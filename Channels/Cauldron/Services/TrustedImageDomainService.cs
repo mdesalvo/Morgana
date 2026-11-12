@@ -95,27 +95,27 @@ public class TrustedImageDomainService : ITrustedImageDomainService
             // Components of a kind that is not listed here carry no text that is rendered as Markdown.
             switch (component)
             {
-                // The content is rendered as Markdown
+                // The content is rendered as Markdown.
                 case TextBlockComponent textBlock:
                     markdownTexts.Add(textBlock.Content);
                     break;
-                // Key and value are both rendered as Markdown
+                // Key and value are both rendered as Markdown.
                 case KeyValueComponent keyValue:
                     markdownTexts.Add(keyValue.Key);
                     markdownTexts.Add(keyValue.Value);
                     break;
-                // Each item is rendered as Markdown
+                // Each item is rendered as Markdown.
                 case ListComponent list:
                     markdownTexts.AddRange(list.Items);
                     break;
-                // The header is rendered as Markdown and the nested components are inspected in turn
+                // The header is rendered as Markdown and the nested components are inspected in turn.
                 case SectionComponent section:
                     markdownTexts.Add(section.Title);
                     if (section.Subtitle is not null)
                         markdownTexts.Add(section.Subtitle);
                     CollectCardImages(section.Components, markdownTexts, cardImageSources);
                     break;
-                // Key and value of each cell are rendered as Markdown
+                // Key and value of each cell are rendered as Markdown.
                 case GridComponent grid:
                     foreach (GridItem gridItem in grid.Items)
                     {
@@ -123,11 +123,11 @@ public class TrustedImageDomainService : ITrustedImageDomainService
                         markdownTexts.Add(gridItem.Value);
                     }
                     break;
-                // The text is rendered as Markdown
+                // The text is rendered as Markdown.
                 case BadgeComponent badge:
                     markdownTexts.Add(badge.Text);
                     break;
-                // The caption is rendered as Markdown while the source is an image of its own
+                // The caption is rendered as Markdown while the source is an image of its own.
                 case ImageComponent image:
                     if (image.Caption is not null)
                         markdownTexts.Add(image.Caption);

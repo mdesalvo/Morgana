@@ -174,14 +174,14 @@
     {
         try
         {
-            // Initialize landing message
+            // Initialize landing message.
             landingMessage = LandingMessageService.GetLandingMessage();
 
-            // Subscribe to streaming state changes for UI re-render
+            // Subscribe to streaming state changes for UI re-render.
             onStreamingStateChanged = () => InvokeAsync(StateHasChanged);
             StreamingService.OnStateChanged += onStreamingStateChanged;
 
-            // Start SignalRService connection
+            // Start SignalRService connection.
             await SignalRService.StartAsync();
             ChatStateService.IsConnected = SignalRService.IsConnected;
 
@@ -203,7 +203,7 @@
             SignalRService.OnConnectionStateChanged += onConnectionStateChanged;
 
             // The deadline expires on a timer thread: the turn is settled on the circuit, which alone
-            // may touch what is on screen
+            // may touch what is on screen.
             onReplyDeadlineExpired = () => _ = InvokeAsync(SettleSilentTurnAsync);
             ConversationLifecycleService.OnReplyDeadlineExpired += onReplyDeadlineExpired;
 
@@ -211,12 +211,12 @@
             // on a circuit that already has its conversation.
             if (!ChatStateService.HasCheckedStorage)
             {
-                // Set before the attempt, not after: a failure below must not cause a retry loop
+                // Set before the attempt, not after: a failure below must not cause a retry loop.
                 ChatStateService.HasCheckedStorage = true;
 
                 try
                 {
-                    // Check ProtectedLocalStorage for saved conversation ID
+                    // Check ProtectedLocalStorage for saved conversation ID.
                     string? savedConversationId = await ConversationLifecycleService.GetSavedConversationIdAsync();
 
                     // A saved id means a returning visitor. Resume falls back to a fresh
@@ -241,7 +241,7 @@
         }
         catch (OperationCanceledException)
         {
-            // The circuit went away while Morgana was still unreachable: nobody is left to tell
+            // The circuit went away while Morgana was still unreachable: nobody is left to tell.
         }
         catch (Exception ex)
         {
@@ -267,7 +267,7 @@
     /// <summary>Sends the composer's words as a turn, pressing the quick reply of <paramref name="pressedOffering"/> when it is not null.</summary>
     private async Task SendTurnAsync(ChatMessage? pressedOffering)
     {
-        // Validate input
+        // Validate input.
         if (string.IsNullOrWhiteSpace(ChatStateService.ComposerText) || ChatStateService.IsSending || !ChatStateService.IsConnected)
             return;
 
@@ -316,7 +316,7 @@
                 if (message.ConversationMetadata?.ReplyTimeoutSeconds is { } replyTimeoutSeconds)
                     ChatStateService.ReplyTimeout = TimeSpan.FromSeconds(replyTimeoutSeconds);
 
-                // Temporary messages (system warnings, errors) - display as banners
+                // Temporary messages (system warnings, errors) - display as banners.
                 if (string.Equals(message.MessageType, ChannelMessageTypes.SystemWarning, StringComparison.OrdinalIgnoreCase)
                     || string.Equals(message.MessageType, ChannelMessageTypes.Error, StringComparison.OrdinalIgnoreCase))
                 {
@@ -335,21 +335,21 @@
                     return;
                 }
 
-                // Late arrival from a conversation this circuit has moved on from
+                // Late arrival from a conversation this circuit has moved on from.
                 if (ChatStateService.ConversationId != message.ConversationId)
                     return;
 
                 // A reply this client already has, pushed and then read back from the history by a
-                // catch-up that overlapped the push: it is on screen once
+                // catch-up that overlapped the push: it is on screen once.
                 if (message.Timestamp <= ChatStateService.LatestDeliveredTimestamp)
                     return;
                 ChatStateService.NoteDelivered(message.Timestamp);
 
                 // Every reply passes here exactly once, pushed or recovered, while its rendering repeats at each
-                // typewriter tick: the images it carries from undeclared domains are counted here and nowhere else
+                // typewriter tick: the images it carries from undeclared domains are counted here and nowhere else.
                 TrustedImageDomains.ReportImagesFromUntrustedDomains(message);
 
-                // PATH 1: this message closes a response already typing itself out on screen
+                // PATH 1: this message closes a response already typing itself out on screen.
                 if (StreamingService.IsStreaming)
                 {
                     StreamingService.FinalizeStreaming(message);
@@ -359,11 +359,11 @@
                     return;
                 }
 
-                // PATH 2: the response arrived whole, with no chunks preceding it
+                // PATH 2: the response arrived whole, with no chunks preceding it.
                 ChatStateService.RemoveTypingIndicator();
                 ChatStateService.UpdateAgentFromMessage(message);
 
-                // Add main agent message
+                // Add main agent message.
                 ChatStateService.ChatMessages.Add(new ChatMessage
                 {
                     ConversationId = message.ConversationId,
@@ -375,7 +375,7 @@
                     RichCard = message.RichCard
                 });
 
-                // Reset sending state - message received via SignalR
+                // Reset sending state - message received via SignalR.
                 ChatStateService.IsSending = false;
 
                 StateHasChanged();
@@ -408,7 +408,7 @@
     private async Task SettleSilentTurnAsync()
     {
         // Text already received is still being revealed: Morgana has spoken and the screen is simply
-        // catching up, so the turn is alive and keeps its place
+        // catching up, so the turn is alive and keeps its place.
         if (StreamingService.IsRevealing)
         {
             ConversationLifecycleService.NoteReplyActivity();
@@ -421,7 +421,7 @@
         if (await DeliverMissedRepliesAsync())
             return;
 
-        // A push may have answered the turn while the history was being read
+        // A push may have answered the turn while the history was being read.
         if (!ConversationLifecycleService.IsAwaitingReply)
             return;
 
@@ -448,7 +448,7 @@
         {
             try
             {
-                // Morgana is answering, so the turn keeps its place however long the answer runs
+                // Morgana is answering, so the turn keeps its place however long the answer runs.
                 ConversationLifecycleService.NoteReplyActivity();
                 await StreamingService.HandleChunkAsync(chunkText);
             }
@@ -482,7 +482,7 @@
     /// <returns>Task representing the async selection handling</returns>
     private async Task SelectQuickReplyAsync(QuickReply reply, ChatMessage message)
     {
-        // Prevent multiple selections
+        // Prevent multiple selections.
         if (message.SelectedQuickReplyId != null)
             return;
 
@@ -491,7 +491,7 @@
         message.SelectedQuickReplyId = reply.Id;
         StateHasChanged();
 
-        // Lets the selected state actually paint before the send redraws the conversation
+        // Lets the selected state actually paint before the send redraws the conversation.
         await Task.Delay(250);
 
         // The reply's Value is what gets sent, not its Label: the button text is for the
@@ -600,7 +600,7 @@
     /// <returns>ValueTask representing the async dispose operation</returns>
     public async ValueTask DisposeAsync()
     {
-        // Unsubscribe from events
+        // Unsubscribe from events.
         SignalRService.OnMessageReceived -= HandleMessageReceivedAsync;
         SignalRService.OnStreamChunkReceived -= HandleStreamChunkReceivedAsync;
         if (onConnectionStateChanged is not null)

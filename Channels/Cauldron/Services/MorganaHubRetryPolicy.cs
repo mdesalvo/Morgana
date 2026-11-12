@@ -31,12 +31,12 @@ public sealed class MorganaHubRetryPolicy : IRetryPolicy
     /// <summary>Returns the wait before the next attempt, never null: the connection is retried for as long as the circuit keeps it.</summary>
     public TimeSpan? NextRetryDelay(RetryContext retryContext)
     {
-        // The quick schedule covers the opening attempts and the steady one every attempt after
+        // The quick schedule covers the opening attempts and the steady one every attempt after.
         TimeSpan baseDelay = retryContext.PreviousRetryCount < QuickRetryDelays.Length
             ? QuickRetryDelays[retryContext.PreviousRetryCount]
             : SteadyRetryDelay;
 
-        // Jitter spreads the circuits that lost Morgana together
+        // Jitter spreads the circuits that lost Morgana together.
         return baseDelay + baseDelay * (Random.Shared.NextDouble() * MaximumJitterShare);
     }
 }

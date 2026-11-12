@@ -30,18 +30,18 @@ public class MorganaAuthHandler : DelegatingHandler
     /// <summary>Reads the signing key and the token claims from <c>Cauldron:Authentication</c>.</summary>
     public MorganaAuthHandler(IConfiguration configuration)
     {
-        // Everything the handler needs sits in one configuration section
+        // Everything the handler needs sits in one configuration section.
         IConfigurationSection authSection = configuration.GetSection("Cauldron:Authentication");
 
-        // Without the key no token can be signed: startup fails here instead of on the first request
+        // Without the key no token can be signed: startup fails here instead of on the first request.
         string symmetricKey = authSection["SymmetricKey"]
             ?? throw new InvalidOperationException("Cauldron:Authentication:SymmetricKey is required for Cauldron authentication.");
 
-        // The defaults match what Morgana expects from an unmodified channel entry
+        // The defaults match what Morgana expects from an unmodified channel entry.
         _issuer = authSection["Issuer"] ?? "cauldron";
         _audience = authSection["Audience"] ?? "morgana.ai";
 
-        // Signed with HMAC-SHA256 like Morgana's validator expects
+        // Signed with HMAC-SHA256 like Morgana's validator expects.
         _credentials = new SigningCredentials(new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey)), SecurityAlgorithms.HmacSha256);
     }
 
@@ -52,7 +52,7 @@ public class MorganaAuthHandler : DelegatingHandler
         // Minted per request rather than cached: tokens live five minutes and a long-lived
         // circuit would otherwise keep presenting an expired one.
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken());
-        // The request continues down the pipeline now that it carries its credentials
+        // The request continues down the pipeline now that it carries its credentials.
         return base.SendAsync(request, cancellationToken);
     }
 
@@ -78,7 +78,7 @@ public class MorganaAuthHandler : DelegatingHandler
                 SigningCredentials = _credentials
             };
 
-        // Signed and serialized: the compact JWT that goes into the Bearer header or the hub query
+        // Signed and serialized: the compact JWT that goes into the Bearer header or the hub query.
         return _tokenHandler.CreateToken(descriptor);
     }
 }

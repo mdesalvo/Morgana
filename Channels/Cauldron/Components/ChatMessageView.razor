@@ -94,7 +94,7 @@
     /// <summary>Records the state of the first paint as the one on screen.</summary>
     protected override void OnAfterRender(bool firstRender)
     {
-        // The first paint skips the comparison, so its state is recorded once the row is on screen
+        // The first paint skips the comparison, so its state is recorded once the row is on screen.
         if (firstRender)
             displayedState = CaptureState();
     }
@@ -105,10 +105,10 @@
         // Read once: during streaming the typewriter keeps appending to the text concurrently.
         string text = Message.Text;
 
-        // A typing row has no text to show: the sanitizer pass costs even on an empty string
+        // A typing row has no text to show: the sanitizer pass costs even on an empty string.
         if (!Message.IsTyping && !string.Equals(text, renderedText, StringComparison.Ordinal))
         {
-            // The sanitized HTML and the text it came from are kept together
+            // The sanitized HTML and the text it came from are kept together.
             renderedHtml = MarkdownRenderer.ToHtml(text);
             renderedText = text;
         }
@@ -117,12 +117,12 @@
     /// <summary>Tells whether anything the row shows changed since the last paint, recording it as the one on screen when it did.</summary>
     protected override bool ShouldRender()
     {
-        // An unchanged snapshot means the row on screen is already current
+        // An unchanged snapshot means the row on screen is already current.
         DisplayedState currentState = CaptureState();
         if (currentState == displayedState)
             return false;
 
-        // A changed row is painted and its snapshot becomes the one on screen
+        // A changed row is painted and its snapshot becomes the one on screen.
         displayedState = currentState;
         return true;
     }

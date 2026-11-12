@@ -68,10 +68,10 @@
         if (IsTerminal)
             return;
 
-        // Cancelled on disposal, so a banner removed early does not keep a timer running
+        // Cancelled on disposal, so a banner removed early does not keep a timer running.
         cancellationTokenSource = new CancellationTokenSource();
 
-        // Detached on purpose: the caller renders the banner now and must not await its lifetime
+        // Detached on purpose: the caller renders the banner now and must not await its lifetime.
         _ = DismissAfterDurationAsync(cancellationTokenSource.Token);
     }
 
@@ -88,17 +88,17 @@
 
         try
         {
-            // Phase 1: fully visible, no styling change
+            // Phase 1: fully visible, no styling change.
             await Task.Delay(visibleDuration, cancellationToken);
 
-            // Phase 2: the "fading" class hands the fade-out over to CSS
+            // Phase 2: the "fading" class hands the fade-out over to CSS.
             isFading = true;
             await InvokeAsync(StateHasChanged);
 
-            // The fade runs its course before anything else changes
+            // The fade runs its course before anything else changes.
             await Task.Delay(fadeDuration, cancellationToken);
 
-            // Phase 3: hide the markup once the animation has actually finished
+            // Phase 3: hide the markup once the animation has actually finished.
             isVisible = false;
             await InvokeAsync(StateHasChanged);
 
@@ -111,7 +111,7 @@
         }
         catch (TaskCanceledException)
         {
-            // Disposed mid-wait: nothing to clean up here, Dispose owns the token source
+            // Disposed mid-wait: nothing to clean up here, Dispose owns the token source.
         }
     }
 

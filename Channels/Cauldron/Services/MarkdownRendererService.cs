@@ -44,7 +44,7 @@ public class MarkdownRendererService : IMarkdownRendererService
         // anyway and leave a broken icon).
         sanitizer.PostProcessNode += (sender, nodeEvent) =>
         {
-            // Only images are judged here: every other node passes through untouched
+            // Only images are judged here: every other node passes through untouched.
             if (nodeEvent.Node is IHtmlImageElement image && !trustedImageDomains.IsServedFromTrustedDomain(image.GetAttribute("src")))
                 nodeEvent.ReplacementNodes.Add(nodeEvent.Document.CreateTextNode(image.AlternativeText ?? string.Empty));
         };

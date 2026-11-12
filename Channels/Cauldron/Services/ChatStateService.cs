@@ -66,10 +66,10 @@ public class ChatStateService : IChatStateService
     /// <inheritdoc />
     public void BeginTurn(string text, ChatMessage? pressedOffering = null)
     {
-        // A press sends the button's value, which is not the user's words: only a typed turn has words to give back
+        // A press sends the button's value, which is not the user's words: only a typed turn has words to give back.
         string wordsToGiveBack = pressedOffering != null ? string.Empty : text;
 
-        // One turn at a time: the composer stays shut until the answer arrives or the turn is withdrawn
+        // One turn at a time: the composer stays shut until the answer arrives or the turn is withdrawn.
         IsSending = true;
 
         // Echoed locally and immediately: the user sees their own words without waiting for the server, which never sends them back.
@@ -85,26 +85,26 @@ public class ChatStateService : IChatStateService
         // Shown immediately: the real answer arrives over SignalR, so without this the UI would sit inert while the agent thinks.
         AddTypingIndicator();
 
-        // What a refusal of this turn would have to undo, until the next turn replaces it
+        // What a refusal of this turn would have to undo, until the next turn replaces it.
         openTurn = new OpenTurn(userMessage, pressedOffering, wordsToGiveBack);
     }
 
     /// <inheritdoc />
     public void WithdrawTurn()
     {
-        // No turn is open, so there is nothing to undo
+        // No turn is open, so there is nothing to undo.
         if (openTurn == null)
             return;
 
-        // The user's bubble and the indicator go away: Morgana recorded neither
+        // The user's bubble and the indicator go away: Morgana recorded neither.
         ChatMessages.Remove(openTurn.UserMessage);
         RemoveTypingIndicator();
 
-        // The row of buttons that the press answered becomes pressable again
+        // The row of buttons that the press answered becomes pressable again.
         if (openTurn.PressedOffering != null)
             openTurn.PressedOffering.SelectedQuickReplyId = null;
 
-        // Typed words return to the composer so the user does not retype them
+        // Typed words return to the composer so the user does not retype them.
         ComposerText = openTurn.WordsToGiveBack;
         IsSending = false;
         openTurn = null;
@@ -128,14 +128,14 @@ public class ChatStateService : IChatStateService
     /// <inheritdoc />
     public bool RemoveTypingIndicator()
     {
-        // Last, not first: only the most recent turn can legitimately still be waiting
+        // Last, not first: only the most recent turn can legitimately still be waiting.
         ChatMessage? typingMessage = ChatMessages.LastOrDefault(message => message.IsTyping);
 
-        // No indicator is on screen, so nothing was removed
+        // No indicator is on screen, so nothing was removed.
         if (typingMessage == null)
             return false;
 
-        // The indicator gives way to whatever comes next
+        // The indicator gives way to whatever comes next.
         ChatMessages.Remove(typingMessage);
         return true;
     }
@@ -143,7 +143,7 @@ public class ChatStateService : IChatStateService
     /// <inheritdoc />
     public void AddChatError(string text, string errorReason, int? fadingDurationSeconds = 10)
     {
-        // The banner carries the technical detail and fades on its own
+        // The banner carries the technical detail and fades on its own.
         AddErrorBanner(text, errorReason, fadingDurationSeconds);
 
         // The chat line stays and is deliberately vague: it marks where the conversation broke without leaving a status
@@ -161,7 +161,7 @@ public class ChatStateService : IChatStateService
     /// <inheritdoc />
     public void AddErrorBanner(string text, string errorReason, int? fadingDurationSeconds = 10)
     {
-        // The banner fades on its own and never reaches the conversation
+        // The banner fades on its own and never reaches the conversation.
         TemporaryMessages.Add(new ChannelMessage
         {
             ConversationId = ConversationId,
@@ -186,7 +186,7 @@ public class ChatStateService : IChatStateService
     /// <inheritdoc />
     public void DismissTemporaryMessage(ChannelMessage message)
     {
-        // The banner the user closed, or that faded, leaves the screen
+        // The banner the user closed, or that faded, leaves the screen.
         TemporaryMessages.Remove(message);
     }
 
@@ -211,11 +211,11 @@ public class ChatStateService : IChatStateService
             ? BaseAgentName
             : message.AgentName;
 
-        // The same agent goes on holding the conversation, so nothing changes
+        // The same agent goes on holding the conversation, so nothing changes.
         if (string.Equals(CurrentAgentName, newAgentName, StringComparison.OrdinalIgnoreCase))
             return false;
 
-        // The header names the new holder
+        // The header names the new holder.
         CurrentAgentName = newAgentName;
         return true;
     }
