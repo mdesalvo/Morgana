@@ -8,131 +8,101 @@ using Morgana.AI.Interfaces;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IAlembicPromptService"/>: loads <c>alembic.json</c> from this assembly's
-/// embedded resources and composes it beneath Morgana's own voice.
+/// The default <see cref="IAlembicPromptService"/>: loads <c>alembic.json</c> from this assembly's resources and composes it beneath Morgana's own voice.
+/// The resource is matched by its file-name suffix, as the framework's resolver matches <c>morgana.json</c>, so renaming the assembly never loses the prose.
 /// </summary>
-/// <remarks>
-/// The loading is a near-copy of how <c>ConfigurationPromptResolverService</c> loads
-/// <c>morgana.json</c>, down to matching the resource by its file-name suffix rather than its
-/// namespace-prefixed manifest name, so renaming the assembly does not silently lose the prose.
-/// </remarks>
 public class AlembicPromptService : IAlembicPromptService
 {
-    /// <summary>
-    /// The framework prompt Alembic inherits its voice from.
-    /// </summary>
+    /// <summary>The framework prompt Alembic inherits its voice from.</summary>
     private const string MorganaPromptId = "Morgana";
 
-    /// <summary>
-    /// The prompt holding what Alembic says in every interview, whichever interviewer is conducting
-    /// it: its identity, how a Morgana domain runs, how it asks and how it answers.
-    /// </summary>
+    /// <summary>The prompt holding what Alembic says in every interview, whichever interviewer conducts it: its identity, how it asks and how it answers.</summary>
     private const string AlembicPromptId = "Alembic";
 
     /// <summary>
-    /// The two jobs a step can be doing, one of which is folded in beneath the shared prose.
+    /// The row read when a step writes sections that do not exist yet, folded beneath the shared prose.
+    /// Writing and correcting are different work and a pass reads only its own, while everything else stays one copy in the shared row.
     /// </summary>
-    /// <remarks>
-    /// Writing a section that does not exist and correcting one that does are different work and a
-    /// pass reads only the one it is doing. Kept as two rows of the same file rather than as two
-    /// files: everything else — the identity, the conducting rules and the voice — is the
-    /// same in both and a second copy of it is the duplication this prompt was already once rebuilt
-    /// to remove.
-    /// </remarks>
     private const string ComposingPromptId = "Composing";
 
-    /// <inheritdoc cref="ComposingPromptId" />
+    /// <summary>The row read when a step reopens an agent that already exists, folded beneath the shared prose.</summary>
     private const string CorrectingPromptId = "Correcting";
 
     /// <summary>
-    /// The prompt holding what Alembic knows about the framework its agents will run under: how a
-    /// message reaches one, how a turn is formed around it, what the runtime splices into the prose
-    /// written here and what every agent can already do without a tool being declared for it.
+    /// The prompt holding the framework as facts: how a message reaches an agent, how a turn forms, what the runtime splices into the prose and what every agent can already do.
+    /// The framework's own rules are orders to an agent taking a turn, which Alembic has none of; restated as facts they become knowledge of the world the authored agents live in.
     /// </summary>
-    /// <remarks>
-    /// Authored here rather than read out of <c>morgana.json</c> and that is the whole point of it.
-    /// The framework's own rules are written in the imperative to an agent taking a turn; handed
-    /// over as they stand they are orders Alembic has no turn to carry out, which is the way to
-    /// manufacture exactly the non-local contradictions this project exists to avoid. Restated in
-    /// the descriptive third person the same facts stop being orders and become knowledge of the
-    /// world the authored agents will live in, which is what an author needs and never had.
-    /// </remarks>
     private const string MorganaPrimerPromptId = "MorganaPrimer";
 
-    // Fences, in the framework's own idiom and for the framework's own reason: two layers carry
-    // overlapping section labels and without a boundary the composed prompt shows [PERSONALITY]
-    // twice with nothing saying which is which.
-    //
-    // Two layers, not three and that is still true of what the model reads: Morgana, then Alembic.
-    // What changed is where Alembic's half is stored. Four passes that differ only in which tools
-    // they hold were carrying four copies of the same conducting rules, the same voice and the same
-    // output format — 22 000 characters of which half was duplication and duplication in a prompt
-    // is not merely long: it is four places to edit a rule and three chances to leave one behind.
-    //
-    // So the identical part lives once, in the "Alembic" prompt and a pass carries only what is
-    // its own — what it settles, what it must leave alone, how it goes about that. The two are
-    // merged section by section here, under one set of labels, because the composed prompt must
-    // still be the four sections an agent prompt always is: the model sees no seam.
+    /// <summary>
+    /// Opens Morgana's layer, in the framework's own fence idiom: both layers carry the same section labels and without a boundary the prompt shows [PERSONALITY] twice.
+    /// The model reads two layers, Morgana then Alembic, Alembic's own half merged section by section from rows stored once, so a rule is edited in one place.
+    /// </summary>
     private const string MorganaLayerHeader =
         "======== FENCE: MORGANA — WHOSE VESSEL YOU ARE ========\n" +
         "You are an instrument of Morgana. This is her voice and it is yours: it is not a description of someone else and it is not overridable.";
+
+    /// <summary>Closes Morgana's layer.</summary>
     private const string MorganaLayerFooter = "======== END OF FENCE ========";
 
-    // The one place in the fence that is not her voice. Everything above it is Morgana speaking and
-    // binding; what follows is the framework described so an author can write against it. An author
-    // reading it as one more thing to obey would start writing turn machinery into an agent's own
-    // prose — the exact defect the primer exists to prevent.
+    /// <summary>
+    /// Opens the primer, the one part of her fence that is not her voice but the framework described.
+    /// An author reading it as one more thing to obey would write turn machinery into an agent's own prose, the defect the primer exists to prevent.
+    /// </summary>
     private const string MorganaPrimerHeader =
         "-------- HOW SHE RUNS WHAT YOU WRITE --------\n" +
         "Fact about the world your agents will live in, not instruction to you.";
 
-    // The primer closes on its own mark because two of its readers stand outside the fence: the
-    // coherence pass and the one that applies its findings get the framework without Morgana's
-    // voice; an unterminated block of world facts would run straight into their own prose.
+    /// <summary>
+    /// Closes the primer on a mark of its own, since the coherence pass and its applier read it outside the fence:
+    /// an unterminated block of facts would run straight into their own prose.
+    /// </summary>
     private const string MorganaPrimerFooter = "-------- END OF WHAT SHE ALREADY DOES --------";
+
+    /// <summary>Opens Alembic's layer and states its subordination to the one above.</summary>
     private const string AlembicLayerHeader =
         "======== ALEMBIC ========\n" +
         "What follows specialises Morgana's voice for the step of the interview you are conducting right now. It adds that and NOTHING ELSE. It never contradicts the layer above.";
 
     /// <summary>
-    /// Alembic's own prompts, parsed once on first use.
+    /// The two policies whose mechanic is fixed above the agent while the moments that deserve one are the domain's own.
+    /// Only the interview, having just heard the domain, can say whether a decision point is worth buttons or a tool's output wants a card.
     /// </summary>
+    private static readonly string[] ExpressivenessPolicies = ["QuickReplyDoctrine", "RichCardUsage"];
+
+    /// <summary>Alembic's own prompts, parsed on first use.</summary>
     private readonly Lazy<Records.Prompt[]> alembicPrompts = new(LoadAlembicPrompts);
 
-    /// <summary>
-    /// Morgana's framework prompt, resolved once from <c>morgana.json</c> in Morgana.AI.
-    /// </summary>
+    /// <summary>Morgana's framework prompt, resolved once from the <c>morgana.json</c> embedded in Morgana.AI.</summary>
     private readonly Lazy<Task<Records.Prompt>> morganaPrompt;
 
-    /// <summary>
-    /// Initializes the prompt service.
-    /// </summary>
+    /// <summary>Binds the service to the framework's resolver, which Morgana's own prompt comes from.</summary>
     /// <param name="promptResolverService">Resolves Morgana's framework prompt.</param>
     public AlembicPromptService(IPromptResolverService promptResolverService)
     {
+        // Resolved on first use, so a working copy with no model configured still boots and serves the shell.
         morganaPrompt = new Lazy<Task<Records.Prompt>>(() => promptResolverService.ResolveAsync(MorganaPromptId));
     }
 
-    /// <inheritdoc />
-    /// <param name="promptId">A prompt's <c>ID</c> in <c>alembic.json</c> — one of the six pass ids
-    /// (<c>DomainMapper</c>, <c>AgentTarget</c>, …) or a standalone one like <c>DomainValidator</c>
-    /// or <c>CodeMocker</c>. Matched case-insensitively.</param>
-    /// <returns>The prompt's four sections, as authored — unmerged with Morgana's or Alembic's shared layer.</returns>
+    /// <summary>Resolves one of Alembic's prompts by id, case-insensitively, throwing <see cref="KeyNotFoundException"/> when none carries it.</summary>
+    /// <param name="promptId">A pass id such as <c>DomainMapper</c> or a standalone one such as <c>DomainValidator</c> or <c>CodeMocker</c>.</param>
+    /// <returns>The prompt's sections as authored, unmerged with any shared layer.</returns>
     public Records.Prompt Resolve(string promptId) =>
-        alembicPrompts.Value.FirstOrDefault(p => string.Equals(p.ID, promptId, StringComparison.OrdinalIgnoreCase))
+        alembicPrompts.Value.FirstOrDefault(prompt => string.Equals(prompt.ID, promptId, StringComparison.OrdinalIgnoreCase))
         ?? throw new KeyNotFoundException($"Prompt '{promptId}' is not declared in alembic.json.");
 
-    /// <inheritdoc />
-    /// <param name="interviewerId">The pass whose own half of the second layer to fold in — e.g.
-    /// <c>AgentTarget</c> or <c>AgentToolkit</c>. Resolved through <see cref="Resolve"/>, so an
-    /// unknown id fails the same way here as it would calling that method directly.</param>
-    /// <returns>The whole composed system prompt this pass's model will read: Morgana's layer, then
-    /// Alembic's shared prose and this pass's own, merged section by section under one set of labels.</returns>
+    /// <summary>
+    /// Composes the system prompt one interviewer conducts with: Morgana's layer, then Alembic's shared prose, the step's job and the interviewer's own.
+    /// An unknown interviewer fails through <see cref="Resolve"/>, the same way it would anywhere else.
+    /// </summary>
+    /// <param name="interviewerId">The pass whose own half of the second layer is folded in, such as <c>AgentTarget</c>.</param>
+    /// <param name="correcting">Whether the step reopens an agent that already exists.</param>
+    /// <returns>The whole system prompt this pass's model reads.</returns>
     public async Task<string> ComposeAsync(string interviewerId, bool correcting = false)
     {
         StringBuilder sb = new StringBuilder();
 
-        // Morgana
+        // Morgana's layer: who she is and her voice, which is Alembic's, then the framework as facts.
         Records.Prompt morgana = await morganaPrompt.Value;
         sb.AppendLine(MorganaLayerHeader);
         sb.AppendLine();
@@ -144,14 +114,15 @@ public class AlembicPromptService : IAlembicPromptService
         sb.AppendLine();
         sb.AppendLine(MorganaLayerFooter);
         sb.AppendLine();
-        
+
         // Alembic. Three rows read as one: what holds in every interview, which of the two jobs this
-        // step is and what this interviewer alone settles — in that order, because the mode governs
+        // step is and what this interviewer alone settles, in that order, because the mode governs
         // how the interviewer's own instructions are to be read.
         Records.Prompt interviewer = Resolve(interviewerId);
         Records.Prompt alembic = Resolve(AlembicPromptId);
         Records.Prompt mode = Resolve(correcting ? CorrectingPromptId : ComposingPromptId);
 
+        // Each section once, under one label, so the model reads the four sections of an agent prompt with no seam.
         sb.AppendLine(AlembicLayerHeader);
         sb.AppendLine();
         AppendSection(sb, Constants.SectionLabels.Target, alembic.Target, mode.Target, interviewer.Target);
@@ -162,14 +133,14 @@ public class AlembicPromptService : IAlembicPromptService
         return sb.ToString();
     }
 
-    /// <inheritdoc />
-    /// <returns>The framework as fact: how a message finds its agent, how a turn is formed around
-    /// it, what the runtime splices into the prose written here, what every agent can already do and
-    /// what each of Morgana's policies settles above every agent.</returns>
+    /// <summary>Composes the framework as facts: how a message finds its agent, how a turn forms, what the runtime splices in and what each policy settles.</summary>
+    /// <returns>The primer between its own marks, ready to stand above a pass's own prose.</returns>
     public async Task<string> ComposeFrameworkPrimerAsync()
     {
+        // Morgana's prompt holds the policy names the primer's lines are checked against.
         Records.Prompt morgana = await morganaPrompt.Value;
 
+        // The primer's own facts, then the policies already binding, between the two marks.
         StringBuilder sb = new StringBuilder();
         sb.AppendLine(MorganaPrimerHeader);
         sb.AppendLine();
@@ -182,39 +153,27 @@ public class AlembicPromptService : IAlembicPromptService
     }
 
     /// <summary>
-    /// The two policies where the exception below applies: their MECHANIC is fixed above the agent,
-    /// but which of a domain's own moments deserve one is not something the framework can know —
-    /// only the interview, having just heard the domain, can say whether a decision point is a
-    /// closed set of actions worth buttons, or a tool's output structured enough to want a card.
+    /// States the policies already binding on every agent Alembic writes, each under the line the primer gives it, throwing when the two lists disagree.
+    /// The names are <c>morgana.json</c>'s and the lines Alembic's own reading for an author; a name alone forbids a subject the model cannot name,
+    /// while the policies' bodies are turn mechanics for a process that takes no turn.
     /// </summary>
-    private static readonly string[] ExpressivenessPolicies = ["QuickReplyDoctrine", "RichCardUsage"];
-
-    /// <summary>
-    /// States the policies already binding on every agent Alembic writes, each under the one line
-    /// the primer gives it.
-    /// </summary>
-    /// <remarks>
-    /// The names are <c>morgana.json</c>'s, which is what makes them authoritative; the line beside
-    /// each is Alembic's own reading of that policy, addressed to whoever is writing an agent. A
-    /// bare list of names was the whole of this block once and it forbade subjects the model could
-    /// not name: a prohibition on <c>ToolGrounding</c> is unenforceable by a reader who has never
-    /// been told what <c>ToolGrounding</c> settles. The bodies still stay out — 14 000 characters
-    /// of turn mechanics for a process that takes no turn.
-    /// </remarks>
     private string BindingPolicies(Records.Prompt morgana)
     {
+        // The framework's policies, by the names every agent's prompt renders them under.
         List<Records.GlobalPolicy> policies =
             morgana.GetAdditionalPropertyOrDefault<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies, []);
 
+        // A framework with no policy leaves nothing already settled to tell an author.
         if (policies.Count == 0)
             return string.Empty;
 
+        // The primer's line for each policy, keyed by the policy's name.
         Dictionary<string, string> glosses = Glosses();
 
         // A policy added to the framework and not to the primer would reach the author as a name
-        // with nothing behind it, which is the state this block was rebuilt to leave; one glossed
-        // here and since removed from the framework teaches a rule that no longer binds. Both are
-        // authoring defects nothing downstream can notice, so both stop the interview here.
+        // with nothing behind it; one glossed here and since removed from the framework teaches a
+        // rule that binds nothing. Both are authoring defects nothing downstream can notice, so
+        // both stop the interview here.
         string[] unglossed = [.. policies.Select(policy => policy.Name).Where(name => !glosses.ContainsKey(name))];
         string[] stale = [.. glosses.Keys.Where(name => policies.All(policy => policy.Name != name))];
 
@@ -223,17 +182,20 @@ public class AlembicPromptService : IAlembicPromptService
                 $"The {MorganaPrimerPromptId} prompt no longer matches morgana.json's policies — "
                 + $"missing a line for: {string.Join(", ", unglossed)}; carrying a line for policies that no longer exist: {string.Join(", ", stale)}.");
 
+        // The policies an author never writes about, apart from the two whose use belongs to the domain.
         string[] silent = [.. policies.Select(policy => policy.Name).Where(name => !ExpressivenessPolicies.Contains(name))];
         string[] expressive = [.. policies.Select(policy => policy.Name).Where(name => ExpressivenessPolicies.Contains(name))];
 
         StringBuilder sb = new StringBuilder();
 
+        // The subjects an agent's prose must never touch, each with what the framework already settles.
         if (silent.Length > 0)
         {
             sb.AppendLine("ALREADY BINDING on every agent written here, stated above it and with more authority. Never write a rule about any of these subjects into an agent's own prose — what each of them already settles:");
             AppendGlossed(sb, silent, glosses);
         }
 
+        // The two whose mechanic is fixed while which moments deserve them is the author's.
         if (expressive.Length > 0)
         {
             sb.AppendLine("ALSO ALREADY BINDING, but not silently. Their MECHANIC is fixed above the agent and never yours to restate, while what does belong to an agent's own author is named in each:");
@@ -243,41 +205,33 @@ public class AlembicPromptService : IAlembicPromptService
         return sb.ToString().TrimEnd();
     }
 
-    /// <summary>
-    /// Lists policies one per line, each carrying what it settles.
-    /// </summary>
+    /// <summary>Lists policies one per line, each carrying what it settles.</summary>
     private static void AppendGlossed(StringBuilder sb, string[] names, Dictionary<string, string> glosses)
     {
+        // Every name is glossed: BindingPolicies refused any that is not before calling here.
         foreach (string name in names)
             sb.Append("- ").Append(name).Append(" — ").AppendLine(glosses[name]);
 
         sb.AppendLine();
     }
 
-    /// <summary>
-    /// What each framework policy settles, said once for an author rather than for an agent taking
-    /// a turn, keyed by the policy's own name in <c>morgana.json</c>.
-    /// </summary>
+    /// <summary>What each framework policy settles, said once for an author rather than for an agent taking a turn, keyed by the policy's name.</summary>
     private Dictionary<string, string> Glosses() =>
         Resolve(MorganaPrimerPromptId)
             .GetAdditionalPropertyOrDefault<List<Records.GlobalPolicy>>(Constants.PromptProperties.GlobalPolicies, [])
             .ToDictionary(policy => policy.Name, policy => policy.Description);
 
-    /// <summary>
-    /// Appends one section of the composed prompt: what Alembic always says under this label, then
-    /// what this interviewer adds under it.
-    /// </summary>
+    /// <summary>Appends one section of the composed prompt: its rows in reading order under the one label the first carries.</summary>
     /// <param name="sb">The prompt being built.</param>
-    /// <param name="parts">
-    /// This section's rows in reading order: what Alembic says in every interview, which carries the
-    /// label; then which of the two jobs this step is; then what this interviewer adds. Only the
-    /// first is labelled — the rest fall under it, which is what makes the three read as one section.
-    /// </param>
+    /// <param name="label">The section's label.</param>
+    /// <param name="parts">What Alembic says in every interview, then the step's job, then what this interviewer adds.</param>
     private static void AppendSection(StringBuilder sb, string label, params string?[] parts)
     {
         // The three rows read as one section under one label: the model sees no seam between them.
         string section = Records.Prompt.Labeled(label,
             string.Join("\n\n", parts.Where(part => !string.IsNullOrWhiteSpace(part)).Select(part => part!.Trim())));
+
+        // A section no row speaks to leaves no empty label behind.
         if (section.Length == 0)
             return;
 
@@ -285,25 +239,26 @@ public class AlembicPromptService : IAlembicPromptService
         sb.AppendLine();
     }
 
-    /// <summary>
-    /// Reads <c>alembic.json</c> out of this assembly.
-    /// </summary>
+    /// <summary>Reads <c>alembic.json</c> out of this assembly, throwing when it declares no prompt.</summary>
     private static Records.Prompt[] LoadAlembicPrompts()
     {
+        // The resource is embedded in Alembic itself, never uploaded: the conducting prose is the workbench's own.
         Assembly assembly = Assembly.GetExecutingAssembly();
 
+        // Matched by suffix, so the assembly's namespace prefix on the manifest name never matters.
         string resourceName = assembly.GetManifestResourceNames()
-            .First(n => n.EndsWith(".alembic.json", StringComparison.OrdinalIgnoreCase));
+            .First(name => name.EndsWith(".alembic.json", StringComparison.OrdinalIgnoreCase));
 
         using Stream stream = assembly.GetManifestResourceStream(resourceName)
             ?? throw new FileNotFoundException("Resource alembic.json is not embedded in Alembic.");
 
+        // The same shape as morgana.json and agents.json, read with the framework's own record.
         Records.PromptCollection? collection = JsonSerializer.Deserialize<Records.PromptCollection>(
             stream, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
         // Unlike the framework's resolver, this one does not degrade to an empty set: Alembic
-        // without its own prose is not a diminished Alembic, it is an interviewer with nothing to
-        // say. Failing here, loudly, beats conducting an interview on an empty system prompt.
+        // without its own prose is an interviewer with nothing to say. Failing here, loudly, beats
+        // conducting an interview on an empty system prompt.
         return collection?.Prompts is { Length: > 0 } loaded
             ? loaded
             : throw new InvalidOperationException("alembic.json declares no prompts.");

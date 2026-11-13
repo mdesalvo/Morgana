@@ -4,21 +4,15 @@ namespace Alembic.Interfaces;
 
 /// <summary>
 /// Builds the single archive a client downloads at the end: configuration, sources and the report.
+/// One download, because the C# declares the toolkit that the <c>agents.json</c> beside it writes prose for: two downloads invite taking one.
 /// </summary>
-/// <remarks>
-/// One download and not several, because the pieces are only correct together. The
-/// generated C# declares the toolkit and the <c>agents.json</c> beside it holds the prose, so two
-/// separate downloads are an invitation to take only one of them.
-/// </remarks>
 public interface IAssetPackageService
 {
-    /// <summary>
-    /// Packages the whole domain.
-    /// </summary>
+    /// <summary>Packages the whole domain as a zip archive.</summary>
     /// <param name="draft">The domain to package.</param>
-    /// <param name="progress">Reports each file as it is written, since the mocks are LLM calls.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>A zip archive.</returns>
+    /// <param name="progress">Reports each file as it is written, since every mock is a model call of its own.</param>
+    /// <param name="cancellationToken">Stops the packaging, mocks included.</param>
+    /// <returns>The zip archive.</returns>
     Task<byte[]> BuildAsync(
         DomainDraft draft,
         IProgress<string>? progress = null,

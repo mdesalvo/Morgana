@@ -6,38 +6,39 @@ using Alembic.Models;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IAssetPackageService"/>: assembles the archive in memory.
+/// The default <see cref="IAssetPackageService"/>: assembles the archive in memory.
+/// A whole domain is tens of kilobytes and Alembic has no filesystem it may write to, running wherever the client deployed it.
 /// </summary>
-/// <remarks>
-/// In memory and that is not a size compromise — a whole domain is tens of kilobytes. It is the
-/// same constraint that shapes everything else here: Alembic has no filesystem it may write to,
-/// because at runtime it lives wherever the client deployed it.
-/// </remarks>
 public class AssetPackageService : IAssetPackageService
 {
     /// <summary>
-    /// The one file in the archive that says Alembic built it.
+    /// The one entry of the archive that says Alembic built it, which Import trusts to tell its own archive from a zipped configuration.
+    /// Anyone can zip an <c>agents.json</c>, while no other zip has a reason to carry this entry; what matters is that it exists, never what it says.
     /// </summary>
-    /// <remarks>
-    /// A zip carrying an <c>agents.json</c> is not evidence of that on its own: anyone can zip up a
-    /// bare configuration and Import's own next-step doors read differently for an archive than for
-    /// a bare upload. This is the fact that check is allowed to trust, because it is the one thing a
-    /// zip built anywhere else would have no reason to contain. Content over name, as everywhere else
-    /// Alembic tells files apart: what matters is that the entry exists, not what is written in it.
-    /// </remarks>
     public const string MarkerFileName = "alembic-emit.marker";
 
+    /// <summary>Writes the Draft back out as <c>agents.json</c>.</summary>
     private readonly IDraftExportService draftExportService;
+
+    /// <summary>Writes the Draft's own save file, so a re-upload of the archive resumes the interview.</summary>
     private readonly IDraftSerializationService draftSerializationService;
+
+    /// <summary>Writes the project and solution the sources build in.</summary>
     private readonly ISolutionEmitService solutionEmitService;
+
+    /// <summary>Writes the generated half of each agent and tool class.</summary>
     private readonly ICodeEmitService codeEmitService;
+
+    /// <summary>Writes the client's half of each tool class, the one step that calls a model.</summary>
     private readonly IToolMockService toolMockService;
+
+    /// <summary>Builds <c>MIGRATION.md</c> from the Draft's diff against its baseline.</summary>
     private readonly IMigrationReportService migrationReportService;
+
+    /// <summary>Records a mock that could not be written, which the archive ships around.</summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Initializes the package service with the emitters and reports that <see cref="BuildAsync"/> drives.
-    /// </summary>
+    /// <summary>Binds the packager to the emitters and the report it assembles.</summary>
     /// <param name="draftExportService">Writes the Draft back out as <c>agents.json</c>.</param>
     /// <param name="draftSerializationService">Writes the Draft's own save file, <c>alembic-draft.json</c>.</param>
     /// <param name="solutionEmitService">Writes the project and solution files the generated sources live in.</param>
@@ -63,18 +64,16 @@ public class AssetPackageService : IAssetPackageService
         this.logger = logger;
     }
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// Entries are written in the order a client would want to trust them: the marker and the
-    /// configuration first, then the project scaffolding, then the generated and authored C# per
-    /// agent. The whole method runs inside one <see cref="ZipArchive"/>, so a failure past the
-    /// marker still yields a partial-but-openable zip rather than nothing.
-    /// </remarks>
+    /// <summary>
+    /// Packages the whole domain in the order a client would want to trust it: the marker and the configuration, the project, then each agent's C#.
+    /// A mock that fails costs only its own body, so the client still receives the configuration, the signatures and the report.
+    /// </summary>
     public async Task<byte[]> BuildAsync(
         DomainDraft draft,
         IProgress<string>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        // The archive is built in memory, handed back as bytes for the browser to download.
         using MemoryStream buffer = new MemoryStream();
 
         // The archive lives entirely in this using block: ZipArchive buffers entries and writes the
@@ -82,27 +81,30 @@ public class AssetPackageService : IAssetPackageService
         // read before that point is bytes no unzip program will recognise as a zip.
         await using (ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
         {
+            // The marker first, so even an archive cut short by a failure is recognised as Alembic's.
             await WriteAsync(archive, MarkerFileName,
                 "This file marks an archive Alembic built. It carries no information of its own and "
                 + "is not part of the domain — safe to delete once you have unpacked the rest.",
                 progress, cancellationToken);
 
+            // The configuration, the save file that resumes the interview, the report and the convention, none of which needs a model.
             await WriteAsync(archive, "agents.json", Encoding.UTF8.GetString(draftExportService.Export(draft)), progress, cancellationToken);
             await WriteAsync(archive, "alembic-draft.json", Encoding.UTF8.GetString(draftSerializationService.Serialize(draft)), progress, cancellationToken);
             await WriteAsync(archive, "MIGRATION.md", migrationReportService.Build(draft).Markdown, progress, cancellationToken);
             await WriteAsync(archive, "README.md", Readme, progress, cancellationToken);
 
-            // The project and solution the generated sources live in. Their absence used to mean
-            // the archive was loose files the client first had to shelter inside a project of their
-            // own; with them, the same unzip is already `dotnet build` or "open in the IDE".
+            // The project and solution the generated sources live in, so the unzipped folder is already a dotnet build.
             foreach (EmittedFile file in solutionEmitService.Emit(draft))
                 await WriteAsync(archive, file.Path, file.Content, progress, cancellationToken);
 
-            foreach (AgentDraft agent in draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)))
+            // Each named agent: an agent the map has not named yet has no class to emit.
+            foreach (AgentDraft agent in draft.Agents.Where(agentDraft => !string.IsNullOrWhiteSpace(agentDraft.ID)))
             {
+                // The generated half: the agent's class and, where it has tools, the declared half of its tool class.
                 foreach (EmittedFile file in codeEmitService.Emit(agent, agent.ID!))
                     await WriteAsync(archive, file.Path, file.Content, progress, cancellationToken);
 
+                // An agent with no native tool has no tool class to mock.
                 if (agent.Tools.Count == 0)
                     continue;
 
@@ -114,6 +116,7 @@ public class AssetPackageService : IAssetPackageService
 
                 try
                 {
+                    // The client's half, written beside the generated one under the class both halves declare.
                     string mock = await toolMockService.AuthorAsync(agent, agent.ID!, cancellationToken);
                     await WriteAsync(archive, $"Tools/{toolClass}.cs", mock, progress, cancellationToken);
                 }
@@ -133,32 +136,32 @@ public class AssetPackageService : IAssetPackageService
             }
         }
 
+        // Read only now that the archive is closed and its central directory written.
         return buffer.ToArray();
     }
 
-    /// <summary>
-    /// Writes one entry and announces it.
-    /// </summary>
+    /// <summary>Writes one entry and announces it to the caller's progress line.</summary>
     /// <param name="archive">The archive under construction.</param>
     /// <param name="path">The entry's path inside the archive, forward-slash separated.</param>
-    /// <param name="content">The entry's whole text content, encoded as UTF-8 without a byte-order mark.</param>
-    /// <param name="progress">Reported the entry's path once it is written, for the caller's own status line.</param>
+    /// <param name="content">The entry's whole text content.</param>
+    /// <param name="progress">Told the entry's path once it is written, for the caller's own status line.</param>
     /// <param name="cancellationToken">Cancels the write mid-entry.</param>
     private static async Task WriteAsync(
         ZipArchive archive, string path, string content, IProgress<string>? progress, CancellationToken cancellationToken)
     {
+        // Compressed as tightly as the format allows, since the download is what the client waits on.
         ZipArchiveEntry entry = archive.CreateEntry(path, CompressionLevel.Optimal);
 
+        // UTF-8 without a byte-order mark, which a compiler or a JSON reader would otherwise meet as a stray character.
         await using (Stream stream = await entry.OpenAsync(cancellationToken))
         await using (StreamWriter writer = new StreamWriter(stream, new UTF8Encoding(false)))
             await writer.WriteAsync(content.AsMemory(), cancellationToken);
 
+        // The page names each file as it lands, the mocks taking seconds each.
         progress?.Report(path);
     }
 
-    /// <summary>
-    /// The convention, carried inside the archive because there is nowhere else to carry it.
-    /// </summary>
+    /// <summary>The convention, carried inside the archive because there is nowhere else to carry it.</summary>
     private const string Readme = """
         # What is in here
 

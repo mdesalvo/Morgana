@@ -5,39 +5,29 @@ using System.Reflection;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="ISolutionEmitService"/>: string templates and nothing else — same discipline
-/// as <see cref="CodeEmitService"/>, applied one level up, to the project that houses its output.
+/// The default <see cref="ISolutionEmitService"/>: string templates for the project that houses <see cref="CodeEmitService"/>'s output.
+/// With it an unzipped archive is already a <c>dotnet build</c>, given a NuGet feed that resolves Morgana.AI, the one thing Alembic cannot see.
 /// </summary>
-/// <remarks>
-/// Without this, the archive is loose sources: a client unzips it and still has to create a class
-/// library, add the Morgana.AI reference and embed agents.json by hand before anything builds.
-/// With it, the same unzip is already <c>dotnet build</c> — assuming a NuGet feed that resolves
-/// Morgana.AI, which is the one thing here Alembic cannot see or guarantee.
-/// </remarks>
 public class SolutionEmitService : ISolutionEmitService
 {
-    /// <summary>
-    /// The .NET the emitted project targets — the same one Alembic and Morgana.AI are built on.
-    /// </summary>
+    /// <summary>The .NET the emitted project targets, the one Alembic and Morgana.AI are built on.</summary>
     private const string TargetFramework = "net10.0";
 
-    /// <inheritdoc />
-    /// <param name="draft">The domain the project is being emitted for — only its agents' namespace
-    /// is read here; the sources themselves come from <see cref="ICodeEmitService"/> separately.</param>
-    /// <returns>The <c>.csproj</c> and <c>.slnx</c>, named after the resolved namespace, both marked
-    /// <see cref="FileOwnership.Generated"/> — a client editing them by hand loses the edit on the
-    /// next Morganize, same as any other <c>.g.cs</c>.</returns>
+    /// <summary>Emits the <c>.csproj</c> and <c>.slnx</c> named after the domain's namespace.</summary>
+    /// <param name="draft">The domain the project is emitted for, of which only the agents' namespace is read.</param>
+    /// <returns>
+    /// The two files, both <see cref="FileOwnership.Generated"/>: a client editing them by hand loses the edit on the next Morganize, as with any <c>.g.cs</c>.
+    /// </returns>
     public IReadOnlyList<EmittedFile> Emit(DomainDraft draft)
     {
-        // The first agent that carries one, since every agent of one domain is emitted into the same
-        // namespace — there is nothing to reconcile if several agents agree and nothing sensible to
-        // do if they disagree, so the first one found stands for all of them.
-        string ns = draft.Agents.FirstOrDefault(a => !string.IsNullOrWhiteSpace(a.Code.Namespace))?.Code.Namespace
-                    ?? CodeEmitService.DefaultNamespace;
+        // Every agent of one domain is emitted into one namespace, so the first agent carrying one stands for all of them.
+        string projectNamespace = draft.Agents.FirstOrDefault(agent => !string.IsNullOrWhiteSpace(agent.Code.Namespace))?.Code.Namespace
+                                  ?? CodeEmitService.DefaultNamespace;
 
-        // The version of Morgana drives package references
+        // The Morgana packages are pinned to the build this Alembic runs against, so the generated code compiles against the framework it was checked with.
         string version = PackageVersion(typeof(Morgana.AI.Records));
 
+        // A class library embedding agents.json, where Morgana's configuration service finds it, with an uninitialized property made an error.
         string csproj = $"""
             <Project Sdk="Microsoft.NET.Sdk">
 
@@ -46,8 +36,8 @@ public class SolutionEmitService : ISolutionEmitService
                     <TargetFramework>{TargetFramework}</TargetFramework>
                     <Nullable>enable</Nullable>
                     <ImplicitUsings>enable</ImplicitUsings>
-                    <RootNamespace>{ns}</RootNamespace>
-                    <AssemblyName>{ns}</AssemblyName>
+                    <RootNamespace>{projectNamespace}</RootNamespace>
+                    <AssemblyName>{projectNamespace}</AssemblyName>
                     <WarningsAsErrors>CS8618</WarningsAsErrors>
                 </PropertyGroup>
 
@@ -63,6 +53,7 @@ public class SolutionEmitService : ISolutionEmitService
             </Project>
             """;
 
+        // The solution shows the configuration and both reports beside the project, the files a client reads before building.
         string slnx = $"""
             <Solution>
               <Folder Name="/Solution Items/">
@@ -70,21 +61,21 @@ public class SolutionEmitService : ISolutionEmitService
                 <File Path="README.md" />
                 <File Path="MIGRATION.md" />
               </Folder>
-              <Project Path="{ns}.csproj" />
+              <Project Path="{projectNamespace}.csproj" />
             </Solution>
             """;
 
+        // Both at the archive's root, beside the sources they build.
         return
         [
-            new EmittedFile($"{ns}.csproj", csproj, FileOwnership.Generated),
-            new EmittedFile($"{ns}.slnx", slnx, FileOwnership.Generated)
+            new EmittedFile($"{projectNamespace}.csproj", csproj, FileOwnership.Generated),
+            new EmittedFile($"{projectNamespace}.slnx", slnx, FileOwnership.Generated)
         ];
     }
 
     /// <summary>
-    /// The version to pin a package reference to: whichever build of it this very Alembic is
-    /// running against, read off the assembly of one of its own types rather than restated by hand
-    /// somewhere it would drift the day the framework ships a new one.
+    /// The version to pin a package reference to: the build of it this Alembic runs against, read off one of its own types.
+    /// Restated by hand it would drift the day the framework ships a new one.
     /// </summary>
     private static string PackageVersion(Type typeFromThatPackage)
     {

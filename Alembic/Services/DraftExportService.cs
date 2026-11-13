@@ -7,45 +7,18 @@ using Alembic.Models;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IDraftExportService"/>: serializes the Draft through
-/// <see cref="DraftProjection"/>, which rebuilds Morgana's own record types.
+/// The default <see cref="IDraftExportService"/>: serializes the Draft through <see cref="DraftProjection"/>, which rebuilds Morgana's own record types.
+/// The file Alembic writes and the file Morgana reads are the same records seen from two sides, so a field added to them reaches this export unasked;
+/// the projection is the recap's too, so what the client reviewed is what gets written.
 /// </summary>
-/// <remarks>
-/// The output shape is not hand-written JSON: it is <c>Records.IntentDefinition</c> and
-/// <c>Records.Prompt</c> serialized as they are, so the file Alembic emits and the file Morgana
-/// reads are the same type seen from two sides. A field added to those records reaches this
-/// exporter without anyone remembering to come here.
-/// <para>
-/// The projection is shared with the recap on purpose: a recap composed from a slightly different
-/// prompt than the one that gets written would be a recap of a domain nobody is going to run.
-/// </para>
-/// </remarks>
 public class DraftExportService : IDraftExportService
 {
     /// <summary>
-    /// Indented because a client reads, reviews and commits this file.
+    /// Indented, null-free and lightly escaped, because the client reads, reviews and commits this file.
+    /// An unstated Personality stays out rather than written as null, while false booleans are written since Morgana reads both alike and stating it is clearer.
+    /// The relaxed encoder keeps accents, dashes and apostrophes literal, safe because the file is downloaded and never placed in markup;
+    /// an emoji lies outside its ranges and still escapes, so the first export normalises a hand-written file once and every later one diffs cleanly.
     /// </summary>
-    /// <remarks>
-    /// <see cref="JsonIgnoreCondition.WhenWritingNull"/> keeps an unstated Personality out of the
-    /// file rather than writing <c>null</c> into it, while leaving <c>false</c> booleans written
-    /// explicitly: an omitted <c>Shared</c> and an explicit <c>"Shared": false</c> mean the same
-    /// thing to Morgana and stating it is the clearer of the two.
-    /// <para>
-    /// The relaxed encoder is chosen against System.Text.Json's default, which escapes every
-    /// non-ASCII character and the apostrophe into <c>\u</c> sequences. A domain configuration is
-    /// prose the client reads, reviews and commits and escaping all of it would leave the export
-    /// semantically identical but textually unrecognisable next to the file it came from. It is
-    /// safe here because this output is downloaded as a file, never interpolated into markup.
-    /// </para>
-    /// <para>
-    /// It does not get all the way there: the encoder's allow-list is expressed in
-    /// <c>UnicodeRange</c>s, which stop at U+FFFF, so a character outside the BMP — every emoji in
-    /// a quick-reply label — is still written as an escaped surrogate pair. Accented text, dashes
-    /// and apostrophes come through literally; emoji do not. The first export therefore normalises
-    /// a hand-written configuration once and every export after that is diffable against the one
-    /// before it, which is the comparison that actually matters in use.
-    /// </para>
-    /// </remarks>
     private static readonly JsonSerializerOptions ExportOptions = new()
     {
         WriteIndented = true,
@@ -53,16 +26,17 @@ public class DraftExportService : IDraftExportService
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     };
 
-    /// <inheritdoc />
-    /// <param name="draft">The domain to serialize — every intent and agent, projected through
-    /// <see cref="DraftProjection"/> into the framework's own record types before serialization.</param>
-    /// <returns>The whole <c>agents.json</c>, UTF-8 encoded, indented, ready to write to disk or to an archive entry as is.</returns>
+    /// <summary>Renders the Draft as the <c>agents.json</c> the client downloads.</summary>
+    /// <param name="draft">The domain to serialize, every intent and agent projected into the framework's own record types.</param>
+    /// <returns>The whole <c>agents.json</c>, UTF-8 encoded and indented, ready to write to an archive entry as is.</returns>
     public byte[] Export(DomainDraft draft)
     {
+        // The file Morgana loads: its intents and its agents' prompts, in the Draft's own order.
         AgentsConfigurationFile file = new AgentsConfigurationFile(
             [.. draft.Intents.Select(DraftProjection.ToIntentDefinition)],
             [.. draft.Agents.Select(DraftProjection.ToPrompt)]);
 
+        // Serialized whole, in the shape a client commits.
         return JsonSerializer.SerializeToUtf8Bytes(file, ExportOptions);
     }
 }

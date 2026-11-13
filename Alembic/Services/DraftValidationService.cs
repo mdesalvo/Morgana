@@ -7,30 +7,20 @@ using Morgana.AI.Tools;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IDraftValidationService"/>: the deterministic checks, each one restating a
-/// rule Morgana already enforces somewhere later and more expensively.
+/// The default <see cref="IDraftValidationService"/>: the deterministic checks, each restating a rule Morgana enforces later and more expensively.
+/// The framework's refusal arrives after the client has packaged, deployed and run; the same sentence here arrives while it costs nothing to change.
 /// </summary>
 public class DraftValidationService : IDraftValidationService
 {
-    /// <summary>
-    /// The base tools every agent receives from <c>MorganaTool</c>, read off the class itself. A domain tool sharing one of
-    /// these names in any case is refused by Morgana at startup.
-    /// </summary>
+    /// <summary>The base tools every agent receives from <c>MorganaTool</c>, read off the class itself; Morgana refuses a domain tool sharing one of these names in any case.</summary>
     private static readonly HashSet<string> BaseToolNames = new(
         MorganaToolAdapter.GetToolMethods(typeof(MorganaTool)).Select(method => method.Name),
         StringComparer.OrdinalIgnoreCase);
 
-    /// <summary>
-    /// The scopes a parameter may declare. A parameter carrying a value the model itself authors
-    /// (quick replies, a rich card) declares none at all, which is why the
-    /// empty scope is legal rather than a third value.
-    /// </summary>
+    /// <summary>The scopes a parameter may declare; a parameter carrying a value the model authors declares none, which is why an empty scope is legal.</summary>
     private static readonly string[] KnownScopes = [Constants.Scopes.Context, Constants.Scopes.Request];
 
-    /// <summary>
-    /// C# keywords that cannot be used bare as an identifier. Not the full list: only the ones a
-    /// domain author plausibly reaches for when naming a tool parameter.
-    /// </summary>
+    /// <summary>The C# keywords a domain author plausibly reaches for when naming something, none of which can stand bare as an identifier.</summary>
     private static readonly HashSet<string> ReservedWords = new(StringComparer.Ordinal)
     {
         "abstract", "base", "bool", "break", "byte", "case", "catch", "char", "checked", "class",
@@ -44,11 +34,17 @@ public class DraftValidationService : IDraftValidationService
         "volatile", "while"
     };
 
-    /// <inheritdoc />
+    /// <summary>The name an intent or agent finding quotes in its Where.</summary>
+    private static readonly System.Text.RegularExpressions.Regex QuotedName =
+        new(@"^(?:intent|agent) '([^']*)'", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>Runs every deterministic check over the Draft.</summary>
+    /// <returns>Findings, errors first, in the order the domain declares its elements.</returns>
     public IReadOnlyList<ValidationFinding> Validate(DomainDraft draft)
     {
         List<ValidationFinding> findings = [];
 
+        // The checks that span the domain: names, the pairing of intents with agents and the colleagues each declares.
         Collect(findings, ValidationCheck.Intents, found => ValidateIntents(draft, found));
         Collect(findings, ValidationCheck.Routing, found => ValidateIntentAgentPairing(draft, found));
         Collect(findings, ValidationCheck.Colleagues, found => ValidateConsultations(draft, found));
@@ -60,28 +56,30 @@ public class DraftValidationService : IDraftValidationService
         {
             List<ValidationFinding> own = [];
 
-            ValidateAgent(agent, draft.Intents.FirstOrDefault(i =>
-                string.Equals(i.Name, agent.ID, StringComparison.OrdinalIgnoreCase)), own);
+            ValidateAgent(agent, draft.Intents.FirstOrDefault(intent =>
+                string.Equals(intent.Name, agent.ID, StringComparison.OrdinalIgnoreCase)), own);
 
+            // Every finding is filed under its agent and the family of check that raised it, which the page groups by.
             findings.AddRange(own.Select(finding => finding with { Agent = agent.ID, Check = CheckOf(finding) }));
         }
 
         // Errors first, then warnings, each group keeping the order the domain declares its
         // elements in: a client reading top-down meets what stops them before what merely
         // deserves a look, without losing the file's own sequence inside each group.
-        return [.. findings.OrderByDescending(f => f.Severity)];
+        return [.. findings.OrderByDescending(finding => finding.Severity)];
     }
 
     /// <summary>
     /// Runs one family of checks and files what it found under that family and the agent it names.
+    /// Those families speak of one element per finding, quoted in its Where; the agent an intent reaches carries the intent's own name.
     /// </summary>
-    // Those families speak of one element per finding, quoted in their Where as 'name': the agent
-    // an intent reaches carries the intent's own name.
     private static void Collect(List<ValidationFinding> findings, ValidationCheck check, Action<List<ValidationFinding>> validate)
     {
+        // The family's findings, gathered before they are filed.
         List<ValidationFinding> found = [];
         validate(found);
 
+        // Filed under the family and the name the Where quotes, so the page can show each beside its agent.
         findings.AddRange(found.Select(finding => finding with
         {
             Check = check,
@@ -90,32 +88,25 @@ public class DraftValidationService : IDraftValidationService
     }
 
     /// <summary>
-    /// The name an intent or agent finding quotes in its Where.
-    /// </summary>
-    private static readonly System.Text.RegularExpressions.Regex QuotedName =
-        new(@"^(?:intent|agent) '([^']*)'", System.Text.RegularExpressions.RegexOptions.Compiled);
-
-    /// <summary>
     /// Which family an agent's own finding belongs to, read off the Where its check wrote.
+    /// A class name is the code's, a tool or parameter is addressed as agent.tool and everything else is the agent's prose.
     /// </summary>
-    // A class name is the code's, a tool or parameter is addressed as agent.tool, everything else is the agent's prose.
     private static ValidationCheck CheckOf(ValidationFinding finding) =>
         finding.Where.EndsWith("class name", StringComparison.Ordinal) ? ValidationCheck.Code
         : finding.Where.StartsWith("agent '", StringComparison.Ordinal) ? ValidationCheck.Agents
         : ValidationCheck.Tools;
 
-    /// <summary>
-    /// Checks intent names for emptiness, duplication and collision with the framework's own
-    /// prompt IDs.
-    /// </summary>
+    /// <summary>Checks every intent for a name, a description, a label and a default value, its name also for duplication or collision with the framework's prompt ids.</summary>
     private static void ValidateIntents(DomainDraft draft, List<ValidationFinding> findings)
     {
+        // Names already met, compared as Morgana compares them.
         HashSet<string> seen = new(StringComparer.OrdinalIgnoreCase);
 
         foreach (IntentDraft intent in draft.Intents)
         {
             string where = $"intent '{intent.Name ?? "(unnamed)"}'";
 
+            // Nothing else about a nameless intent can be judged: everything keys on the name.
             if (string.IsNullOrWhiteSpace(intent.Name))
             {
                 findings.Add(new ValidationFinding(FindingSeverity.Error, where,
@@ -124,6 +115,7 @@ public class DraftValidationService : IDraftValidationService
                 continue;
             }
 
+            // A second intent under one name, casing aside, is the duplicate the configuration service refuses.
             if (!seen.Add(intent.Name))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                     "Two intents carry this name.",
@@ -135,11 +127,13 @@ public class DraftValidationService : IDraftValidationService
                     $"'{intent.Name}' is one of the framework's own prompt IDs.",
                     "Morgana refuses at startup a domain intent or agent prompt that takes the id of one of the framework's own prompts, since an agent's prompt is looked up by its intent's name in the same registry."));
 
+            // Legal, but the classifier is then left matching on the name alone.
             if (string.IsNullOrWhiteSpace(intent.Description))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                     "The intent has no description.",
                     "The description is the only thing the classifier reads about this intent; without one it can only match on the name."));
 
+            // Every intent is a button on Morgana's welcome, so both of a button's parts are required at startup.
             if (string.IsNullOrWhiteSpace(intent.Label))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                     "The intent has no label.",
@@ -153,55 +147,43 @@ public class DraftValidationService : IDraftValidationService
     }
 
     /// <summary>
-    /// Checks that intents and agents pair up in both directions.
+    /// Checks that intents and agents pair up in both directions, the startup registry's own check moved forward to authoring time.
+    /// At startup it is an exception thrown at a client who has already packaged and deployed.
     /// </summary>
-    /// <remarks>
-    /// This is <c>HandlesIntentAgentRegistryService</c>'s bidirectional check, moved forward from
-    /// startup to authoring time. There it is an <c>InvalidOperationException</c> thrown at a
-    /// client who has already packaged and deployed.
-    /// </remarks>
     private static void ValidateIntentAgentPairing(DomainDraft draft, List<ValidationFinding> findings)
     {
+        // Both sides by name, casing aside, as the registry pairs them.
         HashSet<string> agentIds = new(
-            draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)).Select(a => a.ID!),
+            draft.Agents.Where(agent => !string.IsNullOrWhiteSpace(agent.ID)).Select(agent => agent.ID!),
             StringComparer.OrdinalIgnoreCase);
 
         HashSet<string> intentNames = new(
-            draft.Intents.Where(i => !string.IsNullOrWhiteSpace(i.Name)).Select(i => i.Name!),
+            draft.Intents.Where(intent => !string.IsNullOrWhiteSpace(intent.Name)).Select(intent => intent.Name!),
             StringComparer.OrdinalIgnoreCase);
 
+        // An intent nobody handles: the classifier would route requests to an agent that does not exist.
         findings.AddRange(
-            draft.Intents.Where(i => !string.IsNullOrWhiteSpace(i.Name)
-                                       && !agentIds.Contains(i.Name!))
+            draft.Intents.Where(intentDraft => !string.IsNullOrWhiteSpace(intentDraft.Name)
+                                       && !agentIds.Contains(intentDraft.Name!))
                          .Select(intent => new ValidationFinding(FindingSeverity.Error, $"intent '{intent.Name}'", "No agent handles this intent.", "HandlesIntentAgentRegistryService checks this in both directions at startup and throws on a mismatch.")));
 
+        // An agent no intent declares: nothing could ever route to it.
         findings.AddRange(
-            draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)
-                                      && !intentNames.Contains(a.ID!))
+            draft.Agents.Where(agentDraft => !string.IsNullOrWhiteSpace(agentDraft.ID)
+                                      && !intentNames.Contains(agentDraft.ID!))
                         .Select(agent => new ValidationFinding(FindingSeverity.Error, $"agent '{agent.ID}'", "No intent declares this agent.", "An agent nothing routes to is unreachable and the startup registry treats it as a configuration error rather than dead weight.")));
     }
 
     /// <summary>
-    /// Checks every declared colleague against the domain that has to satisfy it.
+    /// Checks every declared colleague against the domain that has to satisfy it, where the startup registry would throw for the first two findings.
+    /// The third, a chain longer than one hop, is the framework's refusal of a second hop seen in advance; a colleague at a partner is checked only for a partner name,
+    /// since its intent is answered by a domain this one cannot see.
     /// </summary>
-    /// <remarks>
-    /// <c>HandlesIntentAgentRegistryService</c> validates the same two things at startup and throws:
-    /// a <c>[ConsultsAgent]</c> naming an intent no agent handles and one naming the declaring
-    /// agent's own. Here they cost nothing to fix. The third finding is not a startup rule at all
-    /// but the shape of the framework's own refusal — a colleague answering a consultation is denied
-    /// its own peer functions — so a chain reaches one hop and no further and an author who drew a
-    /// chain expecting two is the person this exists to tell.
-    /// <para>
-    /// None of the three can be said of a colleague at an instance. Its intent is answered by a domain
-    /// this one cannot see, its own edges are unknowable and an agent consulting a namesake of its
-    /// own at another installation is ordinary rather than circular. So what is checked there is the
-    /// only thing this side owns: that the instance was named at all.
-    /// </para>
-    /// </remarks>
     private static void ValidateConsultations(DomainDraft draft, List<ValidationFinding> findings)
     {
+        // The intents this domain's own agents answer.
         HashSet<string> handled = new(
-            draft.Agents.Where(a => !string.IsNullOrWhiteSpace(a.ID)).Select(a => a.ID!),
+            draft.Agents.Where(agent => !string.IsNullOrWhiteSpace(agent.ID)).Select(agent => agent.ID!),
             StringComparer.OrdinalIgnoreCase);
 
         foreach (AgentDraft agent in draft.Agents)
@@ -210,8 +192,10 @@ public class DraftValidationService : IDraftValidationService
 
             foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults)
             {
+                // A colleague at a partner: only its name is this side's to get right.
                 if (colleague.Instance is not null)
                 {
+                    // A blank partner name matches no entry under Partners and startup refuses it.
                     if (string.IsNullOrWhiteSpace(colleague.Instance))
                         findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                             $"It consults '{colleague.Intent}' at a system with no name.",
@@ -220,6 +204,7 @@ public class DraftValidationService : IDraftValidationService
                     continue;
                 }
 
+                // An agent consulting itself is refused at startup.
                 if (string.Equals(colleague.Intent, agent.ID, StringComparison.OrdinalIgnoreCase))
                 {
                     findings.Add(new ValidationFinding(FindingSeverity.Error, where,
@@ -228,6 +213,7 @@ public class DraftValidationService : IDraftValidationService
                     continue;
                 }
 
+                // A colleague no agent of this domain answers is refused at startup too.
                 if (!handled.Contains(colleague.Intent))
                 {
                     findings.Add(new ValidationFinding(FindingSeverity.Error, where,
@@ -236,8 +222,10 @@ public class DraftValidationService : IDraftValidationService
                     continue;
                 }
 
-                AgentDraft? far = draft.Agents.FirstOrDefault(a => string.Equals(a.ID, colleague.Intent, StringComparison.OrdinalIgnoreCase));
+                // The colleague consulted, whose own colleagues are out of reach while it answers.
+                AgentDraft? far = draft.Agents.FirstOrDefault(candidate => string.Equals(candidate.ID, colleague.Intent, StringComparison.OrdinalIgnoreCase));
 
+                // A chain drawn two hops deep, which the framework cuts at one.
                 if (far?.Code.Consults.Count > 0)
                     findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                         $"It consults '{colleague.Intent}', which consults a colleague of its own.",
@@ -250,18 +238,18 @@ public class DraftValidationService : IDraftValidationService
     private static string Compact(string? text) =>
         new string([.. (text ?? string.Empty).Where(char.IsLetterOrDigit)]).ToLowerInvariant();
 
-    /// <summary>
-    /// Checks one agent's prose, its class names and its whole toolkit.
-    /// </summary>
+    /// <summary>Checks one agent's prose, its class names and its whole toolkit.</summary>
     private static void ValidateAgent(AgentDraft agent, IntentDraft? intent, List<ValidationFinding> findings)
     {
         string where = $"agent '{agent.ID ?? "(unnamed)"}'";
 
+        // Without an id the agent pairs with no intent and no attribute.
         if (string.IsNullOrWhiteSpace(agent.ID))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 "The agent has no ID.",
                 "The ID is what pairs a prompt with its intent and its [HandlesIntent] attribute."));
 
+        // Each missing section is filed under the interview step that writes it, so the page can open that step.
         if (string.IsNullOrWhiteSpace(agent.Target))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 "The agent has no Target.",
@@ -281,59 +269,57 @@ public class DraftValidationService : IDraftValidationService
 
         if (!string.IsNullOrWhiteSpace(territory))
         {
+            // The first of the agent's own tools the territory names, if it names any.
             string? named = agent.Tools
                 .Select(tool => tool.Name)
                 .FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)
                                         && territory.Contains(name!, StringComparison.OrdinalIgnoreCase));
 
+            // An inventory of functions instead of a territory.
             if (named is not null)
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                     $"What this agent publishes to a colleague names its own tool '{named}'.",
                     "Territory states a territory: a colleague handed an inventory of functions rules its question out instead of asking it.") { Step = InterviewStep.AgentTerritory });
 
+            // The classifier's routing phrase recycled, compared without spacing and punctuation.
             if (intent is not null && string.Equals(Compact(territory), Compact(intent.Description), StringComparison.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                     "What this agent publishes to a colleague is its own routing description.",
                     "The intent description tells the classifier which user utterances land here, never what this agent answers for — a caller reading it back learns nothing it could ask about.") { Step = InterviewStep.AgentTerritory });
         }
 
+        // Legal, since the framework already governs a turn, but the agent then adds no constraint of its own.
         if (string.IsNullOrWhiteSpace(agent.Instructions))
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                 "The agent has no Instructions.",
                 "Legal — the framework layer already governs how a turn is formed — but it means this agent adds no domain constraint of its own.") { Step = InterviewStep.AgentInstructions });
 
+        // How the agent's own tools' output is shown is something no global policy can know for it.
         if (string.IsNullOrWhiteSpace(agent.Formatting))
             findings.Add(new ValidationFinding(FindingSeverity.Warning, where,
                 "The agent has no Formatting.",
                 "Formatting is where an agent says how its own tools' output should be presented, which no global policy can know for it.") { Step = InterviewStep.AgentFormatting });
 
-        // Deliberately not a finding, for the same reason as Code.Inferred below: whether zero
-        // native tools means "MCP-only, genuinely nothing to declare" or "the author forgot" is
-        // undecidable without knowing which MCP servers the agent reaches at runtime and that is a
-        // C# fact — AgentCodeFacts.MCPServers — that is nowhere in an agents.json import and no
-        // more decided in an alembic-draft.json save file that has not been through Morganize yet
-        // either. A warning that fires identically on both cases teaches neither apart.
+        // Not a finding: whether zero native tools means an agent served by MCP or one whose author forgot
+        // is undecidable without the MCP servers it reaches, a C# fact no agents.json and no unmorganized save file
+        // carries. A warning that fires on both cases alike teaches neither apart.
 
-        // Deliberately not a finding: agent.Code.Inferred is true of every agent that has not yet
-        // visited Morganize — imported from agents.json, resumed from an alembic-draft.json saved
-        // before that page, or freshly authored this minute, with no exception among the three — so
-        // a warning here would fire on the very first Review after any of them, teaching nothing
-        // ("of course I don't have a die, I haven't been to Morganize") and never once discriminating
-        // a domain that needs attention from one that does not. Morganize's own panel already
-        // surfaces and resolves this directly, where it is actionable rather than tautological.
+        // Not a finding either: agent.Code.Inferred is true of every agent that has not been through Morganize yet,
+        // imported, resumed or freshly written alike, so a warning would fire on every first Review and tell
+        // nothing; Morganize's own panel resolves it where it is actionable.
 
+        // The class names become C# verbatim.
         ValidateIdentifier(agent.Code.AgentClassName, $"{where} class name", "class name", findings);
         ValidateIdentifier(agent.Code.ToolClassName, $"{where} tool class name", "class name", findings);
 
+        // Tool names met so far in this agent, compared as C# compares method names.
         HashSet<string> toolNames = new(StringComparer.Ordinal);
 
         foreach (ToolDraft tool in agent.Tools)
             ValidateTool(agent, tool, toolNames, findings);
     }
 
-    /// <summary>
-    /// Checks one tool's name, description and parameter list.
-    /// </summary>
+    /// <summary>Checks one tool's name, description and parameter list.</summary>
     private static void ValidateTool(AgentDraft agent, ToolDraft tool, HashSet<string> toolNames, List<ValidationFinding> toolkit)
     {
         // Every finding about a tool is rewritten in the Toolkit step.
@@ -341,6 +327,7 @@ public class DraftValidationService : IDraftValidationService
 
         string where = $"{agent.ID}.{tool.Name ?? "(unnamed)"}";
 
+        // A nameless tool has no method to check anything else on.
         if (string.IsNullOrWhiteSpace(tool.Name))
         {
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
@@ -349,23 +336,28 @@ public class DraftValidationService : IDraftValidationService
             return;
         }
 
+        // Two methods under one name in one tool class.
         if (!toolNames.Add(tool.Name))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 "This agent declares two tools with this name.",
                 "Tools are registered by name per agent, so the second registration replaces or collides with the first."));
 
+        // A base tool's name, which the startup checks refuse in any casing.
         if (BaseToolNames.Contains(tool.Name))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{tool.Name}' is one of the base tools every agent already receives.",
                 "MorganaTool gives every agent GetContextVariable, SetContextVariable, SetTurnEnding, SetQuickReplies and SetRichCard; a domain tool cannot share a name with one."));
 
+        // The name becomes a C# method verbatim.
         ValidateIdentifier(tool.Name, where, "tool name", findings);
 
+        // The startup checks refuse a tool without [Description].
         if (string.IsNullOrWhiteSpace(tool.Description))
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 "The tool has no description.",
                 "The description is what the model reads when it decides whether to call this tool at all; an empty one leaves the decision to the name."));
 
+        // Parameter names met so far and whether an optional one has come, which no required one may follow.
         HashSet<string> parameterNames = new(StringComparer.Ordinal);
         bool optionalSeen = false;
 
@@ -373,6 +365,7 @@ public class DraftValidationService : IDraftValidationService
         {
             string parameterWhere = $"{where}.{parameter.Name ?? "(unnamed)"}";
 
+            // A nameless parameter has no C# declaration to check anything else on.
             if (string.IsNullOrWhiteSpace(parameter.Name))
             {
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
@@ -381,42 +374,47 @@ public class DraftValidationService : IDraftValidationService
                 continue;
             }
 
+            // Two parameters under one name cannot both be declared.
             if (!parameterNames.Add(parameter.Name))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "This tool declares two parameters with this name.",
                     "The generated method could not declare them and the JSON schema handed to the model would carry one property, not two."));
 
+            // The name becomes a C# parameter verbatim.
             ValidateIdentifier(parameter.Name, parameterWhere, "parameter name", findings);
 
+            // The startup checks refuse a parameter without [Description].
             if (string.IsNullOrWhiteSpace(parameter.Description))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "The parameter has no description.",
                     "Morgana refuses at startup a tool parameter without [Description]: it is what the model reads to know what to pass."));
 
+            // A scope that is neither context nor request has no attribute to be emitted as.
             if (!string.IsNullOrWhiteSpace(parameter.Scope)
                 && !KnownScopes.Contains(parameter.Scope, StringComparer.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     $"'{parameter.Scope}' is not a scope.",
                     "A parameter resolving an input declares 'context' or 'request'; one carrying a value the model itself authors declares none."));
 
+            // Sharing applies to a context value alone.
             if (parameter.Shared
                 && !string.Equals(parameter.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "The parameter is Shared but not context-scoped.",
                     "Only a context value is shared: it is emitted as [ToolParameter(Records.ToolScope.SharedContext)], which a request or authored value cannot be."));
 
+            // C# allows no required parameter after an optional one.
             if (parameter.Required && optionalSeen)
                 findings.Add(new ValidationFinding(FindingSeverity.Error, parameterWhere,
                     "A required parameter follows an optional one.",
                     "C# cannot declare that method signature."));
 
+            // Once one parameter is optional, every later required one is out of order.
             optionalSeen |= !parameter.Required;
         }
     }
 
-    /// <summary>
-    /// A finding list that files every tool finding under the Toolkit step as it is added.
-    /// </summary>
+    /// <summary>A finding list that files every tool finding under the Toolkit step as it is added.</summary>
     private sealed class ToolkitFindings(List<ValidationFinding> findings)
     {
         /// <summary>The agent's own finding list the tool findings land in.</summary>
@@ -430,21 +428,20 @@ public class DraftValidationService : IDraftValidationService
     }
 
     /// <summary>
-    /// Checks that a name can be a C# identifier at all.
+    /// Checks that a name can be a C# identifier at all, by shape and keywords only.
+    /// It catches the names a domain author actually writes, a space, a hyphen, a leading digit or a word like <c>class</c>, while they can still be changed for free.
     /// </summary>
-    /// <remarks>
-    /// Shape and keywords only. The point is not to reimplement the compiler but to catch the
-    /// names a domain author actually writes — a space, a hyphen, a leading digit, or a word like
-    /// <c>class</c> — while they can still be changed for free.
-    /// </remarks>
     private static void ValidateIdentifier(string? name, string where, string what, List<ValidationFinding> findings)
     {
+        // A missing name has its own finding, raised by the caller.
         if (string.IsNullOrWhiteSpace(name))
             return;
 
+        // A letter or underscore first, then letters, digits and underscores only.
         bool shapeOk = (char.IsLetter(name[0]) || name[0] == '_')
-                       && name.All(c => char.IsLetterOrDigit(c) || c == '_');
+                       && name.All(character => char.IsLetterOrDigit(character) || character == '_');
 
+        // A malformed name cannot be emitted as written, nor can a keyword.
         if (!shapeOk)
             findings.Add(new ValidationFinding(FindingSeverity.Error, where,
                 $"'{name}' cannot be a C# identifier.",

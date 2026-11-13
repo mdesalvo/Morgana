@@ -10,46 +10,36 @@ using Morgana.AI.Interfaces;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="ICoherenceService"/>: one call over the whole domain, answered as JSON.
+/// The default <see cref="ICoherenceService"/>: one call over the whole domain, answered as JSON.
+/// JSON here and prose everywhere else in Alembic, because this output is a list to sort, count and render as a table rather than writing to read.
 /// </summary>
-/// <remarks>
-/// JSON here and prose everywhere else in Alembic, because this output is a list to be sorted,
-/// counted and rendered in a table rather than read as writing. The interview went the other way for
-/// the same reason: there the reply <em>is</em> the product.
-/// </remarks>
 public class CoherenceService : ICoherenceService
 {
-    /// <summary>
-    /// The prompt in <c>alembic.json</c> that governs the coherence pass.
-    /// </summary>
+    /// <summary>The prompt in <c>alembic.json</c> that governs the coherence pass.</summary>
     private const string CoherencePromptId = "DomainValidator";
 
-    /// <summary>
-    /// The key under which that prompt lists the subjects the pass weighs. Alembic's own, unlike the
-    /// keys of a Morgana prompt: nothing outside this workbench writes or reads it.
-    /// </summary>
+    /// <summary>The key under which that prompt lists the classes the pass weighs, Alembic's own and read by nothing outside this workbench.</summary>
     private const string AspectsPropertyName = "Aspects";
 
-    /// <summary>
-    /// Where the composed Instructions carry the classes asked for this run.
-    /// </summary>
+    /// <summary>Where the composed Instructions carry the classes asked for this run.</summary>
     private const string AspectsPlaceholder = "((aspects))";
 
-    /// <summary>
-    /// Where the composed Formatting carries the <c>kind</c> values those classes may answer with.
-    /// </summary>
+    /// <summary>Where the composed Formatting carries the <c>kind</c> values those classes may answer with.</summary>
     private const string KindsPlaceholder = "((kinds))";
 
+    /// <summary>Resolves the pass's prompt and the framework primer it reads first.</summary>
     private readonly IAlembicPromptService alembicPromptService;
+
+    /// <summary>Supplies the chat client, on the Efficiency tier like all of Alembic's model work.</summary>
     private readonly ILanguageModelService llmService;
+
+    /// <summary>Records parse and provider failures, which reach the caller too.</summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Initializes the coherence service.
-    /// </summary>
+    /// <summary>Binds the pass to its prompts and the model.</summary>
     /// <param name="alembicPromptService">Resolves the <c>DomainValidator</c> prompt from <c>alembic.json</c>.</param>
-    /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
-    /// <param name="logger">Used to record parse and provider failures — both surface to the caller too.</param>
+    /// <param name="llmService">Supplies the chat client on the Efficiency tier.</param>
+    /// <param name="logger">Records parse and provider failures.</param>
     public CoherenceService(
         IAlembicPromptService alembicPromptService,
         ILanguageModelService llmService,
@@ -60,28 +50,23 @@ public class CoherenceService : ICoherenceService
         this.logger = logger;
     }
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// Resolved on every read rather than cached: it is a parse of an embedded resource and a list
-    /// held twice is a list that can disagree with the prose the pass is actually composed from.
-    /// </remarks>
+    /// <summary>
+    /// The classes of defect the pass can be asked for, read from its prompt on every access.
+    /// A list held apart from the prompt could disagree with the prose the pass is composed from.
+    /// </summary>
     public IReadOnlyList<CoherenceAspect> Aspects =>
         alembicPromptService.Resolve(CoherencePromptId)
             .GetAdditionalPropertyOrDefault<List<CoherenceAspect>>(AspectsPropertyName, []);
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// Never throws on a model or parsing failure — every catch below returns a <see cref="CoherenceReport"/>
-    /// carrying an explanatory <see cref="CoherenceReport.Error"/> instead, because this pass is
-    /// advisory: a client who cannot run it this once should still be able to keep working with the
-    /// deterministic checks <c>DraftValidationService</c> already gave them.
-    /// </remarks>
-    /// <param name="draft">The whole domain to read at once — every intent and every agent's full prose and toolkit.</param>
-    /// <param name="resolved">Findings already fixed earlier this sitting, so a re-run does not
-    /// report the same defect back the moment its own fix lands in front of the model again.</param>
+    /// <summary>
+    /// Reviews the whole domain for the classes asked for; a model or parse failure comes back as a report carrying an error, never as an exception.
+    /// The pass is advisory, so a client who cannot run it this once keeps working with the deterministic checks.
+    /// </summary>
+    /// <param name="draft">The whole domain to read at once: every intent and every agent's full prose and toolkit.</param>
+    /// <param name="aspects">The classes asked for this run.</param>
+    /// <param name="resolved">Findings already fixed this sitting, so a re-run does not report a defect back the moment its own fix is read.</param>
     /// <param name="cancellationToken">Cancels the underlying completion.</param>
-    /// <returns>The findings the model reports, or an empty list with an <see cref="CoherenceReport.Error"/>
-    /// explaining why none could be produced.</returns>
+    /// <returns>The findings the model reports; otherwise an empty list with an error explaining why none could be produced.</returns>
     public async Task<CoherenceReport> ReviewAsync(
         DomainDraft draft,
         IReadOnlyList<string> aspects,
@@ -89,10 +74,11 @@ public class CoherenceService : ICoherenceService
         CancellationToken cancellationToken = default)
     {
         // Two agents is the floor: with one there is nothing for a relational pass to relate and
-        // running it anyway would spend a Performance call to say so.
+        // running it anyway would spend a model call to say so.
         if (draft.Agents.Count < 2)
             return new CoherenceReport([], "A coherence pass needs at least two agents: everything it looks for is a relation between them.");
 
+        // The pass's prose, its class catalogue among its properties.
         Records.Prompt coherence = alembicPromptService.Resolve(CoherencePromptId);
 
         // Only the classes asked for and the pass is composed of them: the prose of an unselected
@@ -101,16 +87,19 @@ public class CoherenceService : ICoherenceService
         // exception is the part a model gets wrong.
         List<CoherenceAspect> asked =
             [.. coherence.GetAdditionalPropertyOrDefault<List<CoherenceAspect>>(AspectsPropertyName, [])
-                    .Where(a => aspects.Contains(a.Id, StringComparer.OrdinalIgnoreCase))];
+                    .Where(aspect => aspects.Contains(aspect.Id, StringComparer.OrdinalIgnoreCase))];
 
+        // An empty selection asks no question, so no model call is spent on it.
         if (asked.Count == 0)
             return new CoherenceReport([], "Nothing was asked for: tick at least one thing to look for.");
 
+        // The Instructions carry the asked classes' own prose and nothing of the others.
         string instructions = (coherence.Instructions ?? string.Empty)
-            .Replace(AspectsPlaceholder, string.Join("\n\n", asked.Select(a => a.Description)), StringComparison.Ordinal);
+            .Replace(AspectsPlaceholder, string.Join("\n\n", asked.Select(aspect => aspect.Description)), StringComparison.Ordinal);
 
+        // The Formatting names the kinds the answer may use, which are exactly the classes asked for.
         string formatting = (coherence.Formatting ?? string.Empty)
-            .Replace(KindsPlaceholder, string.Join(", ", asked.Select(a => $"`{a.Id}`")), StringComparison.Ordinal);
+            .Replace(KindsPlaceholder, string.Join(", ", asked.Select(aspect => $"`{aspect.Id}`")), StringComparison.Ordinal);
 
         // The framework first, this pass's own prose under it. Every class this pass reports turns
         // on a rule settled above the agent (prose restating one, a boundary the framework already
@@ -125,55 +114,57 @@ public class CoherenceService : ICoherenceService
                 Records.Prompt.Labeled(Constants.SectionLabels.Formatting, formatting)
             }.Where(section => !string.IsNullOrWhiteSpace(section)));
 
+        // Judging meaning across a whole domain needs the capable model the interview runs on.
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         try
         {
+            // The whole domain in one request, resumed until the pass finishes its list.
             string answer = await StreamedCompletion.RunAsync(
                 chatClient, system, Describe(draft, resolved),
                 length => logger.LogInformation("The coherence pass was cut at {Length} characters; resuming", length),
                 length => logger.LogWarning("The coherence pass went silent after {Length} characters; retrying once", length),
                 cancellationToken);
 
+            // An empty answer is told as one rather than shown as a clean domain.
             if (answer.Length == 0)
                 return new CoherenceReport([], "The model returned nothing.");
 
+            // The findings in the shape the Formatting asks for.
             CoherenceFinding[]? findings = JsonSerializer.Deserialize<CoherenceFinding[]>(
                 answer, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
+            // A JSON null reads as nothing found.
             return new CoherenceReport(findings ?? []);
         }
         catch (JsonException ex)
         {
+            // An answer that is not JSON leaves the client with the deterministic checks and an explanation.
             logger.LogWarning(ex, "The coherence pass did not answer as JSON");
             return new CoherenceReport([], $"The pass did not answer in the agreed shape: {ex.Message}");
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // A provider failure is reported on the page the same way; a cancellation is the client's own and goes through.
             logger.LogError(ex, "The coherence pass failed");
             return new CoherenceReport([], $"The pass could not run: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// States the whole domain: every intent description, every agent's prose, every toolkit.
+    /// States the whole domain in its exact words: every intent description, every agent's prose, every toolkit.
+    /// The defects this pass exists for live in the phrasing, which a summary would smooth away before the model saw it.
     /// </summary>
-    /// <remarks>
-    /// All of it and not a summary. The defects this pass exists for live in the exact words —
-    /// two descriptions that overlap do so in their phrasing and a summary is precisely the step
-    /// that would smooth the overlap away before the model ever sees it.
-    /// </remarks>
-    /// <param name="draft">The domain to render — read whole, never summarized.</param>
-    /// <param name="resolved">Prior fixes this sitting, rendered first and by name so the model can
-    /// tell a lingering defect from one it already dealt with.</param>
+    /// <param name="draft">The domain to render, read whole.</param>
+    /// <param name="resolved">Prior fixes this sitting, rendered first so the model can tell a lingering defect from one already dealt with.</param>
     private static string Describe(DomainDraft draft, IReadOnlyList<ResolvedCoherenceFinding>? resolved)
     {
         StringBuilder sb = new StringBuilder();
 
         // Read first and named as what it is: this pass has no memory of its own last run, so
         // without this a client who fixed something and asked to run it again would face a pass
-        // with no way to tell "still there" from "reads like something already dealt with" — it
-        // would just see the domain and say what it always says about it.
+        // with no way to tell "still there" from "reads like something already dealt with" and
+        // it would just see the domain and say what it always says about it.
         if (resolved is { Count: > 0 })
         {
             sb.AppendLine("# Already addressed this sitting");
@@ -181,12 +172,14 @@ public class CoherenceService : ICoherenceService
             sb.AppendLine("Do not report these again on sight. Read the current text below first: report one only if it is genuinely still true of it, not because it once resembled this.");
             sb.AppendLine();
 
-            foreach (ResolvedCoherenceFinding r in resolved)
-                sb.AppendLine(CultureInfo.InvariantCulture, $"- {r.Finding.Kind} ({r.Finding.Where}): {r.Finding.What} — addressed: {r.Resolution}");
+            // Each fix with the finding it answered, in the applier's own words.
+            foreach (ResolvedCoherenceFinding resolvedFinding in resolved)
+                sb.AppendLine(CultureInfo.InvariantCulture, $"- {resolvedFinding.Finding.Kind} ({resolvedFinding.Finding.Where}): {resolvedFinding.Finding.What} — addressed: {resolvedFinding.Resolution}");
 
             sb.AppendLine();
         }
 
+        // The intents as the classifier weighs them, side by side, which is where two of them collide.
         sb.AppendLine("# Intents, as the classifier reads them");
         sb.AppendLine();
 
@@ -196,14 +189,13 @@ public class CoherenceService : ICoherenceService
         sb.AppendLine();
         sb.AppendLine("# Agents");
         sb.AppendLine();
-        // Every agent below is described by its native tools alone. A Morgana agent may also be
-        // hybrid, with native tools of its own plus arbitrary MCP tools reached at runtime. Which
-        // MCP servers an agent reaches is a C# fact (AgentCodeFacts.MCPServers) agents.json never
-        // carries, whether that agent's own tool count here is zero or not. So a capability a
-        // Target or Instructions promises with no native tool listed for it is not evidence of
-        // PROMISES WITHOUT TOOLS on its own — it may be MCP-backed, invisibly to this description.
+
+        // Every agent below is described by its native tools alone. A Morgana agent may also reach MCP tools
+        // at runtime, a C# fact (AgentCodeFacts.MCPServers) that agents.json never carries, so a capability
+        // promised with no native tool listed for it is not on its own a promise without its tool.
         sb.AppendLine("Native tools only, below: an agent may also reach further capability through MCP servers this description cannot see, whether or not it lists any native tools of its own.");
 
+        // One section per agent, in the domain's own order.
         foreach (AgentDraft agent in draft.Agents)
         {
             sb.AppendLine();
@@ -225,6 +217,7 @@ public class CoherenceService : ICoherenceService
                 ? $"May consult and is handed each as a function of its own: {PeerNaming.Describe(agent.Code.Consults)}."
                 : "Declares no colleagues: it can put a question to no other agent.");
 
+            // No toolkit to list, said in so many words so the pass does not read an omission.
             if (agent.Tools.Count == 0)
             {
                 sb.AppendLine();
@@ -235,6 +228,7 @@ public class CoherenceService : ICoherenceService
             sb.AppendLine();
             sb.AppendLine("Tools:");
 
+            // Each tool with its parameters' scope and sharing, where two toolkits reaching one system under two shapes show.
             foreach (ToolDraft tool in agent.Tools)
             {
                 sb.AppendLine(CultureInfo.InvariantCulture, $"- {tool.Name}: {tool.Description}");

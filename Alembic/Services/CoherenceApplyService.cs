@@ -10,34 +10,31 @@ using Morgana.AI.Interfaces;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="ICoherenceApplyService"/>: a one-shot tool-calling agent, built the same way
-/// an interview pass is, whose tools write directly into the agents the finding named.
+/// The default <see cref="ICoherenceApplyService"/>: a one-shot tool-calling agent, built as an interview pass is, whose tools write into the agents the finding names.
+/// A new agent is built per call, since its tools close over this call's Draft and a finding is one instruction with no turn after it.
 /// </summary>
-/// <remarks>
-/// One <see cref="AIAgent"/> per call rather than a reused one: the tool set is rebuilt against
-/// this call's <see cref="DomainDraft"/> instance every time (<see cref="CoherenceApplyTool"/>
-/// closes over it) and a finding is a single, self-contained instruction with no turn after it to
-/// keep an agent alive for.
-/// </remarks>
 public class CoherenceApplyService : ICoherenceApplyService
 {
-    /// <summary>
-    /// The prompt in <c>alembic.json</c> governing this pass.
-    /// </summary>
+    /// <summary>The prompt in <c>alembic.json</c> governing this pass.</summary>
     private const string PromptId = "CoherenceApplier";
 
+    /// <summary>Resolves the pass's prompt and the framework primer it reads first.</summary>
     private readonly IAlembicPromptService alembicPromptService;
+
+    /// <summary>The framework's composer, which <see cref="MorganaToolAdapter"/> describes the tools through.</summary>
     private readonly IPromptComposerService promptComposerService;
+
+    /// <summary>Supplies the chat client, on the Efficiency tier like all of Alembic's model work.</summary>
     private readonly ILanguageModelService llmService;
+
+    /// <summary>Records an apply that failed, which the caller also sees in the result.</summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Initializes the apply service.
-    /// </summary>
+    /// <summary>Binds the pass to its prompts, the tool machinery and the model.</summary>
     /// <param name="alembicPromptService">Resolves the <c>CoherenceApplier</c> prompt from <c>alembic.json</c>.</param>
-    /// <param name="promptComposerService">Passed through to <see cref="MorganaToolAdapter"/> — the framework's own tool-schema machinery.</param>
-    /// <param name="llmService">Supplies the chat client, always on the Performance tier.</param>
-    /// <param name="logger">Records a failed apply — the caller also sees it, via the returned result.</param>
+    /// <param name="promptComposerService">Passed to <see cref="MorganaToolAdapter"/>, the framework's own tool-schema machinery.</param>
+    /// <param name="llmService">Supplies the chat client on the Efficiency tier.</param>
+    /// <param name="logger">Records a failed apply.</param>
     public CoherenceApplyService(
         IAlembicPromptService alembicPromptService,
         IPromptComposerService promptComposerService,
@@ -50,25 +47,27 @@ public class CoherenceApplyService : ICoherenceApplyService
         this.logger = logger;
     }
 
-    /// <inheritdoc />
-    /// <param name="draft">The domain to fix, mutated in place by whichever tools the model calls —
-    /// there is no copy: a successful apply is the caller's own Draft with the fix already on it.</param>
-    /// <param name="finding">The one coherence finding to act on, rendered into the opening user
-    /// message below (Kind/Where/What/Why/Fix) rather than left for the model to re-derive.</param>
+    /// <summary>
+    /// Applies one finding's fix through the pass's tools, which change the caller's own Draft in place.
+    /// A result declared not applied may still follow tool calls that landed, which its summary tells the client to check.
+    /// </summary>
+    /// <param name="draft">The domain to fix, changed in place by whichever tools the model calls.</param>
+    /// <param name="finding">The finding to act on, handed to the model field by field rather than left for it to re-derive.</param>
     /// <param name="cancellationToken">Cancels the underlying run.</param>
-    /// <returns>Whether the pass declared the fix applied (via <c>ApplyCompleted</c>) and a one-line
-    /// summary of what changed — or, on failure, an explanation of what could not be done. A
-    /// declared-false-but-tool-calls-may-have-landed result is possible: see the final return below.</returns>
+    /// <returns>Whether the pass declared the fix applied with what changed; otherwise why nothing could be done.</returns>
     public async Task<CoherenceApplyResult> ApplyAsync(DomainDraft draft, CoherenceFinding finding, CancellationToken cancellationToken = default)
     {
+        // The pass's own prose: what it is for, how it repairs and how it reports.
         Records.Prompt prompt = alembicPromptService.Resolve(PromptId);
 
+        // The tools write into this very Draft, so the fix lands on what the client is looking at.
         CoherenceApplyTool tools = new CoherenceApplyTool(draft);
         MorganaToolAdapter toolAdapter = new MorganaToolAdapter(promptComposerService);
 
         // The ten tools of the apply pass, each described by the attributes of the method that implements it.
         toolAdapter.AddTools(tools, MorganaToolAdapter.ProjectToolDefinitions(typeof(CoherenceApplyTool)));
 
+        // Rewriting an agent's prose is the same job as writing it, so it runs on the tier the interview does.
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);
 
         AIAgent agent = chatClient.AsAIAgent(new ChatClientAgentOptions
@@ -89,24 +88,31 @@ public class CoherenceApplyService : ICoherenceApplyService
                         Records.Prompt.Labeled(Constants.SectionLabels.Instructions, prompt.Instructions),
                         Records.Prompt.Labeled(Constants.SectionLabels.Formatting, prompt.Formatting)
                     }.Where(section => !string.IsNullOrWhiteSpace(section))),
+
+                // The pass may change exactly what its tools reach and nothing else.
                 Tools = [.. await toolAdapter.CreateAllFunctionsAsync()]
             }
         });
 
+        // A session of its own: the apply remembers nothing of the coherence pass that produced the finding.
         AgentSession session = await agent.CreateSessionAsync();
 
+        // The finding exactly as the client read it, so the pass acts on what they decided to apply.
         string message = $"Kind: {finding.Kind}\nWhere: {finding.Where}\nWhat: {finding.What}\nWhy: {finding.Why}\nFix: {finding.Fix}";
 
         try
         {
+            // One run: the model reads the agents involved, writes the fix and declares it done.
             await agent.RunAsync(new ChatMessage(ChatRole.User, message), session, cancellationToken: cancellationToken);
         }
         catch (Exception ex) when (ex is not OperationCanceledException)
         {
+            // A failed run is reported on the finding's own row, so the client knows it is still open.
             logger.LogError(ex, "Applying a coherence finding failed");
             return new CoherenceApplyResult(false, $"The fix could not be applied: {ex.Message}");
         }
 
+        // Only ApplyCompleted sets a summary, so its absence means the pass stopped without declaring the fix done.
         return tools.Summary is { } summary
             ? new CoherenceApplyResult(true, summary)
             : new CoherenceApplyResult(false, "The pass stopped without declaring the fix applied. Some of its tool calls may already have "

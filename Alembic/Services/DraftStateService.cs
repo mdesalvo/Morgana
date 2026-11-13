@@ -4,43 +4,25 @@ using Alembic.Models;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="IDraftStateService"/>: the Draft in the circuit, with a recent copy of itself.
+/// The default <see cref="IDraftStateService"/>: the circuit's Draft with a copy of itself a few seconds old, gone with the circuit.
+/// Nothing is resumed on the way in, since a workbench that resumed what the client had not asked for would decide what they came to do;
+/// the copy exists so Save my work hands over a file even when serializing the Draft as it stands fails.
 /// </summary>
-/// <remarks>
-/// <para>
-/// The Draft lives here, in this circuit and goes when it goes. Nothing survives a restart and
-/// nothing is picked up on the way in: the landing page is the same door for everybody and coming
-/// back to unfinished work means bringing the file back to it. A workbench that silently resumed
-/// something the client had not asked to resume would be deciding for them what they had come to do.
-/// </para>
-/// <para>
-/// What the timer keeps is a copy of the last few seconds and it exists for one gesture: Save my
-/// work serializes the Draft as it stands when the button is pressed and falls back to this when it
-/// cannot — a Draft caught mid-write, a serialization that throws. The client gets a file either way,
-/// at worst <c>AutosaveSeconds</c> behind what is on their screen.
-/// </para>
-/// <para>
-/// The service is registered <b>Scoped</b>, so its lifetime is exactly one Blazor Server circuit:
-/// one instance per browser tab, created when the circuit opens and disposed when it closes —
-/// whether that is a clean navigation away or the connection dropping (a suspended laptop, a proxy
-/// closing an idle socket). <see cref="Dispose"/> stops the timer either way, so a dead circuit
-/// never leaves a snapshot loop running against a Draft nobody can reach any more.
-/// </para>
-/// </remarks>
 public sealed class DraftStateService : IDraftStateService, IDisposable
 {
+    /// <summary>Turns the Draft into the bytes the client takes away.</summary>
     private readonly IDraftSerializationService drafts;
+
+    /// <summary>Records a snapshot that could not be taken.</summary>
     private readonly ILogger logger;
+
+    /// <summary>Takes a snapshot every <c>Alembic:Work:AutosaveSeconds</c>, stopped with the circuit.</summary>
     private readonly Timer timer;
 
-    /// <summary>
-    /// The most recent snapshot, kept only so Save my work is never left with nothing to hand over.
-    /// </summary>
+    /// <summary>The most recent snapshot, kept only so Save my work is never left with nothing to hand over.</summary>
     private byte[]? latest;
 
-    /// <summary>
-    /// Binds the state service to the serializer its snapshots go through.
-    /// </summary>
+    /// <summary>Binds the state service to the serializer its snapshots go through and starts the autosave.</summary>
     /// <param name="drafts">Turns the Draft into the bytes the client takes away.</param>
     /// <param name="configuration">How often to take a snapshot.</param>
     /// <param name="logger">Records a snapshot that could not be taken.</param>
@@ -49,12 +31,11 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
         this.drafts = drafts;
         this.logger = logger;
 
+        // How far behind the screen the fallback copy may lag.
         TimeSpan autosave = TimeSpan.FromSeconds(configuration.GetValue("Alembic:Work:AutosaveSeconds", 20));
 
-        // Same interval for the due time and the period: the first snapshot fires one AutosaveSeconds
-        // after the circuit opens (there is nothing to snapshot before then anyway — Current starts
-        // null) and every one after that on the same cadence, on the .NET thread pool rather than
-        // the circuit's own synchronization context.
+        // The first snapshot fires one interval after the circuit opens, when there may be a Draft at last; it runs on the
+        // thread pool rather than the circuit's synchronization context, so a slow serialization never stalls the screen.
         timer = new Timer(_ => Snapshot(), null, autosave, autosave);
     }
 
@@ -64,21 +45,18 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
     /// <inheritdoc />
     public event Action? Changed;
 
-    /// <inheritdoc />
+    /// <summary>Replaces the Draft under construction and tells every listening component to re-render.</summary>
     public void Set(DomainDraft? draft)
     {
+        // Every page of the circuit reads the Draft from here, so each re-renders on the one that replaced it.
         Current = draft;
         Changed?.Invoke();
     }
 
-    /// <inheritdoc />
-    /// <remarks>
-    /// Called both by the timer, on its own cadence and directly by <c>SaveWork</c>'s own handler
-    /// for an up-to-the-second copy at the moment the client actually presses the button — the timer
-    /// is a floor under that call, not a replacement for it.
-    /// </remarks>
-    /// <returns>The freshly serialized bytes, or <c>null</c> when there is no Draft yet or serialization
-    /// failed — in the latter case <see cref="latest"/> is left holding whatever snapshot preceded it.</returns>
+    /// <summary>
+    /// Serializes the Draft as it stands and keeps it as the newest snapshot; <c>null</c> without a Draft or when serialization fails.
+    /// The timer calls it on its cadence and Save my work at the moment of the press, the timer being a floor under that call.
+    /// </summary>
     public byte[]? Snapshot()
     {
         // Read into a local first: the timer's thread and the circuit's own both arrive here and a
@@ -88,6 +66,7 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
 
         try
         {
+            // The fresh copy replaces the last one and goes to the caller.
             return latest = drafts.Serialize(draft);
         }
         catch (Exception ex)
@@ -101,11 +80,9 @@ public sealed class DraftStateService : IDraftStateService, IDisposable
         }
     }
 
-    /// <inheritdoc />
-    /// <returns>The most recent snapshot taken, by timer or by an explicit <see cref="Snapshot"/>
-    /// call — never re-serializes on its own, so this is a cheap read even mid-turn.</returns>
+    /// <summary>The most recent snapshot, taken by the timer or by Save my work, read without serializing anything.</summary>
     public byte[]? Latest() => latest;
 
-    /// <inheritdoc />
+    /// <summary>Stops the autosave, so a closed circuit leaves no snapshot loop running against a Draft nobody can reach.</summary>
     public void Dispose() => timer.Dispose();
 }

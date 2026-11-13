@@ -7,55 +7,38 @@ using Morgana.AI;
 namespace Alembic.Services;
 
 /// <summary>
-/// Default <see cref="ICodeEmitService"/>: string templates and nothing else.
+/// The default <see cref="ICodeEmitService"/>: string templates and nothing else.
+/// What is emitted is the shape of the shipped example plugin's agent and tool classes, which a template reproduces exactly; when the framework's small
+/// plugin surface changes, this file changes with it visibly rather than a code model quietly emitting something subtly different.
 /// </summary>
-/// <remarks>
-/// No Roslyn, no syntax factory. What is emitted is the shape of `BillingAgent.cs` and
-/// `BillingTool.cs` in the shipped Examples plugin, which a template reproduces exactly and a code
-/// model would only reproduce approximately. The plugin surface is small, fixed by base classes and
-/// attributes and changes when the framework changes — at which point this file changes with it,
-/// visibly, rather than a generator quietly emitting something subtly different.
-/// </remarks>
 public class CodeEmitService : ICodeEmitService
 {
-    /// <summary>
-    /// The namespace used when the Draft carries none.
-    /// </summary>
+    /// <summary>The namespace used when the Draft carries none.</summary>
     public const string DefaultNamespace = "Domain";
 
     /// <summary>
-    /// The tier assumed when the Draft carries none.
+    /// The tier assumed when the Draft carries none: Efficiency, the cheaper of the two an agent may run on.
+    /// The framework reserves Performance for an author declaring an existential need, so a default picking it would spend a budget on a decision nobody made.
     /// </summary>
-    /// <remarks>
-    /// <c>Efficiency</c> and deliberately the cheap one: the framework reserves
-    /// <c>Performance</c> for an agent whose author declares an existential need for deep
-    /// reasoning and a default that quietly picks it would spend a client's budget on a decision
-    /// nobody made.
-    /// </remarks>
     public const Records.LLMTier DefaultTier = Records.LLMTier.Efficiency;
 
     /// <summary>
-    /// Every emitted C# parameter is a <c>string</c>.
+    /// The type of every emitted parameter, a statement about what the configuration carries rather than a shortcut.
+    /// A tool parameter's record has no type, the model's schema coming from the method itself, so a type guessed from a name would be a guess the client meets at runtime.
     /// </summary>
-    /// <remarks>
-    /// Not a shortcut — a statement about what the configuration carries.
-    /// <c>Records.ToolParameter</c> has a name, a description, a required flag, a scope and a
-    /// shared flag and no type: the JSON schema the model reads is generated from the
-    /// <em>delegate</em>, so the type lives in the C# and only there. Alembic cannot know it and
-    /// guessing one from a parameter's name would be a guess the client discovers at runtime.
-    /// A narrower type is a one-word edit in the two halves; a wrong one is a bug.
-    /// </remarks>
     private const string ParameterType = "string";
 
-    /// <inheritdoc />
+    /// <summary>Emits the agent's class and, where it declares native tools, the generated half of its tool class.</summary>
     public IReadOnlyList<EmittedFile> Emit(AgentDraft agent, string intentName)
     {
-        string ns = string.IsNullOrWhiteSpace(agent.Code.Namespace) ? DefaultNamespace : agent.Code.Namespace!;
+        // The namespace and class name the interview settled, else the conventions the framework's own examples follow.
+        string codeNamespace = string.IsNullOrWhiteSpace(agent.Code.Namespace) ? DefaultNamespace : agent.Code.Namespace!;
         string agentClass = agent.Code.AgentClassName ?? $"{Pascal(intentName)}Agent";
 
+        // The agent class is always emitted, whole.
         List<EmittedFile> files =
         [
-            new EmittedFile($"Agents/{agentClass}.g.cs", EmitAgent(agent, intentName, ns, agentClass), FileOwnership.Generated)
+            new EmittedFile($"Agents/{agentClass}.g.cs", EmitAgent(agent, intentName, codeNamespace, agentClass), FileOwnership.Generated)
         ];
 
         // No tool class for an agent that declares none: an MCP-only agent's tools arrive at runtime
@@ -63,27 +46,24 @@ public class CodeEmitService : ICodeEmitService
         if (agent.Tools.Count == 0)
             return files;
 
+        // The tool class's name, which the client's own half must share.
         string toolClass = agent.Code.ToolClassName ?? $"{Pascal(intentName)}Tool";
 
-        files.Add(new EmittedFile($"Tools/{toolClass}.g.cs", EmitToolSignatures(agent, intentName, ns, toolClass), FileOwnership.Generated));
+        // The declared half only: the client's half is a mock the packager asks a model for.
+        files.Add(new EmittedFile($"Tools/{toolClass}.g.cs", EmitToolSignatures(agent, intentName, codeNamespace, toolClass), FileOwnership.Generated));
 
         return files;
     }
 
     /// <summary>
-    /// The agent class, whole. There is no half of it for the client to own.
+    /// The agent class, whole, since every decision it expresses, the intent, the tier and the MCP servers, is configuration Alembic already holds.
+    /// It is still partial, which costs nothing and leaves room for a client who wants to add something of their own beside it.
     /// </summary>
-    /// <remarks>
-    /// A <c>MorganaAgent</c> subclass is attributes plus one constructor that hands the type to
-    /// <c>MorganaAgentAdapter</c>. Every domain decision it expresses — the intent, the tier, the
-    /// MCP servers — is configuration Alembic already holds, so there is nothing left to write by
-    /// hand. It is still <c>partial</c>, which costs nothing and leaves the door open for a client
-    /// who wants to add something of their own beside it.
-    /// </remarks>
-    private static string EmitAgent(AgentDraft agent, string intentName, string ns, string agentClass)
+    private static string EmitAgent(AgentDraft agent, string intentName, string codeNamespace, string agentClass)
     {
         StringBuilder sb = new StringBuilder();
 
+        // The banner, the usings a plugin agent needs and its namespace.
         sb.AppendLine(AgentBanner);
         sb.AppendLine("using Microsoft.Extensions.Configuration;");
         sb.AppendLine("using Microsoft.Extensions.Logging;");
@@ -93,8 +73,10 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine("using Morgana.AI.Interfaces;");
         sb.AppendLine("using static Morgana.AI.Records;");
         sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {ns}.Agents;");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {codeNamespace}.Agents;");
         sb.AppendLine();
+
+        // The two attributes the startup checks require of every agent: its intent and its tier.
         sb.AppendLine(CultureInfo.InvariantCulture, $"[HandlesIntent(\"{intentName}\")]");
         sb.AppendLine(CultureInfo.InvariantCulture, $"[RequiresLLMTier(LLMTier.{agent.Code.Tier ?? DefaultTier})]");
 
@@ -108,15 +90,15 @@ public class CodeEmitService : ICodeEmitService
 
         // One per colleague and each one becomes a consult_{intent} function in this agent's tool
         // list at assembly time. Startup refuses an intent no agent handles and refuses the agent's
-        // own, which is why the interview settles them against the finished domain. A colleague at an
-        // instance is checked differently — startup verifies the instance is declared, addressable and
-        // signable and leaves the intent to that instance's own card.
-
+        // own, which is why the interview settles them against the finished domain. A colleague at a
+        // partner is checked differently: startup verifies the partner is declared, addressable and
+        // signable and leaves the intent to that partner's own card.
         foreach (Morgana.AI.Records.PeerReference colleague in agent.Code.Consults)
             sb.AppendLine(colleague.Instance is null
                 ? $"[ConsultsAgent(\"{colleague.Intent}\")]"
                 : $"[ConsultsAgent(\"{colleague.Intent}\", \"{colleague.Instance}\")]");
 
+        // The one constructor every plugin agent has, handing its dependencies to the base, which builds the agent.
         sb.AppendLine(CultureInfo.InvariantCulture, $"public partial class {agentClass} : MorganaAgent");
         sb.AppendLine("{");
         sb.AppendLine(CultureInfo.InvariantCulture, $"    public {agentClass}(");
@@ -130,20 +112,19 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine("        : base(conversationId, llmService, promptResolverService, conversationPersistenceService, logger, morganaAgentAdapter, configuration) { }");
         sb.AppendLine("}");
 
+        // The agent's whole source file.
         return sb.ToString();
     }
 
     /// <summary>
-    /// The tool class's half that Alembic owns: the attribute, the constructor and one attributed
-    /// <c>partial</c> declaration per declared tool.
+    /// The half of the tool class Alembic owns: the attribute, the constructor and one attributed partial declaration per declared tool.
+    /// The declaration is the tool's whole contract, its description and each parameter's description and scope sitting on the attributes Morgana reads.
     /// </summary>
-    /// <remarks>
-    /// The declaration is the tool's whole contract: its description and each parameter's description and scope sit on attributes, which is where Morgana reads them.
-    /// </remarks>
-    private static string EmitToolSignatures(AgentDraft agent, string intentName, string ns, string toolClass)
+    private static string EmitToolSignatures(AgentDraft agent, string intentName, string codeNamespace, string toolClass)
     {
         StringBuilder sb = new StringBuilder();
 
+        // The banner tells whoever opens the file that it is regenerated and where their own half is.
         sb.AppendLine(ToolBanner);
 
         // Roslyn treats a .g.cs file carrying an <auto-generated> banner as generated code and
@@ -153,13 +134,15 @@ public class CodeEmitService : ICodeEmitService
         // .csproj already declares it project-wide.
         sb.AppendLine("#nullable enable");
         sb.AppendLine();
+
+        // The usings the attributes and the base class need, then the namespace and the class with its constructor.
         sb.AppendLine("using System.ComponentModel;");
         sb.AppendLine("using Microsoft.Extensions.Logging;");
         sb.AppendLine("using Morgana.AI;");
         sb.AppendLine("using Morgana.AI.Attributes;");
         sb.AppendLine("using Morgana.AI.Tools;");
         sb.AppendLine();
-        sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {ns}.Tools;");
+        sb.AppendLine(CultureInfo.InvariantCulture, $"namespace {codeNamespace}.Tools;");
         sb.AppendLine();
         sb.AppendLine(CultureInfo.InvariantCulture, $"[ProvidesToolForIntent(\"{intentName}\")]");
         sb.AppendLine(CultureInfo.InvariantCulture, $"public partial class {toolClass} : MorganaTool");
@@ -169,28 +152,29 @@ public class CodeEmitService : ICodeEmitService
 
         // A tool with no name failed ValidateTool as an error, so this loop's filter only ever
         // skips a Draft the client has not yet fixed — the emit itself never blocks on it.
-        foreach (ToolDraft tool in agent.Tools.Where(t => !string.IsNullOrWhiteSpace(t.Name)))
+        foreach (ToolDraft tool in agent.Tools.Where(toolDraft => !string.IsNullOrWhiteSpace(toolDraft.Name)))
         {
+            // A blank line between tools, as a hand-written class would have.
             sb.AppendLine();
 
             // The description is an attribute on the partial method: Morgana reads it from the
             // declaration alone, so the client's half carries nothing but the implementation.
             sb.AppendLine(CultureInfo.InvariantCulture, $"    [Description({Literal(tool.Description)})]");
 
+            // The partial declaration the client's half must implement with the same signature.
             AppendDeclaration(sb, tool);
         }
 
         sb.AppendLine("}");
 
+        // The generated half's whole source file.
         return sb.ToString();
     }
 
     /// <summary>
-    /// Appends one tool's <c>partial</c> method declaration with one attributed parameter per line.
+    /// Appends one tool's partial method declaration with one attributed parameter per line, in declaration order.
+    /// A required parameter behind an optional one would not compile, which is why the archive is withheld while the validator reports an error.
     /// </summary>
-    /// <remarks>
-    /// Declaration order, never sorted: a required parameter behind an optional one emits C# that does not compile, which is why the emit is gated on the validator reporting no errors.
-    /// </remarks>
     private static void AppendDeclaration(StringBuilder sb, ToolDraft tool)
     {
         // A parameter with no name is a Draft the client has not yet fixed and is skipped like a nameless tool.
@@ -210,9 +194,7 @@ public class CodeEmitService : ICodeEmitService
         sb.AppendLine(string.Join("," + Environment.NewLine, parameters.Select(parameter => $"        {parameter}")) + ");");
     }
 
-    /// <summary>
-    /// Renders one parameter with its description and scope attributes.
-    /// </summary>
+    /// <summary>Renders one parameter with its description and scope attributes.</summary>
     private static string DeclareParameter(ToolParameterDraft parameter)
     {
         // The scope attribute is absent for a value the model authors: the parameter then carries only its description.
@@ -225,12 +207,11 @@ public class CodeEmitService : ICodeEmitService
             ? $"{ParameterType} {parameter.Name}"
             : $"{ParameterType}? {parameter.Name} = null";
 
+        // The description first, where Morgana's schema reads it for the model.
         return $"[Description({Literal(parameter.Description)})]{scopeAttribute} {declaration}";
     }
 
-    /// <summary>
-    /// The <c>Records.ToolScope</c> member a parameter maps to or <c>null</c> for a value the model authors.
-    /// </summary>
+    /// <summary>The <c>Records.ToolScope</c> member a parameter maps to; <c>null</c> for a value the model authors.</summary>
     private static string? ScopeOf(ToolParameterDraft parameter)
     {
         // A shared parameter is a context value published to every agent of the conversation.
@@ -245,9 +226,7 @@ public class CodeEmitService : ICodeEmitService
         return null;
     }
 
-    /// <summary>
-    /// Renders text as a C# regular string literal.
-    /// </summary>
+    /// <summary>Renders text as a C# regular string literal.</summary>
     private static string Literal(string? text)
     {
         // The opening quote starts the literal the closing one completes below.
@@ -291,28 +270,20 @@ public class CodeEmitService : ICodeEmitService
         return literal.ToString();
     }
 
-    /// <summary>
-    /// PascalCases an intent name, for the fallback class names.
-    /// </summary>
+    /// <summary>PascalCases an intent name, for the fallback class names.</summary>
     private static string Pascal(string value) =>
         string.IsNullOrWhiteSpace(value) ? "Domain" : char.ToUpperInvariant(value[0]) + value[1..];
 
     /// <summary>
-    /// The header an agent class carries.
+    /// The header an agent class carries, saying only that it is regenerated in full.
+    /// An agent has no client half, so the banner points at no matching file that would never exist.
     /// </summary>
-    /// <remarks>
-    /// An agent has no client half — see the remarks on <see cref="EmitAgent"/> — so this banner
-    /// says only that it is regenerated in full and stops there rather than pointing at a matching
-    /// file without the <c>.g</c> that will never exist.
-    /// </remarks>
     private const string AgentBanner =
         "// <auto-generated>\n" +
         "//     Written by Alembic. This file is regenerated in full: edit it and the edit is lost.\n" +
         "// </auto-generated>";
 
-    /// <summary>
-    /// The header a tool class's generated signatures carry.
-    /// </summary>
+    /// <summary>The header a tool class's generated half carries, pointing at the half the client owns.</summary>
     private const string ToolBanner =
         "// <auto-generated>\n" +
         "//     Written by Alembic. This file is regenerated in full: edit it and the edit is lost.\n" +
