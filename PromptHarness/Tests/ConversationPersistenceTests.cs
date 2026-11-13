@@ -13,42 +13,18 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// What a conversation leaves on record, followed step by step from the greeting onwards: who owns
-/// each line, when it is dated and how the transcript a returning channel reads is rebuilt out of
-/// the rows.
+/// What a conversation leaves on record, step by step from the greeting: who owns each line, how it is dated and how the transcript a returning channel reads is rebuilt.
+/// Every test reads the one real conversation <see cref="Script"/> drives, photographed after each exchange, since a correct transcript may still have been written by the wrong participant.
+/// Nothing about wording is asserted; it needs Harness__EnableUserGuardrail=true in an invocation of its own, since a refused turn cannot be staged without the guard.
 /// </summary>
-/// <remarks>
-/// <para>One real conversation is run and nothing about its wording is asserted. The oracle is the
-/// conversation itself: what the channel was pushed and what the channel said are compared against
-/// what the record gives back, so nothing here can fail because a model phrased an answer
-/// differently. Every assertion is about ownership, dating and order.</para>
-///
-/// <para>The record is photographed after every single exchange rather than read once at the end,
-/// because that is the only way to see which side each line landed on while it was landing: a
-/// transcript that reads correctly can still have been written by the wrong participant and the
-/// finished record no longer says who wrote what when. Each turn of <see cref="Script"/> declares
-/// whose it is before it is sent, so a step is checked against what was expected of it rather than
-/// against whatever it produced.</para>
-///
-/// <para>The script walks the four ways a turn can end so the record left behind is the one a real
-/// conversation leaves: a phrase the guard refuses, a phrase too ambiguous to route, a phrase that
-/// reaches an agent and two the agent was waiting for. Morgana answers the first two herself, which is
-/// what puts her voice on record with no agent in the conversation at all.</para>
-///
-/// <para><strong>Runs under <c>Harness__EnableUserGuardrail=true</c>, alone.</strong> The guard is off
-/// everywhere else and a refused turn cannot be staged without it. Nothing is mocked to avoid the
-/// knob: a persistence group that wrote its own rows would assert against its own idea of what the
-/// pipeline stores, which is the one thing it exists to check.</para>
-/// </remarks>
 public sealed class ConversationPersistenceTests
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
     private readonly MorganaHostFixture fixture;
 
     /// <summary>
-    /// The conversation as it is meant to unfold, each turn carrying how it must end and what the
-    /// record must show of it. The phrases are the ones the guard and classifier groups already pin
-    /// down, so a turn ending elsewhere is a finding those groups own rather than a surprise here.
+    /// The conversation as it is meant to unfold, each turn carrying how it must end and what the record must show of it.
+    /// The phrases are the ones the guard and classifier groups already pin down, so a turn ending elsewhere is a finding those groups own.
     /// </summary>
     private static readonly ScriptedTurn[] Script =
     [
@@ -88,9 +64,8 @@ public sealed class ConversationPersistenceTests
     private const string OrchestratorName = "Morgana";
 
     /// <summary>
-    /// Marks the copy of a user's phrase an agent holds only so its model could read it. Spelled out
-    /// rather than read from <c>Constants</c>: this literal is what a stored row is filtered on, so
-    /// renaming it silently must be noticed here rather than asserted against itself.
+    /// Marks the copy of a user's phrase an agent holds only so its model could read it.
+    /// It is spelled out because a stored row is filtered on it, so a silent rename must be noticed here.
     /// </summary>
     private const string ContextOnlyMarker = "morgana:context_only";
 
@@ -104,21 +79,21 @@ public sealed class ConversationPersistenceTests
     private const string RowMessagesProperty = "messages";
 
     /// <summary>
-    /// How long a line pushed to the channel is given to reach the record. A reply leaves on one
-    /// path and is filed on another, so the two are close together without being ordered.
+    /// How long a line pushed to the channel is given to reach the record.
+    /// A reply leaves on one path and is filed on another, so the two are close together without being ordered.
     /// </summary>
     private static readonly TimeSpan RecordSettlingBudget = TimeSpan.FromSeconds(10);
 
     /// <summary>
-    /// The one conversation the whole group reads, driven on first use. Each test below examines the
-    /// same record from a different angle, so a conversation per test would buy nothing and spend a
-    /// second set of live turns.
+    /// The one conversation the whole group reads, driven on first use.
+    /// Each test examines the same record from a different angle, so a conversation per test would only spend more live turns.
     /// </summary>
     private static Task<DrivenConversation>? driven;
 
     /// <summary>Guards the single drive against xUnit running the tests of this class in parallel.</summary>
     private static readonly Lock DriveGate = new Lock();
 
+    /// <summary>Receives the assembly's one live host.</summary>
     public ConversationPersistenceTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     [Fact]
@@ -128,13 +103,12 @@ public sealed class ConversationPersistenceTests
         IReadOnlyList<PersistedRow> afterGreeting = conversation.Steps[0].Rows;
 
         // Morgana speaks first and no agent has been reached, so hers is the only row there can be:
-        // a conversation whose opening nobody kept is one every channel has to invent an opening for
-        // on a reload, which is what every channel used to do.
+        // a conversation whose opening nobody kept would leave every channel to invent one on a reload.
         Assert.True(afterGreeting.Count == 1,
             $"The greeting put {afterGreeting.Count} participants on record.{Environment.NewLine}{Describe(afterGreeting)}");
 
+        // What Morgana's side holds in her own voice: the greeting alone, as the channel was pushed it.
         IReadOnlyList<string> spoken = SpokenBy(RowOf(afterGreeting, OrchestratorName), ChatRole.Assistant);
-
         Assert.True(spoken.Count == 1,
             $"Morgana's side opens with {spoken.Count} lines instead of the greeting alone.{Environment.NewLine}{Describe(afterGreeting)}");
         Assert.True(spoken[0] == conversation.Steps[0].Delivered.Text,
@@ -147,15 +121,18 @@ public sealed class ConversationPersistenceTests
         DrivenConversation conversation = await ConversationAsync();
 
         // The record is only worth reading if the conversation that produced it is the one intended:
-        // a phrase the guard let through, or one that reached an agent instead of being handed back,
+        // a phrase the guard let through or one that reached an agent instead of being handed back
         // leaves a perfectly coherent record of a different conversation.
         for (int turn = 0; turn < Script.Length; turn++)
         {
+            // What the script meant for the turn and what the pipeline's spans say happened; every turn step carries an observation.
             ScriptedTurn scripted = Script[turn];
             TurnResult observed = conversation.Steps[turn + 1].Observed!;
 
+            // Each ending has its own evidence in the spans.
             switch (scripted.Ending)
             {
+                // A refusal: the guard said no and no agent was reached.
                 case TurnEnding.RefusedByTheGuard:
                     Assert.True(observed.GuardCompliant == false,
                         $"\"{Excerpt(scripted.Say)}\" was not refused by the guard, so {scripted.Because} is not what happened.{Environment.NewLine}{observed.Describe()}");
@@ -163,6 +140,7 @@ public sealed class ConversationPersistenceTests
                         $"A refused phrase reached {observed.AgentName}.{Environment.NewLine}{observed.Describe()}");
                     break;
 
+                // A disambiguation: the guard let it through and no agent took it, the user being offered buttons to choose.
                 case TurnEnding.HandedBackToChoose:
                     Assert.True(observed.GuardCompliant != false,
                         $"\"{Excerpt(scripted.Say)}\" was refused by the guard, so the disambiguation it was chosen for never happened.{Environment.NewLine}{observed.Describe()}");
@@ -170,6 +148,7 @@ public sealed class ConversationPersistenceTests
                         $"\"{Excerpt(scripted.Say)}\" was resolved by {observed.AgentName ?? "nobody"} instead of being handed back to the user to choose.{Environment.NewLine}{observed.Describe()}");
                     break;
 
+                // A served turn: an agent answered it.
                 case TurnEnding.ServedByAnAgent:
                     Assert.True(observed.AgentName is not null,
                         $"\"{Excerpt(scripted.Say)}\" reached no agent, so {scripted.Because} is not what happened.{Environment.NewLine}{observed.Describe()}");
@@ -183,15 +162,16 @@ public sealed class ConversationPersistenceTests
     {
         DrivenConversation conversation = await ConversationAsync();
 
+        // Each turn is compared with the photograph taken just before it.
         for (int turn = 0; turn < Script.Length; turn++)
         {
             ScriptedTurn scripted = Script[turn];
             RecordStep step = conversation.Steps[turn + 1];
             IReadOnlyList<PersistedRow> before = conversation.Steps[turn].Rows;
 
+            // The participant the script says keeps the phrase took it, alone.
             string keeper = scripted.MorganaKeepsIt ? OrchestratorName : TheAgent(step.Rows).Author;
             IReadOnlyList<string> kept = PhrasesGained(before, step.Rows, keeper);
-
             Assert.True(kept.Count == 1 && kept[0] == scripted.Say,
                 $"\"{Excerpt(scripted.Say)}\" is {keeper}'s to keep, because {scripted.Because}. "
                 + $"{keeper} took [{string.Join(" | ", kept.Select(Excerpt))}].{Environment.NewLine}{Describe(step.Rows)}");
@@ -209,12 +189,14 @@ public sealed class ConversationPersistenceTests
     {
         DrivenConversation conversation = await ConversationAsync();
 
+        // Only the turns the script ends before any agent is routed.
         for (int turn = 0; turn < Script.Length; turn++)
         {
             ScriptedTurn scripted = Script[turn];
             if (scripted.AgentOnRecord)
                 continue;
 
+            // The record right after that turn.
             RecordStep step = conversation.Steps[turn + 1];
 
             // A refusal and a request to disambiguate both end the turn before anyone is routed, so
@@ -224,8 +206,7 @@ public sealed class ConversationPersistenceTests
                 $"\"{Excerpt(scripted.Say)}\" should have been answered by Morgana alone, because {scripted.Because}."
                 + $"{Environment.NewLine}{Describe(step.Rows)}");
 
-            // Her answer is on her own side: without it the transcript carries a question with
-            // nothing under it, which is the hole a channel used to fill by inventing a line.
+            // Her answer is on her own side: without it the transcript would carry a question with nothing under it.
             Assert.True(SpokenBy(RowOf(step.Rows, OrchestratorName), ChatRole.Assistant).Contains(step.Delivered.Text),
                 $"What the channel was pushed for \"{Excerpt(scripted.Say)}\" is not on Morgana's own side."
                 + $"{Environment.NewLine}{Describe(step.Rows)}");
@@ -243,6 +224,7 @@ public sealed class ConversationPersistenceTests
         RecordStep step = conversation.Steps[routing + 1];
         PersistedRow agent = TheAgent(step.Rows);
 
+        // The agent holds the phrase marked as its model's to read, never as a line it keeps.
         Assert.True(agent.Messages.Any(message => message.Role == ChatRole.User
                                                  && message.Text == Script[routing].Say
                                                  && message.AdditionalProperties?.ContainsKey(ContextOnlyMarker) == true),
@@ -276,6 +258,7 @@ public sealed class ConversationPersistenceTests
         Assert.True(settled.Count == 2,
             $"The conversation settled as {settled.Count} participants.{Environment.NewLine}{Describe(settled)}");
 
+        // One of the two is Morgana's (RowOf fails the test without it) while the other is the one agent.
         RowOf(settled, OrchestratorName);
         PersistedRow agent = TheAgent(settled);
 
@@ -290,8 +273,10 @@ public sealed class ConversationPersistenceTests
         DrivenConversation conversation = await ConversationAsync();
         IReadOnlyList<MorganaChatMessage> history = await fixture.Channel.GetHistoryAsync(conversation.ConversationId);
 
+        // Every line the channel was pushed, the greeting included.
         foreach (ChannelMessage delivered in conversation.Steps.Select(step => step.Delivered))
         {
+            // The same text in the transcript a returning channel reads.
             MorganaChatMessage[] matches = [.. history.Where(message => message.Text == delivered.Text)];
 
             // A channel that missed a push catches up from the history and tells a reply it already
@@ -327,8 +312,8 @@ public sealed class ConversationPersistenceTests
         int cursor = 0;
         foreach ((ChatMessageType type, string text) in lived)
         {
+            // The next occurrence at or after the cursor, which only ever moves forward.
             int position = FindFrom(history, cursor, type, text);
-
             Assert.True(position >= 0,
                 $"The transcript does not carry \"{Excerpt(text)}\" as {type}, or carries it out of order.{Environment.NewLine}{Describe(history)}");
             cursor = position + 1;
@@ -357,6 +342,7 @@ public sealed class ConversationPersistenceTests
     {
         DrivenConversation conversation = await ConversationAsync();
 
+        // Two reads of the same record, one right after the other.
         IReadOnlyList<MorganaChatMessage> first = await fixture.Channel.GetHistoryAsync(conversation.ConversationId);
         IReadOnlyList<MorganaChatMessage> second = await fixture.Channel.GetHistoryAsync(conversation.ConversationId);
 
@@ -364,6 +350,8 @@ public sealed class ConversationPersistenceTests
         // a line the record leaves undated is dated at the moment it is read, which moves it among
         // the others and shows a returning channel a conversation that never happened.
         Assert.Equal(first.Count, second.Count);
+
+        // Position by position, the same text, the same date and the same speaker.
         for (int position = 0; position < first.Count; position++)
         {
             Assert.True(first[position].Text == second[position].Text,
@@ -393,12 +381,12 @@ public sealed class ConversationPersistenceTests
     }
 
     /// <summary>
-    /// Runs the script once for the whole group, opening a conversation as any channel would and
-    /// photographing the record after every exchange. The conversation is deliberately left open:
-    /// every assertion reads the record, which outlives the actors either way.
+    /// Runs the script once for the whole group, opening a conversation as any channel would and photographing the record after every exchange.
+    /// The conversation is left open, since every assertion reads the record, which outlives the actors either way.
     /// </summary>
     private Task<DrivenConversation> ConversationAsync()
     {
+        // The first caller starts the drive and every other one awaits the same task.
         lock (DriveGate)
             return driven ??= DriveAsync(fixture);
     }
@@ -406,14 +394,17 @@ public sealed class ConversationPersistenceTests
     /// <inheritdoc cref="ConversationAsync" />
     private static async Task<DrivenConversation> DriveAsync(MorganaHostFixture fixture)
     {
+        // The turn timeout the scenarios run with.
         TimeSpan timeout = TimeSpan.FromSeconds(fixture.Options.TurnTimeoutSeconds);
 
         // The full capability profile the harness channel announces by default keeps the adapter out
         // of the way, so the text compared against the record is the text Morgana composed.
         (string conversationId, ChannelMessage greeting) = await fixture.Channel.StartConversationAsync(timeout);
 
+        // The first photograph, of the record holding the greeting alone.
         List<RecordStep> steps = [await PhotographAsync(fixture, conversationId, greeting, greeting.Text, observed: null)];
 
+        // One photograph after each scripted turn, once its phrase is on record.
         foreach (ScriptedTurn scripted in Script)
         {
             // Watched as every other group watches a turn, so how it ended is read from the
@@ -425,30 +416,32 @@ public sealed class ConversationPersistenceTests
             steps.Add(await PhotographAsync(fixture, conversationId, answer, scripted.Say, observed));
         }
 
+        // The conversation's id with every photograph, the greeting's first.
         return new DrivenConversation(conversationId, steps);
     }
 
-    /// <summary>
-    /// Reads every row once the exchange has settled into it, so a photograph shows a finished step
-    /// rather than one still being written.
-    /// </summary>
-    /// <param name="settled">
-    /// The line whose arrival says the step is on record: the user's phrase for a turn, the greeting
-    /// for the opening. A line pushed to the channel is filed on a different path, so the record is
-    /// reached shortly after the push rather than before it.
-    /// </param>
+    /// <summary>Reads every row once the exchange has settled into it, so a photograph shows a finished step rather than one still being written.</summary>
+    /// <param name="fixture">The live host, whose storage holds the database.</param>
+    /// <param name="conversationId">The conversation photographed.</param>
+    /// <param name="delivered">What the channel was pushed for the step.</param>
+    /// <param name="settled">The line whose arrival says the step is on record: the user's phrase for a turn, the greeting for the opening.</param>
+    /// <param name="observed">How the pipeline handled the turn; null for the greeting.</param>
     private static async Task<RecordStep> PhotographAsync(
         MorganaHostFixture fixture, string conversationId, ChannelMessage delivered, string settled, TurnResult? observed)
     {
+        // The wait is bounded by the settling budget, measured from the push.
         Stopwatch elapsed = Stopwatch.StartNew();
 
+        // The rows are read again until the settling line appears in one of them.
         IReadOnlyList<PersistedRow> rows;
         while (true)
         {
+            // A line pushed to the channel is filed on another path, so the record catches up a moment after the push.
             rows = ReadRows(fixture, conversationId);
             if (rows.Any(row => row.Messages.Any(message => message.Text == settled)))
                 break;
 
+            // A line that never reaches the record within the budget is a fault of the pipeline, reported with the census.
             Assert.True(elapsed.Elapsed < RecordSettlingBudget,
                 $"\"{Excerpt(settled)}\" never reached the record in {RecordSettlingBudget.TotalSeconds:F0}s."
                 + $"{Environment.NewLine}{Describe(rows)}");
@@ -456,27 +449,29 @@ public sealed class ConversationPersistenceTests
             await Task.Delay(TimeSpan.FromMilliseconds(100));
         }
 
+        // The step as the record held it once settled.
         return new RecordStep(delivered, rows, observed);
     }
 
-    /// <summary>
-    /// Opens the conversation's database and decrypts every participant's row, in the order the
-    /// participants first spoke — the order the history endpoint itself reads them in.
-    /// </summary>
+    /// <summary>Opens the conversation's database and decrypts every participant's row, in the order the participants first spoke, as the history endpoint reads them.</summary>
     private static IReadOnlyList<PersistedRow> ReadRows(MorganaHostFixture fixture, string conversationId)
     {
+        // The key the host encrypts rows with, read from the same configuration the host booted on.
         byte[] encryptionKey = Convert.FromBase64String(
             fixture.Configuration["Morgana:ConversationPersistence:EncryptionKey"]!);
 
+        // The conversation's own database file in the run's throwaway storage.
         using SqliteConnection connection = new SqliteConnection(
             $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.sqlite")}");
         connection.Open();
 
+        // Every participant's row with its session and whether it stands active.
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = "SELECT agent_name, agent_session, is_active FROM morgana ORDER BY creation_date ASC;";
 
         using SqliteDataReader reader = command.ExecuteReader();
 
+        // Each row decrypted and its transcript read out.
         List<PersistedRow> rows = [];
         while (reader.Read())
             rows.Add(new PersistedRow(
@@ -484,12 +479,14 @@ public sealed class ConversationPersistenceTests
                 (long)reader["is_active"] == 1,
                 ReadMessages(Decrypt((byte[])reader["agent_session"], encryptionKey))));
 
+        // The participants in the order they first spoke.
         return rows;
     }
 
     /// <summary>Reads the transcript out of a decrypted row, wherever the row's owner keeps the rest.</summary>
     private static IReadOnlyList<ChatMessage> ReadMessages(string rowJson)
     {
+        // The row as Microsoft.Agents.AI serializes a session.
         JsonElement row = JsonSerializer.Deserialize<JsonElement>(rowJson, AgentAbstractionsJsonUtilities.DefaultOptions);
 
         // An agent's row is the session it resurrects itself from and Morgana's carries messages and
@@ -499,6 +496,7 @@ public sealed class ConversationPersistenceTests
             || !historyState.TryGetProperty(RowMessagesProperty, out JsonElement messages))
             return [];
 
+        // The messages under the history provider's key.
         return JsonSerializer.Deserialize<ChatMessage[]>(
             messages.GetRawText(), AgentAbstractionsJsonUtilities.DefaultOptions) ?? [];
     }
@@ -506,13 +504,16 @@ public sealed class ConversationPersistenceTests
     /// <summary>Recovers a row's plaintext: the initialization vector prefixes the ciphertext it belongs to.</summary>
     private static string Decrypt(byte[] ciphertext, byte[] encryptionKey)
     {
+        // AES with the host's key.
         using Aes aes = Aes.Create();
         aes.Key = encryptionKey;
 
+        // The first block of the stored bytes is the initialization vector the host wrote in front of the ciphertext.
         byte[] initializationVector = new byte[aes.IV.Length];
         Array.Copy(ciphertext, 0, initializationVector, 0, initializationVector.Length);
         aes.IV = initializationVector;
 
+        // The rest of the bytes decrypted into the row's JSON.
         using ICryptoTransform decryptor = aes.CreateDecryptor(aes.Key, aes.IV);
         using MemoryStream cipherStream = new MemoryStream(
             ciphertext, initializationVector.Length, ciphertext.Length - initializationVector.Length);
@@ -523,16 +524,18 @@ public sealed class ConversationPersistenceTests
     }
 
     /// <summary>
-    /// The user's phrases one participant took on during a step, leaving out the copy an agent holds
-    /// for its model: a marked copy is not a record of the phrase, it is the phrase being read.
+    /// The user's phrases one participant took on during a step, leaving out the copy an agent holds for its model.
+    /// A marked copy is not a record of the phrase: it is the phrase being read.
     /// </summary>
     private static IReadOnlyList<string> PhrasesGained(
         IReadOnlyList<PersistedRow> before, IReadOnlyList<PersistedRow> after, string author)
     {
+        // The phrases the participant already kept before the step, which the new ones follow.
         int alreadyKept = before
             .Where(row => row.Author.Equals(author, StringComparison.OrdinalIgnoreCase))
             .Sum(row => KeptPhrases(row).Count);
 
+        // Only those taken on during the step.
         return [.. after.Where(row => row.Author.Equals(author, StringComparison.OrdinalIgnoreCase))
                         .SelectMany(row => KeptPhrases(row).Skip(alreadyKept))];
     }
@@ -546,20 +549,23 @@ public sealed class ConversationPersistenceTests
     /// <summary>The row of one named participant, failing with the whole census when there is none.</summary>
     private static PersistedRow RowOf(IReadOnlyList<PersistedRow> rows, string author)
     {
+        // A participant's name is matched as the record writes it, ignoring case.
         PersistedRow? row = rows.FirstOrDefault(
             candidate => candidate.Author.Equals(author, StringComparison.OrdinalIgnoreCase));
 
         Assert.True(row is not null, $"No row for {author}.{Environment.NewLine}{Describe(rows)}");
 
+        // Present, since the assertion above has passed.
         return row!;
     }
 
     /// <summary>
-    /// The one agent the script engages. Asserting it is alone is part of the point: a consultation
-    /// leaves no trace, so a colleague that answered must own no row here.
+    /// The one agent the script engages, asserted alone.
+    /// A consultation leaves no trace, so a colleague that answered must own no row here.
     /// </summary>
     private static PersistedRow TheAgent(IReadOnlyList<PersistedRow> rows)
     {
+        // Every row that is not Morgana's.
         PersistedRow[] agents =
         [
             .. rows.Where(row => !row.Author.Equals(OrchestratorName, StringComparison.OrdinalIgnoreCase))
@@ -568,6 +574,7 @@ public sealed class ConversationPersistenceTests
         Assert.True(agents.Length == 1,
             $"The script engages one agent and {agents.Length} rows are not Morgana's.{Environment.NewLine}{Describe(rows)}");
 
+        // The agent, alone as the assertion has just required.
         return agents[0];
     }
 
@@ -575,13 +582,15 @@ public sealed class ConversationPersistenceTests
     private static IReadOnlyList<string> SpokenBy(PersistedRow row, ChatRole role) =>
         [.. row.Messages.Where(message => message.Role == role).Select(message => message.Text)];
 
-    /// <summary>Position of a line at or after a point in the transcript, or -1 when it is not there.</summary>
+    /// <summary>Position of a line at or after a point in the transcript; -1 when it is not there.</summary>
     private static int FindFrom(IReadOnlyList<MorganaChatMessage> history, int from, ChatMessageType type, string text)
     {
+        // The first line of that type and text from the cursor on.
         for (int position = from; position < history.Count; position++)
             if (history[position].Type == type && history[position].Text == text)
                 return position;
 
+        // Absent from the cursor on, wherever it may sit before it.
         return -1;
     }
 
@@ -594,9 +603,11 @@ public sealed class ConversationPersistenceTests
     private static string Describe(IReadOnlyList<PersistedRow> rows) =>
         string.Join(Environment.NewLine, rows.Select(row =>
         {
+            // The row's owner, whether it stands active and how much it holds.
             StringBuilder description = new StringBuilder(
                 $"  {row.Author}{(row.IsActive ? " (active)" : string.Empty)}, {row.Messages.Count} message(s):");
 
+            // Each message with its voice, marked when it is an agent's read-only copy of a phrase.
             foreach (ChatMessage message in row.Messages)
                 description.Append(
                     CultureInfo.InvariantCulture,
@@ -610,8 +621,10 @@ public sealed class ConversationPersistenceTests
     /// <summary>Enough of a line to recognise it in a failure, on one line.</summary>
     private static string Excerpt(string text)
     {
+        // A failure message lists many lines, so each is folded onto one.
         string oneLine = text.ReplaceLineEndings(" ").Trim();
 
+        // Sixty characters are enough to recognise a line.
         return oneLine.Length <= 60 ? oneLine : $"{oneLine[..60]}…";
     }
 

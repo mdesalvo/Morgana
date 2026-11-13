@@ -14,22 +14,9 @@ namespace PromptHarness.Tests;
 
 /// <summary>
 /// The UserGuard prompt on live calls, in two forms: whole conversations through the pipeline and calibration cases against the guard itself.
+/// The scenarios need Harness__EnableUserGuardrail=true in an invocation of their own; left off, the guard admits every message unjudged and the refusing scenarios fail loudly.
+/// The calibration cases call the guard directly on the framework tier, need no knob and are judged on the verdict alone, in every run.
 /// </summary>
-/// <remarks>
-/// <para><strong>The scenarios require <c>Harness:EnableUserGuardrail=true</c></strong> — the guard rail is a
-/// whole-process boot flag (<c>MorganaHostFixture.ApplyHostEnvironment</c>), set once before the
-/// single assembly-wide host starts, with no per-scenario override. Run this class on its own:</para>
-/// <code>Harness__EnableUserGuardrail=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.UserGuardTests"</code>
-///
-/// <para>Running the scenarios with the flag left off does <em>not</em> silently skip: per <c>GuardActor</c>,
-/// a disabled guard rail short-circuits to <c>GuardRailResult(true, null, Disabled)</c> without ever calling
-/// the LLM, so <c>userguard-rejects-abusive-message</c> fails loudly and correctly — <c>compliant</c>
-/// can structurally never come back <c>false</c> — rather than passing by accident.</para>
-///
-/// <para>The calibration cases over <c>Calibration/userguard.yaml</c> call the guard directly on the framework tier, need no knob and are
-/// judged by the verdict alone: a red case is rude or malicious and must be refused by the UserGuard's own verdict with a refusal
-/// for the user, a green case is an honest message that must pass. Every run must hold. A case may carry the answer the user received, which the UserGuard reads beside the message. The wording of a refusal is judged by the scenarios.</para>
-/// </remarks>
 public sealed class UserGuardTests : IDisposable
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
@@ -183,7 +170,7 @@ public sealed class UserGuardTests : IDisposable
             }
 
             // The message is checked as the pipeline checks it at ingress.
-            Records.GuardRailResult verdict = await guard.CheckUserMessageAsync($"{caseId}-{run}", userGuardCase.Message);
+            Records.GuardRailResult verdict = await guard.CheckUserMessageAsync($"{caseId}-{run}", userGuardCase.Message, TestContext.Current.CancellationToken);
 
             // What the UserGuard was handed and answered in this run, kept for the failure log.
             IReadOnlyList<ModelCall> userGuardCalls = fixture.Observer.ModelCallsSince(mark);

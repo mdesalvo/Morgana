@@ -11,13 +11,9 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The PeerGuard on a live call of the framework tier, over the calibration set: a red case must be declined by the guard's own
-/// verdict in every run and a green case admitted in every run. No host traffic and no judge: the verdict is the oracle.
+/// The PeerGuard on a live call of the framework tier over its calibration set, a red case declined on the guard's own verdict and a green one admitted, in every run.
+/// No host traffic and no judge: the verdict is the oracle, one billed judgment per run on whichever provider <c>Morgana:ActorSystem:Tier</c> names.
 /// </summary>
-/// <remarks>
-/// Live and billed, one judgment per run. The guard is the one the host builds, over the tiers the host reads, so the group measures
-/// whichever provider <c>Morgana:ActorSystem:Tier</c> names. Run it on its own with the filter in CLAUDE.md.
-/// </remarks>
 public sealed class PeerGuardTests : IDisposable
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
@@ -84,7 +80,7 @@ public sealed class PeerGuardTests : IDisposable
 
             // The question as the hosted agent hands it to the guard once the partner is admitted.
             Records.GuardRailResult verdict = await guard.CheckPeerQuestionAsync(
-                $"{caseId}-{run}", peerGuardCase.Partner, peerGuardCase.Agent, peerGuardCase.Territory, peerGuardCase.Question);
+                $"{caseId}-{run}", peerGuardCase.Partner, peerGuardCase.Agent, peerGuardCase.Territory, peerGuardCase.Question, TestContext.Current.CancellationToken);
 
             // What the guard was handed and answered in this run, kept for the failure log.
             IReadOnlyList<ModelCall> guardCalls = fixture.Observer.ModelCallsSince(mark);

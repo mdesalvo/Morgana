@@ -8,19 +8,9 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group asserting that the morgana.json shipped inside Morgana.AI carries every entry the
-/// framework fetches by name: the global policies in their reading order, the templates and the
-/// placeholders each is filled through, the base tools, the error answers and the messages Morgana
-/// says in her own voice.
+/// The group asserting that the morgana.json shipped inside Morgana.AI carries every entry the framework fetches by name: policies, templates, base tools, error answers and messages.
+/// The framework reads each entry when it needs it, so one lost to a bad edit would fail a conversation mid-turn on a host that passed its health probe; here it fails at once, naming the entry.
 /// </summary>
-/// <remarks>
-/// <para>Deterministic and free. The framework reads these entries by name at the moment it needs them,
-/// so one lost to a bad edit fails a conversation in mid-turn, long after a host that boots cleanly
-/// passed its health probe. Here it fails at once, naming the entry.</para>
-///
-/// <para>Every name is spelled out rather than read from <c>Constants</c>, as the wire-contract groups
-/// do: the point is to notice the configuration losing an entry, not a constant equal to itself.</para>
-/// </remarks>
 public sealed class FrameworkPromptTests
 {
     /// <summary>The framework prompts, read through the resolver from the embedded morgana.json over a domain with no agents.</summary>
@@ -182,6 +172,7 @@ public sealed class FrameworkPromptTests
     [InlineData("ChannelAdapter")]
     public async Task Sections_carry_no_label_of_their_own(string promptId)
     {
+        // The prompt as its actor resolves it, before any composer labels it.
         Records.Prompt prompt = await resolver.ResolveAsync(promptId);
 
         // The label is put in front by whoever composes the prompt: one written here would be one more
@@ -206,8 +197,10 @@ public sealed class FrameworkPromptTests
     [Fact]
     public async Task A_section_that_says_nothing_leaves_no_label_in_the_composed_prompt()
     {
+        // The composer every agent's instructions are assembled by, over the embedded framework prompts.
         ConfigurationPromptComposerService composer = new ConfigurationPromptComposerService(resolver);
 
+        // One domain prompt with a Formatting section and the same prompt with that section left empty.
         string withFormatting = await composer.ComposeAgentInstructionsAsync(
             new Records.Prompt("billing", "Target.", "Instructions.", "Plain text.", null, null, "en-US", "1", []));
         string withoutFormatting = await composer.ComposeAgentInstructionsAsync(

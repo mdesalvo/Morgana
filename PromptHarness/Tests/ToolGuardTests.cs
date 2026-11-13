@@ -13,14 +13,10 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The ToolGuard inspector on a live call of the framework tier, over the calibration set: a red case must be withheld
-/// by the inspector's own verdict in every run and a green case admitted in every run. No host traffic and no judge: the verdict is the oracle.
-/// The group measures offers too: what an MCP server lists or a partner's card says, judged before any agent may use it.
+/// The ToolGuard inspector on a live call of the framework tier over its calibration sets, a red case withheld on the inspector's own verdict and a green one admitted, in every run.
+/// It measures offers too, what an MCP server lists or a partner's card says, judged before any agent may use it.
+/// No host traffic and no judge: the verdict is the oracle, one billed inspection per run on whichever provider <c>Morgana:ActorSystem:Tier</c> names.
 /// </summary>
-/// <remarks>
-/// Live and billed, one inspection per run. The inspector is the one the host builds, over the tiers the host reads, so the group measures
-/// whichever provider <c>Morgana:ActorSystem:Tier</c> names. Run it on its own with the filter in CLAUDE.md.
-/// </remarks>
 public sealed class ToolGuardTests : IDisposable
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
@@ -106,7 +102,7 @@ public sealed class ToolGuardTests : IDisposable
             int mark = fixture.Observer.ModelCallMark();
 
             // The inspector reads every guarded result.
-            Records.GuardRailResult verdict = await guard.CheckToolResultAsync($"{caseId}-{run}", toolGuardCase.Tool, arguments, result);
+            Records.GuardRailResult verdict = await guard.CheckToolResultAsync($"{caseId}-{run}", toolGuardCase.Tool, arguments, result, TestContext.Current.CancellationToken);
 
             // What the inspector was handed and answered in this run, kept for the failure log.
             IReadOnlyList<ModelCall> inspectorCalls = fixture.Observer.ModelCallsSince(mark);

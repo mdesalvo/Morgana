@@ -9,32 +9,34 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// Checks the wiring itself before any scenario is believed: host up, handshake accepted, webhook
-/// delivered, span and log observers wired.
+/// Checks the wiring itself before any scenario is believed: host up, handshake accepted, webhook delivered, observers wired and the gardening server answering.
+/// A broken observer reads exactly like a prompt regression, which is why the suite starts here whenever it fails wholesale.
 /// </summary>
 public sealed class HarnessSmokeTests
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
     private readonly MorganaHostFixture fixture;
 
+    /// <summary>Receives the assembly's one live host.</summary>
     public HarnessSmokeTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     [Fact]
     public async Task Conversation_opens_and_Morgana_presents_itself()
     {
-        // StartConversationAsync itself drains the presentation message off the webhook — this is
-        // the whole handshake path (start call, webhook delivery, presentation drain) exercised
-        // with no scenario logic layered on top, the smallest possible proof the rig is alive.
+        // The start call, the webhook delivery and the welcome read off it, with no scenario logic on top:
+        // the smallest proof that the rig is alive.
         (string conversationId, ChannelMessage presentation) =
             await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(fixture.Options.TurnTimeoutSeconds));
 
         try
         {
+            // A welcome with words and the intents' buttons, whatever its wording.
             Assert.False(string.IsNullOrWhiteSpace(presentation.Text), "The presentation carried no text.");
             Assert.NotEmpty(presentation.QuickReplies ?? []);
         }
         finally
         {
+            // The conversation is ended whatever the verdict, so its actors do not outlive the test.
             await fixture.Channel.EndConversationAsync(conversationId);
         }
     }
@@ -42,14 +44,14 @@ public sealed class HarnessSmokeTests
     [Fact]
     public async Task Structural_observers_see_the_turn()
     {
+        // A fresh conversation, given the turn timeout the scenarios run with.
         TimeSpan timeout = TimeSpan.FromSeconds(fixture.Options.TurnTimeoutSeconds);
         (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(timeout);
 
         try
         {
-            // Exercises the exact same BeginTurn/send/CompleteTurnAsync sequence ScenarioRunner
-            // uses for every scripted turn — proving the span and log observers actually see a
-            // turn happen, independent of any scenario's own assertions.
+            // The same sequence ScenarioRunner uses for every scripted turn, proving the observers see a turn
+            // independently of any scenario's own assertions.
             TurnScope scope = fixture.Observer.BeginTurn(conversationId);
             ChannelMessage message = await fixture.Channel.SendAsync(conversationId, "I'd like to see my invoices", timeout);
             TurnResult turn = await fixture.Observer.CompleteTurnAsync(scope, "I'd like to see my invoices", message);
@@ -58,10 +60,8 @@ public sealed class HarnessSmokeTests
             Assert.False(string.IsNullOrWhiteSpace(turn.AgentName),
                 $"No morgana.agent span was observed for the turn.\n{turn.Describe()}");
 
-            // The log observer: a turn always produces host log lines. Asserting on the lines
-            // rather than on parsed context accesses keeps this a test of the rig — an agent that
-            // skipped GetContextVariable would be a prompt regression and that verdict belongs to
-            // the context-handling scenarios, not here.
+            // The log observer: a turn always produces host log lines. Asserting on the lines rather than on parsed
+            // context accesses keeps this a test of the rig, since a skipped lookup is the context group's verdict.
             Assert.NotEmpty(turn.LogLines);
 
             // The model observer: every call of the turn carries what the model was handed and answered,
@@ -72,6 +72,7 @@ public sealed class HarnessSmokeTests
         }
         finally
         {
+            // The conversation is ended whatever the verdict, so its actors do not outlive the test.
             await fixture.Channel.EndConversationAsync(conversationId);
         }
     }
@@ -79,12 +80,12 @@ public sealed class HarnessSmokeTests
     [Fact]
     public void Every_scenario_file_parses()
     {
-        // Only a parse-and-shape check — this never talks to the host or runs a single turn, so it
-        // catches a malformed YAML file (or a missing/mismatched id) at effectively zero cost,
-        // well before a scenario would otherwise fail expensively and confusingly at run time.
+        // A parse and shape check that reaches no host, so a malformed file or a mismatched id costs nothing
+        // here instead of failing a billed run later.
         string[] files = Directory.GetFiles(ScenarioLoader.Directory, "*.yaml");
         Assert.NotEmpty(files);
 
+        // Each file must load under its own name and script at least one turn.
         foreach (string file in files)
         {
             ScenarioDefinition scenario = ScenarioLoader.Load(Path.GetFileNameWithoutExtension(file));
@@ -284,7 +285,7 @@ public sealed class HarnessSmokeTests
         // The server answers with one text block holding the JSON of the advice.
         string answerText = toolResult.Content.OfType<TextContentBlock>().Single().Text;
 
-        // The document is cloned so that it outlives the parser that read it.
+        // The caller reads the advice after the parsed document is released, so it is handed a copy.
         using JsonDocument answerDocument = JsonDocument.Parse(answerText);
         return answerDocument.RootElement.Clone();
     }

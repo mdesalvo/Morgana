@@ -18,16 +18,10 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// Checks the REST API a channel talks to — who it lets in, what a start must announce, how it answers
-/// for a conversation it does not hold, which command requests it admits — as status codes and shapes.
+/// Checks the REST API a channel talks to, as status codes and shapes: who it lets in, what a start must announce, how it answers for an unknown conversation and which commands it admits.
+/// Every test works on a conversation id of its own, seeded straight on the run's storage where it needs one on record, so no turn runs and no test reads another's state.
+/// Every path, status and field is spelled out literally, so the API changing shape is noticed.
 /// </summary>
-/// <remarks>
-/// No turn is ever run, so no agent and no judge is reached. A conversation these tests need on record
-/// is synthesised straight into the run's storage (<see cref="ChannelApiClient.SeedConversationOnRecordAsync"/>), so the
-/// only model call of the group is the presentation of the single real start, which the presenter
-/// computes once per channel name for the whole process. Every path, status and field is spelled out
-/// literally, as in <see cref="AgentCardTests"/>: what must be noticed is the API changing shape.
-/// </remarks>
 public sealed class ConversationApiTests
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
@@ -36,16 +30,14 @@ public sealed class ConversationApiTests
     /// <summary>The API as a channel calls it, on that host.</summary>
     private readonly ChannelApiClient api;
 
+    /// <summary>Receives the assembly's one live host and calls its API as the harness channel.</summary>
     public ConversationApiTests(MorganaHostFixture fixture)
     {
         this.fixture = fixture;
         api = new ChannelApiClient(fixture);
     }
 
-    /// <summary>
-    /// Every endpoint a channel calls, each with the body it would carry, so the refusals below are
-    /// asserted on the whole surface rather than on the one endpoint somebody remembered.
-    /// </summary>
+    /// <summary>Every endpoint a channel calls, so the refusals below are asserted on the whole surface rather than on the one endpoint somebody remembered.</summary>
     public static TheoryData<string, string> ChannelEndpoints => new()
     {
         { "POST", "/api/morgana/conversation/start" },
@@ -61,6 +53,7 @@ public sealed class ConversationApiTests
     [MemberData(nameof(ChannelEndpoints))]
     public async Task Endpoint_refuses_a_call_without_credentials(string method, string path)
     {
+        // No Authorization header at all: the gate is fail-closed on every endpoint but the health probe.
         HttpResponseMessage response = await api.SendAsync(method, path, ChannelApiClient.NewConversationId(), token: null);
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -74,6 +67,7 @@ public sealed class ConversationApiTests
         // name is not its credential, so claiming it proves nothing without the key it was filed under.
         string forgedKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
 
+        // The token is proven against the key the issuer was declared with, never against the one it was signed with.
         HttpResponseMessage response = await api.SendAsync(method, path, ChannelApiClient.NewConversationId(), api.MintToken(HarnessChannel.IssuerName, forgedKey));
 
         Assert.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
@@ -92,8 +86,8 @@ public sealed class ConversationApiTests
     }
 
     /// <summary>
-    /// Handshakes the start gate must refuse: each one is missing a fact without which no reply could
-    /// be delivered or adapted, so the conversation is never opened rather than failing on its first send.
+    /// Handshakes the start gate must refuse, each missing a fact without which no reply could be delivered or adapted.
+    /// The conversation is never opened rather than failing on its first send.
     /// </summary>
     public static TheoryData<string, string> RefusedHandshakes => new()
     {
@@ -111,8 +105,10 @@ public sealed class ConversationApiTests
     {
         string conversationId = ChannelApiClient.NewConversationId();
 
+        // The handshake as written, under a fresh id so the record can be checked afterwards.
         HttpResponseMessage response = await api.PostJsonAsync("/api/morgana/conversation/start", body.Replace("{id}", conversationId), TestContext.Current.CancellationToken);
 
+        // Refused with nothing left on record that a later call could mistake for an open conversation.
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"A start with {missing} was answered {(int)response.StatusCode}, not 400.");
         Assert.False(api.ConversationIsOnRecord(conversationId), $"A start refused for {missing} left a conversation on record.");
     }
@@ -135,6 +131,7 @@ public sealed class ConversationApiTests
     {
         string conversationId = ChannelApiClient.NewConversationId();
 
+        // A valid channel token on an id nobody started.
         HttpResponseMessage response = await api.SendAsync(method, path, conversationId, api.HarnessToken());
 
         // Answered as unknown and left unknown: a request that brought a conversation's database into
@@ -148,6 +145,7 @@ public sealed class ConversationApiTests
     {
         string conversationId = ChannelApiClient.NewConversationId();
 
+        // The one real start of the group, whose welcome the presenter caches for the whole process.
         HttpResponseMessage start = await api.StartAsync(conversationId);
         Assert.Equal(HttpStatusCode.Accepted, start.StatusCode);
 
@@ -166,6 +164,7 @@ public sealed class ConversationApiTests
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", callbackUrl: "http://127.0.0.1:1/owner");
 
+        // A second start naming the owner's id, with the harness's own handshake.
         HttpResponseMessage response = await api.StartAsync(conversationId);
 
         // Whoever names a conversation someone else opened is refused and its handshake stays the owner's:
@@ -180,8 +179,11 @@ public sealed class ConversationApiTests
     {
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
+
+        // The agent's session as it was written, to compare byte for byte afterwards.
         object? sessionBefore = await api.QueryRecordAsync(conversationId, "SELECT hex(agent_session) FROM morgana WHERE agent_name = 'billing';");
 
+        // The agent hands the conversation back, which takes it off active duty.
         await api.HostPersistenceService().DeactivateAgentAsync(conversationId, "billing");
 
         // A second call finds the row already off duty and leaves it as it is
@@ -198,6 +200,7 @@ public sealed class ConversationApiTests
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
 
+        // A client coming back to a conversation billing was carrying.
         HttpResponseMessage response = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId,
             api.HarnessToken());
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -223,6 +226,7 @@ public sealed class ConversationApiTests
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: null);
 
+        // The transcript of a conversation started and never spoken in.
         HttpResponseMessage response = await api.SendAsync("GET", "/api/morgana/conversation/{id}/history", conversationId, api.HarnessToken());
 
         // Started and silent is a conversation with an empty transcript: only one never started is a 404.
@@ -238,6 +242,7 @@ public sealed class ConversationApiTests
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: null);
 
+        // One token for both calls, as a channel holds one for its whole session.
         string token = api.HarnessToken();
 
         // A channel ends a conversation on its way out, often more than once (a page closing, a
@@ -254,13 +259,13 @@ public sealed class ConversationApiTests
     {
         // The liveness probe is asked by infrastructure holding no channel key
         HttpResponseMessage response = await api.SendAsync("GET", "/api/morgana/health", ChannelApiClient.NewConversationId(), token: null);
-
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
     }
 
     [Fact]
     public async Task Command_catalogue_publishes_compact()
     {
+        // The catalogue as a channel reads it to fill its palette.
         HttpResponseMessage response = await api.SendAsync("GET", "/api/morgana/commands", ChannelApiClient.NewConversationId(), api.HarnessToken());
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
@@ -273,8 +278,8 @@ public sealed class ConversationApiTests
     }
 
     /// <summary>
-    /// Command requests the channel got wrong, each on a conversation that exists: refused before the
-    /// command runs, with the name echoed back so the channel can tell which of its calls it was.
+    /// Command requests the channel got wrong, each on a conversation that exists, refused before the command runs.
+    /// The name is echoed back so the channel can tell which of its calls it was.
     /// </summary>
     public static TheoryData<string, string, string?> RefusedCommandRequests => new()
     {
@@ -290,8 +295,10 @@ public sealed class ConversationApiTests
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent);
 
+        // The request as the channel wrote it.
         HttpResponseMessage response = await api.SendCommandAsync(conversationId, body.Replace("{id}", conversationId), TestContext.Current.CancellationToken);
 
+        // A 400 that names the command, whatever the request got wrong.
         Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"A command with {reason} was answered {(int)response.StatusCode}, not 400.");
         JsonElement refusal = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
         Assert.True(refusal.TryGetProperty("name", out _), $"The refusal of a command with {reason} does not name the command.");
@@ -303,6 +310,7 @@ public sealed class ConversationApiTests
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing");
 
+        // /compact on an agent with no history, which answers without reaching a model.
         HttpResponseMessage response = await api.SendCommandAsync(conversationId, """{"name":"compact"}""", TestContext.Current.CancellationToken);
 
         // The command runs once it is admitted and the acknowledgement names it
@@ -313,8 +321,8 @@ public sealed class ConversationApiTests
     }
 
     /// <summary>
-    /// The run a channel names on its request is the run every frame of it hands back, the outcome included: that
-    /// is what lets a channel tell this run's outcome from a late one of an earlier run of the same command.
+    /// The run a channel names on its request is the run every frame of it hands back, the outcome included.
+    /// That is what lets a channel tell this run's outcome from a late one of an earlier run of the same command.
     /// </summary>
     [Fact]
     public async Task Command_outcome_names_the_run_the_channel_asked_for()
@@ -322,6 +330,7 @@ public sealed class ConversationApiTests
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
 
+        // A run the channel names, delivered to the harness channel where its frames are read.
         HttpResponseMessage response = await api.SendCommandAsync(conversationId, """{"name":"compact","invocationId":"run-7"}""", TestContext.Current.CancellationToken);
         Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
 
@@ -333,15 +342,16 @@ public sealed class ConversationApiTests
     }
 
     /// <summary>
-    /// A command declaring that it cannot be taken back is refused with 400 when the request carries no Yes. No
-    /// command Morgana ships asks for one, so the gate is handed a registry holding such a command and judged
-    /// on its own: the status is what a channel would read.
+    /// A command declaring that it cannot be taken back is refused with 400 when the request carries no Yes.
+    /// No command Morgana ships asks for one, so the gate is judged alone on a registry holding such a command.
     /// </summary>
     [Fact]
     public async Task Command_needing_a_yes_is_refused_without_one()
     {
+        // The request without the confirmation its command declares it needs.
         (ActionExecutingContext context, bool ran) = await AdmitAsync(new ExecuteCommandRequest("wipe"));
 
+        // The gate stopped it with the 400 a channel reads, naming the command and the missing Yes.
         Assert.False(ran);
         BadRequestObjectResult refusal = Assert.IsType<BadRequestObjectResult>(context.Result);
         Assert.Equal(400, refusal.StatusCode);
@@ -356,20 +366,22 @@ public sealed class ConversationApiTests
     {
         (ActionExecutingContext context, bool ran) = await AdmitAsync(new ExecuteCommandRequest("wipe", Confirmed: true));
 
+        // The gate let it go on and left no result of its own.
         Assert.True(ran);
         Assert.Null(context.Result);
     }
 
     /// <summary>
-    /// Puts <paramref name="request"/> through the admission gate as the command route would, on a registry
-    /// holding only <see cref="IrreversibleCommand"/>; answers the context the gate left and whether it let
-    /// the request go on.
+    /// Puts <paramref name="request"/> through the admission gate as the command route would, on a registry holding only <see cref="IrreversibleCommand"/>.
+    /// It answers the context the gate left and whether the gate let the request go on.
     /// </summary>
     private async Task<(ActionExecutingContext Context, bool Ran)> AdmitAsync(ExecuteCommandRequest request)
     {
+        // The real gate, over a registry whose one command needs a Yes and over the host's record.
         CommandAdmissionFilter gate = new CommandAdmissionFilter(
             new CommandRegistryService([new IrreversibleCommand()]), api.HostPersistenceService(), NullLogger.Instance);
 
+        // The context MVC would build for the command route, the request bound as its action argument.
         RouteData route = new RouteData();
         route.Values["conversationId"] = ChannelApiClient.NewConversationId();
         ActionExecutingContext context = new ActionExecutingContext(
@@ -378,6 +390,7 @@ public sealed class ConversationApiTests
             new Dictionary<string, object?> { ["request"] = request },
             controller: new object());
 
+        // The next step only records that the gate reached it, since the command must never run.
         bool ran = false;
         await gate.OnActionExecutionAsync(context, () =>
         {
@@ -385,6 +398,7 @@ public sealed class ConversationApiTests
             return Task.FromResult(new ActionExecutedContext(context, [], context.Controller));
         });
 
+        // The result the gate set, if any, with whether it let the request through.
         return (context, ran);
     }
 
@@ -399,4 +413,3 @@ public sealed class ConversationApiTests
             throw new InvalidOperationException("The admission gate never runs a command.");
     }
 }
-

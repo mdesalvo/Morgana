@@ -5,38 +5,19 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group covering a colleague that is not an agent of this installation at all, but of another
-/// Morgana running beside it.
+/// The group covering a colleague that is an agent of another Morgana running beside this one, booted with Harness__FederatedPeer=true in an invocation of its own.
+/// The stub peer of PeerFederationTests and the stub caller of ServedConsultationTests were both written here, so only two real Morganas show the halves of the protocol agreeing.
+/// The asking agent has no tools, so a turn that states a stock level at all has been across the wire.
 /// </summary>
-/// <remarks>
-/// <para><strong>Requires a second installation at boot</strong> — the instance under test carries a
-/// domain of one agent on this run and would find every other group's agents missing. Run it on its
-/// own:</para>
-/// <code>Harness__FederatedPeer=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~FederationTests"</code>
-///
-/// <para>What only this group can show: that the two halves of the protocol meet. Everything on the
-/// way out is measured against a stub peer by <c>PeerFederationTests</c> and everything on the way in
-/// against a stub caller by <c>ServedConsultationTests</c> — but both stubs were written here, so
-/// neither can catch the two ends disagreeing about what a card, an issuer or an audience is. Here
-/// the card is written by a Morgana, read by a Morgana and the token one minted is proven by the
-/// other.</para>
-///
-/// <para>Its one scenario asserts the mechanism and the datum, nothing around it. The agent doing the
-/// asking has no books and no tools, so a turn that states a stock level at all has been across the
-/// wire — which is why no assertion here has to reach into the other installation to see what
-/// happened there.</para>
-/// </remarks>
 public sealed class FederationTests
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
     private readonly MorganaHostFixture fixture;
 
+    /// <summary>Receives the assembly's one live host, with its second installation when the knob raised one.</summary>
     public FederationTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
-    /// <summary>
-    /// Replays the federation scenario and asserts it cleared its own pass threshold, printing the
-    /// full per-run transcript on the assertion message when it did not.
-    /// </summary>
+    /// <summary>Replays the federation scenario and asserts it cleared its own pass threshold.</summary>
     [Fact]
     public async Task An_agent_reaches_its_colleague_at_the_other_installation()
     {
@@ -46,8 +27,10 @@ public sealed class FederationTests
         Assert.SkipWhen(fixture.Peer is null,
             "This group needs the second installation: Harness__FederatedPeer=true.");
 
+        // The dispatch agent asks its colleague at the annex for a datum only that installation holds.
         ScenarioOutcome outcome = await fixture.Runner.RunAsync("federation-consults-an-agent-at-another-installation");
 
+        // The full per-run transcript is the assertion message when the threshold was missed.
         Assert.True(outcome.Passed, outcome.Report());
     }
 }

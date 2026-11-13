@@ -14,46 +14,30 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group asserting what this installation does when a partner consults it: which conversation the
-/// exchange is served on, what the answer costs and how many exchanges a partner may open.
+/// The group asserting what this installation does when a partner consults it: which conversation the exchange is served on, what the answer costs and how many a partner may open.
+/// The harness is the partner, declared twice on its own run (admitted to a single agent under one name, allowed one exchange an hour under the other) and asking through the A2A client a partner's Morgana uses.
+/// An admitted request reaches a real model, yet every assertion is deterministic and reads the envelope as data, never its wording.
 /// </summary>
-/// <remarks>
-/// <para>The counterpart of <c>PeerFederationTests</c>, which reads what leaves toward a colleague
-/// published elsewhere. Here this installation is the one answering, so the partner is the harness
-/// itself: two are declared on its own run, one admitted to a single agent and one allowed a single
-/// exchange an hour.</para>
-///
-/// <para>The question is put through the A2A client rather than as a hand-written envelope, so what
-/// knocks is what a partner's own Morgana would send. What comes back is read as the serialized
-/// envelope it is — an answer, whether the colleague awaits a reply and what the turn cost — never as
-/// prose to judge: a consulted agent's wording is <c>ConsultingTests</c>' subject, not this group's.</para>
-///
-/// <para><b>These turns cost.</b> An admitted request reaches a real agent and a real model; only the
-/// refusal at the end costs nothing, being decided before any agent is troubled. Everything asserted
-/// here is nonetheless deterministic — a conversation's name, a number's presence, a sentence a
-/// deployment wrote itself. What a consultation costs in dust is deliberately not among them: dust
-/// limiting is off in this run as in every group but <c>DustTests</c>, so the figure reported back is
-/// honestly zero and only the decision to report it at all belongs here.</para>
-/// </remarks>
 public sealed class ServedConsultationTests
 {
     /// <summary>The live host, consulted here the way a partner would consult it.</summary>
     private readonly MorganaHostFixture fixture;
 
+    /// <summary>Receives the assembly's one live host, which this group consults as a partner.</summary>
     public ServedConsultationTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     /// <summary>Agent on the asking side, declared so the answer reports what it cost.</summary>
     private const string CallerIntent = "billing";
 
     /// <summary>
-    /// How a consultation names the agent that asked. Spelled out rather than read from the framework:
-    /// it travels as protocol metadata between two installations that share no code.
+    /// How a consultation names the agent that asked.
+    /// It is spelled out rather than read from the framework, since it travels as protocol metadata between installations that share no code.
     /// </summary>
     private const string CallerIntentMetadataKey = "morgana:caller";
 
     /// <summary>
-    /// What parts a partner's name from the conversation it wrote. Spelled out for the same reason:
-    /// the shape of a name kept apart is the thing under test, not a constant compared to itself.
+    /// What parts a partner's name from the conversation it wrote.
+    /// It is spelled out for the same reason: the shape of a name kept apart is under test, not a constant compared to itself.
     /// </summary>
     private const string ForeignConversationSeparator = "~";
 
@@ -65,6 +49,7 @@ public sealed class ServedConsultationTests
         // context they were told and spend their budget.
         string namedConversation = $"live-conversation-{Guid.NewGuid():N}";
 
+        // The partner admitted to the inventory agent asks under that name.
         PeerEnvelope envelope = await ConsultAsync(
             MorganaHostFixture.ScopedPartnerName, fixture.ScopedPartnerKey, namedConversation, CallerIntent);
 
@@ -99,6 +84,7 @@ public sealed class ServedConsultationTests
         PeerEnvelope envelope = await ConsultAsync(
             MorganaHostFixture.ScopedPartnerName, fixture.ScopedPartnerKey, $"undeclared-{Guid.NewGuid():N}", callerIntent: null);
 
+        // No figure on an envelope whose caller named no agent.
         Assert.Null(envelope.DustConsumed);
     }
 
@@ -111,8 +97,10 @@ public sealed class ServedConsultationTests
         PeerEnvelope admitted = await ConsultAsync(
             MorganaHostFixture.MeteredPartnerName, fixture.MeteredPartnerKey, $"first-{Guid.NewGuid():N}", CallerIntent);
 
+        // The first exchange of the hour is admitted and answered.
         Assert.False(string.IsNullOrWhiteSpace(admitted.Answer));
 
+        // The second, under a fresh name, finds the hour spent.
         PeerEnvelope refused = await ConsultAsync(
             MorganaHostFixture.MeteredPartnerName, fixture.MeteredPartnerKey, $"second-{Guid.NewGuid():N}", CallerIntent);
 
@@ -172,8 +160,8 @@ public sealed class ServedConsultationTests
     }
 
     /// <summary>
-    /// What the consulted agent can call, spelled out rather than read from the domain configuration:
-    /// the point is to notice a tool list reaching a caller, not that a list equals itself.
+    /// What the consulted agent can call, spelled out rather than read from the domain's tool class.
+    /// The point is to notice a tool list reaching a caller, not that a list equals itself.
     /// </summary>
     private static readonly string[] InventoryToolNames =
     [
@@ -181,18 +169,17 @@ public sealed class ServedConsultationTests
         "GetOrderStatus", "CancelOrder", "GetOrders", "GetOrderHistory"
     ];
 
-    /// <summary>
-    /// Consults one published agent as a partner would, handing back the envelope it answered with.
-    /// </summary>
+    /// <summary>Consults one published agent as a partner would, handing back the envelope it answered with.</summary>
     /// <param name="partnerName">Partner to sign as, which is what the gate reads.</param>
     /// <param name="symmetricKey">Key that partner is declared with on the host under test.</param>
     /// <param name="conversationName">The A2A context id, written by the caller exactly as a partner writes one.</param>
-    /// <param name="callerIntent">Asking agent, or <c>null</c> for a caller that is not an agent of a Morgana.</param>
+    /// <param name="callerIntent">Asking agent; <c>null</c> for a caller that is not an agent of a Morgana.</param>
     /// <param name="question">What to ask, defaulting to an ordinary one this agent answers for.</param>
     private async Task<PeerEnvelope> ConsultAsync(
         string partnerName, string symmetricKey, string conversationName, string? callerIntent,
         string question = "Which plants are in stock right now?")
     {
+        // An admitted question runs a real agent turn, which can take well past the default timeout; the token rides on every call.
         using HttpClient httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
         httpClient.DefaultRequestHeaders.Authorization =
             new AuthenticationHeaderValue("Bearer", MintToken(partnerName, symmetricKey));
@@ -203,12 +190,15 @@ public sealed class ServedConsultationTests
             new Uri($"{fixture.BaseAddress}/a2a/{MorganaHostFixture.ScopedPartnerAgent}/"), httpClient)
             .GetAgentCardAsync(TestContext.Current.CancellationToken);
 
+        // The colleague as Microsoft's A2A client stands it up from the card.
         AIAgent colleague = card.AsAIAgent(httpClient);
 
+        // The context id is the conversation name the partner writes, which is what the answering side keeps apart.
         AgentSession session = colleague is A2AAgent a2aColleague
             ? await a2aColleague.CreateSessionAsync(conversationName)
             : await colleague.CreateSessionAsync(TestContext.Current.CancellationToken);
 
+        // A caller that declares itself an agent of a Morgana names its intent in the metadata, which decides whether the cost travels back.
         AgentRunOptions options = new AgentRunOptions();
         if (callerIntent is not null)
         {
@@ -216,9 +206,11 @@ public sealed class ServedConsultationTests
             options.AdditionalProperties[CallerIntentMetadataKey] = callerIntent;
         }
 
+        // One question, answered in full by one message.
         AgentResponse response = await colleague.RunAsync(
             question, session, options, TestContext.Current.CancellationToken);
 
+        // The answer's text is the serialized envelope; anything else is a broken contract.
         return JsonSerializer.Deserialize<PeerEnvelope>(response.Text, EnvelopeFormat)
             ?? throw new InvalidOperationException($"The consultation answered something that is not an envelope: {response.Text}");
     }
@@ -245,15 +237,12 @@ public sealed class ServedConsultationTests
     /// <summary>Reads the envelope whatever casing the answering side serialized its fields under.</summary>
     private static readonly JsonSerializerOptions EnvelopeFormat = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
 
-    /// <summary>
-    /// What a consultation answers with, as the asking side reads it: data to act on rather than
-    /// prose to relay.
-    /// </summary>
+    /// <summary>What a consultation answers with, as the asking side reads it: data to act on rather than prose to relay.</summary>
     /// <param name="Answer">What the consulted agent said.</param>
     /// <param name="AwaitingReply">Whether it expects the exchange to continue.</param>
     /// <param name="DustConsumed">What the turn cost, present only for a caller that declared itself an agent.</param>
     private sealed record PeerEnvelope(
         [property: JsonPropertyName("answer")] string Answer,
-        [property: JsonPropertyName("awaitingReply")] bool AwaitingReply,
+        [property: JsonPropertyName("colleagueAwaitsYourReply")] bool AwaitingReply,
         [property: JsonPropertyName("dustConsumed")] double? DustConsumed);
 }

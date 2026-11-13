@@ -8,17 +8,10 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The per-conversation rate limit at the REST gate: which calls it counts and how it refuses the one
-/// past the window. A message and a command fill the same window.
+/// The per-conversation rate limit at the REST gate: which calls it counts and how it refuses the one past the window, a message and a command filling the same window.
+/// It needs Harness__RateLimitPerMinute in an invocation of its own, since the limit is process-wide.
+/// No model is reached: the window is filled with <c>/compact</c> on an agent holding no history, which answers without summarizing.
 /// </summary>
-/// <remarks>
-/// <para><strong>Requires the limit switched on at boot</strong>, process-wide like the dust budget.
-/// Run this class on its own:</para>
-/// <code>Harness__RateLimitPerMinute=3 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~RateLimitTests"</code>
-/// <para>No model is reached: the window is filled with <c>/compact</c> on a conversation seeded with an
-/// agent holding no history, which answers without summarizing. Every message sent is one the gate
-/// refuses. Every status and field is spelled out literally, as in <see cref="ConversationApiTests"/>.</para>
-/// </remarks>
 public sealed class RateLimitTests
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
@@ -27,6 +20,7 @@ public sealed class RateLimitTests
     /// <summary>The API as a channel calls it, on that host.</summary>
     private readonly ChannelApiClient api;
 
+    /// <summary>Receives the assembly's one live host and calls its API as the harness channel.</summary>
     public RateLimitTests(MorganaHostFixture fixture)
     {
         this.fixture = fixture;
@@ -36,20 +30,26 @@ public sealed class RateLimitTests
     /// <summary>Calls per minute the host admits; skips the test on a host booted without the limit.</summary>
     private int CallsPerMinute()
     {
+        // A host booted without the knob limits nothing, so there is no window to measure.
         Assert.SkipWhen(fixture.Options.RateLimitPerMinute is null,
             "Rate limiting is off: run with Harness__RateLimitPerMinute set, in this class's own invocation.");
+
+        // The cap the host was booted with, which every test fills exactly.
         return fixture.Options.RateLimitPerMinute!.Value;
     }
 
     [Fact]
     public async Task Command_past_the_window_is_answered_429()
     {
+        // A fresh conversation, so the window starts empty.
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync();
 
+        // Every call up to the cap is admitted.
         for (int call = 1; call <= callsPerMinute; call++)
             Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
 
+        // The one past the cap meets the gate.
         HttpResponseMessage refused = await SendCompactAsync(conversationId);
 
         // The client learns when to come back and which window it hit; the user hears why over the channel
@@ -63,6 +63,7 @@ public sealed class RateLimitTests
     [Fact]
     public async Task Command_refused_before_running_costs_the_user_nothing()
     {
+        // A fresh conversation, so the window starts empty.
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync();
 
@@ -78,6 +79,7 @@ public sealed class RateLimitTests
         // The whole window is still there for the requests the user actually made
         for (int call = 1; call <= callsPerMinute; call++)
         {
+            // Admitted only if none of the refused requests was counted.
             HttpResponseMessage response = await SendCompactAsync(conversationId);
             Assert.True(response.StatusCode == HttpStatusCode.Accepted,
                 $"Command {call} of {callsPerMinute} was answered {(int)response.StatusCode}: refused requests were counted against the window.");
@@ -87,9 +89,11 @@ public sealed class RateLimitTests
     [Fact]
     public async Task Message_meets_the_window_commands_filled()
     {
+        // A fresh conversation, so the window starts empty.
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync();
 
+        // Commands alone fill the window.
         for (int call = 1; call <= callsPerMinute; call++)
             Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
 
@@ -104,9 +108,11 @@ public sealed class RateLimitTests
     [Fact]
     public async Task Command_past_the_window_is_told_as_its_own_outcome()
     {
+        // Delivered to the harness channel, which this test reads the refusal from.
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);
 
+        // The window filled, then one command more under a run id the refusal must name.
         for (int call = 1; call <= callsPerMinute; call++)
             Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendCommandAsync(conversationId, """{"name":"compact","invocationId":"refused-run"}""", TestContext.Current.CancellationToken)).StatusCode);
@@ -125,9 +131,11 @@ public sealed class RateLimitTests
     [Fact]
     public async Task Message_past_the_window_is_told_as_a_notice()
     {
+        // Delivered to the harness channel, which this test reads the refusal from.
         int callsPerMinute = CallsPerMinute();
         string conversationId = await SeedConversationWithAgentAsync(deliverToHarnessChannel: true);
 
+        // The window filled by commands, then a message the gate refuses.
         for (int call = 1; call <= callsPerMinute; call++)
             Assert.Equal(HttpStatusCode.Accepted, (await SendCompactAsync(conversationId)).StatusCode);
         Assert.Equal(HttpStatusCode.TooManyRequests, (await api.SendAsync(
@@ -140,22 +148,27 @@ public sealed class RateLimitTests
     }
 
     /// <summary>
-    /// A conversation on record with billing carrying it, so /compact is admitted and runs. Its deliveries reach
-    /// the harness channel only when <paramref name="deliverToHarnessChannel"/> asks for them to be read.
+    /// A conversation on record with billing carrying it, so /compact is admitted and runs.
+    /// Its deliveries reach the harness channel only when <paramref name="deliverToHarnessChannel"/> asks for them to be read.
     /// </summary>
     private async Task<string> SeedConversationWithAgentAsync(bool deliverToHarnessChannel = false)
     {
+        // Written straight to the record: no turn runs, so no model is reached.
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing",
             deliverToHarnessChannel ? fixture.Channel.CallbackUrl : null);
+
+        // The id every call of the test addresses.
         return conversationId;
     }
 
     /// <summary>The rate limit's refusal among what the conversation was told, past the outcomes of the commands that filled the window.</summary>
     private async Task<ChannelMessage> ReceiveRefusalAsync(string conversationId)
     {
+        // The outcomes of the admitted commands arrive first; a receive that times out fails the test.
         while (true)
         {
+            // The refusal is the one delivery that carries the rate limit's reason.
             ChannelMessage delivered = await fixture.Channel.ReceiveAsync(conversationId, TimeSpan.FromSeconds(15));
             if (delivered.ErrorReason == "rate_limit_exceeded")
                 return delivered;

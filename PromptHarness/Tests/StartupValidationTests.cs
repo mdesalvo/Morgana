@@ -4,37 +4,16 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group asserting that an incoherent trust declaration stops the instance at boot rather than
-/// at the first consultation.
+/// The group asserting that an incoherent trust or tier declaration stops the instance at boot rather than at the first consultation or turn.
+/// Every case boots the real entry point with one declaration broken as a deployer would break it; the checks run before the container is built,
+/// so a doomed host throws before it binds a port, which lets these run beside the live host. A fault declared in a plugin's code is PluginValidationTests' instrument.
 /// </summary>
-/// <remarks>
-/// <para>Kin to <c>AgentCardTests</c>: neither prose nor behaviour, deterministic and free. Where
-/// that group reads a document a stranger fetches, this one reads what the instance refuses to
-/// become. Both matter for the same reason — an A2A topology that boots cleanly can still be
-/// unreachable, over-reaching or unmetered, none of which a running instance announces.</para>
-///
-/// <para>Every case boots the <b>real</b> entry point with one declaration broken, exactly as a
-/// deployer would break it, so nothing here mocks a validator or asserts against one. The checks
-/// live before the container is built, so a doomed host throws before it binds a port or raises an
-/// actor system, which is what lets these run in the same process as the live host.</para>
-///
-/// <para>Almost every case here breaks one <c>Morgana:AgentToAgent:Partners</c> entry against itself:
-/// what a partner is, where it answers and how far it reaches are one declaration, so there is no
-/// second list for a case to set against the first. The exception is the address this installation
-/// publishes itself at, which a proxied deployment declares because its binding cannot. Its own
-/// agents appear nowhere — they consult each other under a key coined at startup, which no deployer
-/// can misdeclare.</para>
-///
-/// <para>What configuration cannot reach is deliberately absent: a <c>[ConsultsAgent]</c> naming an
-/// unknown colleague, one naming its own agent, two folding to one function name. Those are refused
-/// at startup too, but they are declared in a plugin's code, so reaching them would need a second
-/// plugin built to be wrong, which is the instrument of <c>PluginValidationTests</c>.</para>
-/// </remarks>
 public sealed class StartupValidationTests
 {
     /// <summary>The live host, read for the positions this run's own declarations occupy.</summary>
     private readonly MorganaHostFixture fixture;
 
+    /// <summary>Receives the assembly's one live host, read for the partner positions this run's configuration occupies.</summary>
     public StartupValidationTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     /// <summary>Placeholder the shipped configuration carries where a real secret belongs.</summary>

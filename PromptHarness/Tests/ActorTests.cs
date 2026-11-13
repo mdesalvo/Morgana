@@ -6,15 +6,14 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The framework actors <c>ContextHandlingTests</c>/<c>BehaviourTests</c> never meaningfully
-/// exercise: the classifier's own output, <c>MorganaChannelAdapter</c>'s degradation path and the
-/// Presentation prompt's actual content.
+/// The framework prompts that the context and behaviour groups never exercise: the classifier's own output, the channel adapter's rewrite and the presentation's content.
 /// </summary>
 public sealed class ActorTests
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
     private readonly MorganaHostFixture fixture;
 
+    /// <summary>Receives the assembly's one live host.</summary>
     public ActorTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     [Theory]
@@ -27,31 +26,27 @@ public sealed class ActorTests
     [InlineData("actor-channeladapter-degrades-invoice-card")]
     public async Task Actor_scenario_holds(string scenarioId)
     {
+        // The scenario's own runs and minPasses decide the threshold.
         ScenarioOutcome outcome = await fixture.Runner.RunAsync(scenarioId);
 
+        // The full per-run transcript is the assertion message when the threshold was missed.
         Assert.True(outcome.Passed, outcome.Report());
     }
 
     /// <summary>
-    /// Judges the Presentation prompt's actual content — distinct from
-    /// <c>HarnessSmokeTests.Conversation_opens_and_Morgana_presents_itself</c>, which only proves
-    /// the rig is alive (non-empty text, at least one quick reply) and leaves the wording unchecked.
+    /// Judges what the presentation says, where the smoke group only proves that one arrives.
+    /// It is one shot and never a scenario of N runs: the presenter caches its result process-wide by channel name, so every later start replays the first.
     /// </summary>
-    /// <remarks>
-    /// Deliberately one-shot, never a 5-run YAML scenario: <c>LLMPresenterService</c> caches its
-    /// result process-wide, keyed only by channel name — every conversation-start after the very
-    /// first one in the whole assembly replays the cached result rather than calling the LLM again,
-    /// so the standard N-runs/threshold method would be meaningless here. Do not "fix" this into a
-    /// scenario later.
-    /// </remarks>
     [Fact]
     public async Task Presentation_introduces_Morgana_and_invites_a_request()
     {
+        // The welcome of a fresh conversation, which is the presenter's text or the one it cached for this channel.
         (string conversationId, ChannelMessage presentation) =
             await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(fixture.Options.TurnTimeoutSeconds));
 
         try
         {
+            // The judge reads the welcome as the user would and convicts on either proposition.
             IReadOnlyList<string> failures = await fixture.Judge.EvaluateAsync(
                 judge: ["The message introduces itself as Morgana and invites the user to say what they need."],
                 judgeNot: ["The message asks for personal or account information before the user has said anything."],
@@ -61,6 +56,7 @@ public sealed class ActorTests
         }
         finally
         {
+            // The conversation is ended whatever the verdict, so its actors do not outlive the test.
             await fixture.Channel.EndConversationAsync(conversationId);
         }
     }

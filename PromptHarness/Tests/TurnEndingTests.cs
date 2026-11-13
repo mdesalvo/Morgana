@@ -14,14 +14,8 @@ namespace PromptHarness.Tests;
 /// The group asserting what a presentation tool tells the model about the text of its turn and about a card it refuses.
 /// A landing declaration reaches the model on the landing turn alone.
 /// The rich card's limit is measured as the prose states it: three sections nested below the card's own components pass and a fourth is refused.
+/// Deterministic and free: a scripted chat client stands behind the real tool loop and every literal a model sees is spelled out, so a changed contract shows.
 /// </summary>
-/// <remarks>
-/// <para>Deterministic and free: no host, no model. A scripted chat client stands where the model would, behind
-/// the real function-invoking loop that the tools run in.</para>
-///
-/// <para>Every literal a model sees is spelled out here rather than read from <c>Constants</c>, as the
-/// wire-contract groups do: the point is to notice the contract changing.</para>
-/// </remarks>
 public sealed class TurnEndingTests
 {
     /// <summary>The fact a presentation tool appends while the turn has written no text.</summary>
@@ -40,6 +34,7 @@ public sealed class TurnEndingTests
         ScriptedChatClient model = new ScriptedChatClient(Call(toolName), Text("Here you are."));
         ToolRig rig = await ToolRig.CreateAsync(model);
 
+        // One turn of the real loop, which runs the tool and hands its result back to the model.
         await rig.Agent.RunAsync([new ChatMessage(ChatRole.User, "Show my invoices")], rig.Session, cancellationToken: TestContext.Current.CancellationToken);
 
         // The result is the last thing the model reads before writing, so the fact closes it.
@@ -66,6 +61,7 @@ public sealed class TurnEndingTests
                 Text("Here you are."));
         ToolRig rig = await ToolRig.CreateAsync(model);
 
+        // One turn of the real loop, whose text precedes the tool under test.
         await rig.Agent.RunAsync([new ChatMessage(ChatRole.User, "Show my invoices")], rig.Session, cancellationToken: TestContext.Current.CancellationToken);
 
         // The turn has already written its words, so the tool has no debt to announce.
@@ -99,6 +95,7 @@ public sealed class TurnEndingTests
         // No model is involved: the tool is called directly, so no loop knows what the turn has written.
         ToolRig rig = await ToolRig.CreateAsync(new ScriptedChatClient());
 
+        // A call made straight to the tool, as nothing in a deployment does.
         object? result = await rig.Tool.SetQuickReplies([new Morgana.Contracts.QuickReply("yes", "Yes", "Yes, please", false)]);
 
         // Without a loop there is nothing to state a fact about.
@@ -118,6 +115,7 @@ public sealed class TurnEndingTests
         for (int sectionLevel = nestedSections; sectionLevel >= 1; sectionLevel--)
             components = $$"""[{"type":"section","title":"Level {{sectionLevel}}","components":{{components}}}]""";
 
+        // The card as a model would hand it to the tool.
         object? result = await rig.Tool.SetRichCard($$"""{"title":"Invoice","components":{{components}}}""");
 
         // Admitted, the model reads the confirmation; refused, the depth it went past.
@@ -182,6 +180,7 @@ public sealed class TurnEndingTests
             _ => null
         };
 
+        // The id every assertion reads the result back by.
         return new FunctionCallContent("call-1", toolName, arguments);
     }
 
@@ -238,6 +237,7 @@ public sealed class TurnEndingTests
                 }
             });
 
+            // The three pieces a test drives: the tool called directly, the agent run through the loop and their shared session.
             return new ToolRig { Tool = tool, Agent = agent, Session = session };
         }
     }

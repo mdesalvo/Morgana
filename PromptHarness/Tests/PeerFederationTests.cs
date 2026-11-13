@@ -17,27 +17,10 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group asserting what this installation does toward a colleague published somewhere else: which
-/// cards it accepts, what it signs and where a credential is allowed to go.
+/// The group asserting what this installation does toward a colleague published somewhere else: which cards it accepts, what it signs and where a credential may go.
+/// The partner is a stub serving the documents a deployment has to survive (a card naming a third host, one demanding a scheme nobody here presents, one demanding nothing).
+/// Deterministic and free, the assertions read the request the stub recorded, since the token on the way out is this installation's and the answer is the peer's.
 /// </summary>
-/// <remarks>
-/// <para>Kin to <c>AgentCardTests</c> and <c>StartupValidationTests</c>: deterministic, no model, no
-/// cost. Where those read what a stranger fetches from this installation and what it refuses to
-/// become, this one reads the other direction — the half no HTTP call from outside can reach, since
-/// it only runs when this installation is the one asking.</para>
-///
-/// <para>The partner is stood up here rather than being a second Morgana: what is under test is what
-/// <b>leaves</b> (the card this side accepts, the token it mints and the origin it attaches it to)
-/// while a real peer would answer those questions with its own behaviour instead of with the cases a
-/// deployment actually has to survive. A card naming a third host, one demanding a scheme nobody here
-/// can present, one demanding nothing: each is a document, which is what this group serves.</para>
-///
-/// <para>Assertions read the request the peer recorded rather than the answer this side received. A
-/// consultation's answer is the peer's word; the token on the way in is ours. It is the only part
-/// a deployment is exposed by. So a run that ends in an exception because the stub answered no proper
-/// envelope still proves what it was asked to prove, which is why the calls below are made without
-/// expecting one.</para>
-/// </remarks>
 public sealed class PeerFederationTests
 {
     /// <summary>Partner publishing the colleague, as this installation's configuration names it.</summary>
@@ -64,17 +47,18 @@ public sealed class PeerFederationTests
     [Fact]
     public async Task A_colleague_is_signed_for_under_the_name_and_audience_its_partner_agreed()
     {
+        // A partner whose card demands a JWT bearer at the address it is served from.
         using WireMockServer peer = StartPeer(out string peerAddress);
         StubCard(peer, peerAddress, RequireBearer());
         StubConsultationEndpoint(peer);
 
+        // One consultation, so the stub records the token this side minted.
         using ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
         await ConsultAsync(directory);
 
         // Neither claim is discoverable and neither is this installation's own: a partner files a
         // caller under a name of its choosing and validates an audience it agreed when it cut the key.
         JsonWebToken token = ReadTokenOf(SingleConsultationRequest(peer));
-
         Assert.Equal(PartnerIssuer, token.Issuer);
         Assert.Contains(PartnerAudience, token.Audiences);
         Assert.DoesNotContain(LocalAudience, token.Audiences);
@@ -86,6 +70,7 @@ public sealed class PeerFederationTests
     [Fact]
     public async Task A_colleague_advertising_an_interface_at_another_host_is_not_reached_at_all()
     {
+        // The partner with a third host its card will point at.
         using WireMockServer peer = StartPeer(out string peerAddress);
         using WireMockServer thirdHost = StartPeer(out string thirdHostAddress);
 
@@ -98,6 +83,7 @@ public sealed class PeerFederationTests
         using ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
         AIAgent? colleague = await ResolveAsync(directory);
 
+        // No colleague, while the third host never heard from this installation.
         Assert.Null(colleague);
         Assert.Empty(thirdHost.LogEntries);
     }
@@ -105,6 +91,7 @@ public sealed class PeerFederationTests
     [Fact]
     public async Task A_colleague_demanding_a_scheme_this_installation_cannot_present_costs_only_itself()
     {
+        // A partner on a port of its own.
         using WireMockServer peer = StartPeer(out string peerAddress);
 
         // OAuth2 is a requirement this side has no way to satisfy. The colleague is left unresolved
@@ -116,6 +103,7 @@ public sealed class PeerFederationTests
             },
             RequiredSchemeName: "oauth"));
 
+        // The resolution answers nothing instead of throwing, so the asking agent runs without this colleague.
         using ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
         Assert.Null(await ResolveAsync(directory));
     }
@@ -123,6 +111,7 @@ public sealed class PeerFederationTests
     [Fact]
     public async Task A_colleague_requiring_nothing_is_consulted_with_no_token_at_all()
     {
+        // A partner on a port of its own.
         using WireMockServer peer = StartPeer(out string peerAddress);
 
         // An open A2A peer is reachable, which is the whole reason a card's requirements are read
@@ -130,15 +119,16 @@ public sealed class PeerFederationTests
         StubCard(peer, peerAddress, security: null);
         StubConsultationEndpoint(peer);
 
+        // One consultation, whose request must carry no credential at all.
         using ConfigurationAgentDirectoryService directory = BuildDirectory(peerAddress);
         await ConsultAsync(directory);
-
         Assert.False(SingleConsultationRequest(peer).ContainsKey("Authorization"));
     }
 
     [Fact]
     public async Task A_colleague_is_described_by_one_reading_of_its_card_however_many_conversations_consult_it()
     {
+        // A partner whose card demands a bearer, as a Morgana's does.
         using WireMockServer peer = StartPeer(out string peerAddress);
         StubCard(peer, peerAddress, RequireBearer());
         StubConsultationEndpoint(peer);
@@ -149,6 +139,7 @@ public sealed class PeerFederationTests
         await ResolveAsync(directory);
         await ResolveAsync(directory);
 
+        // Two resolutions, one card fetch.
         Assert.Single(peer.LogEntries, entry => entry.RequestMessage!.Path!.EndsWith("agent-card.json", StringComparison.Ordinal));
     }
 
@@ -156,22 +147,24 @@ public sealed class PeerFederationTests
     /// <param name="peerAddress">Everything before the published agent path, as configuration would declare it.</param>
     private static WireMockServer StartPeer(out string peerAddress)
     {
+        // A free port, so several peers of one test never collide.
         WireMockServer peer = WireMockServer.Start();
+
+        // Without the trailing separator, as a deployment writes a partner's Url.
         peerAddress = peer.Url!.TrimEnd('/');
         return peer;
     }
 
-    /// <summary>Serves the colleague's card, advertising its endpoint at <paramref name="interfaceAddress"/>.</summary>
-    /// <remarks>
-    /// The address the card is served from and the one it advertises are separate parameters because
-    /// their disagreement is the case worth testing: a card may only send this installation where it
-    /// already was.
-    /// </remarks>
+    /// <summary>
+    /// Serves the colleague's card, advertising its endpoint at <paramref name="interfaceAddress"/>.
+    /// The address served from and the one advertised are apart because their disagreement is the case worth testing.
+    /// </summary>
     /// <param name="peer">The peer serving the card.</param>
     /// <param name="interfaceAddress">Base address the card names its own endpoint under.</param>
-    /// <param name="security">What the card demands of a caller, or <c>null</c> to demand nothing.</param>
+    /// <param name="security">What the card demands of a caller; <c>null</c> demands nothing.</param>
     private static void StubCard(WireMockServer peer, string interfaceAddress, AgentCardSecurity? security)
     {
+        // The card a Morgana would publish for the shipping agent, its one interface at the given address.
         AgentCard card = new AgentCard
         {
             Name = PeerIntent,
@@ -189,6 +182,7 @@ public sealed class PeerFederationTests
             ]
         };
 
+        // A demanding card defines its schemes and names the one a caller must present.
         if (security is not null)
         {
             card.SecuritySchemes = security.Schemes;
@@ -201,6 +195,7 @@ public sealed class PeerFederationTests
             ];
         }
 
+        // Served at the well-known path, where a caller that knows only the partner's address looks first.
         peer.Given(Request.Create().WithPath($"{Constants.AgentToAgent.AgentPathPrefix}/{PeerIntent}/.well-known/agent-card.json").UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
@@ -208,11 +203,10 @@ public sealed class PeerFederationTests
                 .WithBody(JsonSerializer.Serialize(card, A2A.A2AJsonUtilities.DefaultOptions)));
     }
 
-    /// <summary>Accepts the consultation itself, so the request carrying the credential is recorded.</summary>
-    /// <remarks>
-    /// What it answers is deliberately not an envelope this side can read: the answer is the peer's
-    /// word and no assertion here rests on it.
-    /// </remarks>
+    /// <summary>
+    /// Accepts the consultation itself, so the request carrying the credential is recorded.
+    /// It answers no envelope this side can read, since no assertion here rests on the peer's word.
+    /// </summary>
     /// <param name="peer">The peer being consulted.</param>
     private static void StubConsultationEndpoint(WireMockServer peer)
         => peer.Given(Request.Create().WithPath($"{Constants.AgentToAgent.AgentPathPrefix}/{PeerIntent}").UsingPost())
@@ -231,16 +225,13 @@ public sealed class PeerFederationTests
             RequiredSchemeName: BearerSchemeName);
 
     /// <summary>
-    /// Builds the directory over a configuration declaring one consultable partner at
-    /// <paramref name="peerAddress"/>.
+    /// Builds the directory over a configuration declaring one consultable partner at <paramref name="peerAddress"/>.
+    /// The configuration and prompt services are inert stand-ins, since nothing on the path to a colleague elsewhere reads them.
     /// </summary>
-    /// <remarks>
-    /// The two prompt services are inert here: they describe agents of <em>this</em> installation and
-    /// nothing on the path to a colleague published elsewhere reads them.
-    /// </remarks>
     /// <param name="peerAddress">Where the partner answers.</param>
     private static ConfigurationAgentDirectoryService BuildDirectory(string peerAddress)
     {
+        // One partner open outbound, with the issuer and audience it agreed, which differ from this installation's own.
         IConfiguration configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -255,6 +246,7 @@ public sealed class PeerFederationTests
             })
             .Build();
 
+        // The directory every agent of this installation resolves its colleagues through.
         return new ConfigurationAgentDirectoryService(
             new UnreadAgentConfiguration(),
             new UnreadPromptResolver(),
@@ -265,31 +257,29 @@ public sealed class PeerFederationTests
             NullLogger.Instance);
     }
 
-    /// <summary>Resolves the colleague as an agent of this installation would, or hands back nothing.</summary>
+    /// <summary>Resolves the colleague as an agent of this installation would; null when it is refused.</summary>
     /// <param name="directory">Directory under test.</param>
     private static async Task<AIAgent?> ResolveAsync(ConfigurationAgentDirectoryService directory)
         => (await directory.ResolvePeerAgentAsync(new Records.PeerReference(PeerIntent, PartnerName), CallerIntent))?.Agent;
 
     /// <summary>
-    /// Resolves the colleague and puts a question to it, so the peer records the request this
-    /// installation actually sends.
+    /// Resolves the colleague and puts a question to it, so the peer records the request this installation sends.
+    /// The answer is discarded, since the stub answers no envelope and every assertion is on what arrived at the peer.
     /// </summary>
-    /// <remarks>
-    /// The answer is discarded whatever it turns out to be: the stub answers no envelope this side
-    /// could read, while every assertion in this group is on what arrived at the peer.
-    /// </remarks>
     /// <param name="directory">Directory under test.</param>
     private static async Task ConsultAsync(ConfigurationAgentDirectoryService directory)
     {
         AIAgent colleague = await ResolveAsync(directory)
             ?? throw new InvalidOperationException("The colleague was not resolved, so nothing was ever sent to its peer.");
 
+        // The A2A context id a consultation carries, as an agent of this installation binds it.
         AgentSession session = colleague is A2AAgent a2aColleague
             ? await a2aColleague.CreateSessionAsync("conversation-under-test")
             : await colleague.CreateSessionAsync();
 
         try
         {
+            // The question that makes this installation sign and send its request.
             await colleague.RunAsync("Where is the parcel?", session);
         }
         catch (Exception)
@@ -310,10 +300,11 @@ public sealed class PeerFederationTests
     /// <param name="headers">Headers of the recorded request.</param>
     private static JsonWebToken ReadTokenOf(IDictionary<string, WireMock.Types.WireMockList<string>> headers)
     {
+        // Exactly one credential, presented as a bearer.
         string authorization = Assert.Single(headers["Authorization"]);
-
         Assert.StartsWith("Bearer ", authorization, StringComparison.Ordinal);
 
+        // The token itself, read without validation: its claims are what is under test.
         return new JsonWebToken(authorization["Bearer ".Length..]);
     }
 
@@ -325,14 +316,17 @@ public sealed class PeerFederationTests
     /// <summary>Stands in for the domain configuration, which describes agents of this installation only.</summary>
     private sealed class UnreadAgentConfiguration : IAgentConfigurationService
     {
+        /// <inheritdoc />
         public Task<List<Records.IntentDefinition>> GetIntentsAsync() => Task.FromResult(new List<Records.IntentDefinition>());
 
+        /// <inheritdoc />
         public Task<List<Records.Prompt>> GetAgentPromptsAsync() => Task.FromResult(new List<Records.Prompt>());
     }
 
     /// <summary>Stands in for prompt resolution, which no path toward a colleague elsewhere reaches.</summary>
     private sealed class UnreadPromptResolver : IPromptResolverService
     {
+        /// <summary>Fails the test, since resolving a prompt here would mean the outbound path reads this installation's own agents.</summary>
         public Task<Records.Prompt> ResolveAsync(string promptID)
             => throw new InvalidOperationException($"Prompt '{promptID}' was resolved while consulting a colleague published elsewhere.");
     }
@@ -340,6 +334,7 @@ public sealed class PeerFederationTests
     /// <summary>Reports an address for this installation, which only a colleague of its own ring is reached at.</summary>
     private sealed class FixedHostAddress : IHostAddressService
     {
+        /// <summary>An address nothing listens on, never reached since no colleague of the ring is consulted here.</summary>
         public string? ResolveBaseAddress() => "http://127.0.0.1:1";
     }
 }

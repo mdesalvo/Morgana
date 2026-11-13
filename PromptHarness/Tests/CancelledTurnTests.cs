@@ -11,11 +11,10 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// Every flow of a turn that Morgana can stop, held by a fake model until the wait on it runs out: the held call must be dropped in time, no late answer may reach the channel, a stopped turn keeps the tool calls that ran and only completed calls are charged.
+/// Every flow of a turn that Morgana can stop, held by a fake model until the wait on it runs out: the held call is dropped in time and no late answer reaches the channel.
+/// A stopped turn keeps the tool calls that ran and only completed calls are charged.
+/// It needs Harness__CancellableModel=true in an invocation of its own, which points every tier at the fake model with a turn budget of six seconds.
 /// </summary>
-/// <remarks>
-/// Requires <c>Harness__CancellableModel=true</c> in an invocation of its own, which points every tier at the fake model and sets the turn budget to six seconds; no real model is reached.
-/// </remarks>
 public sealed class CancelledTurnTests
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
@@ -24,6 +23,7 @@ public sealed class CancelledTurnTests
     /// <summary>The API as a channel calls it, used here to read the records and to mint a partner's token.</summary>
     private readonly ChannelApiClient api;
 
+    /// <summary>Receives the assembly's one live host and calls its API as the harness channel.</summary>
     public CancelledTurnTests(MorganaHostFixture fixture)
     {
         this.fixture = fixture;
@@ -215,10 +215,10 @@ public sealed class CancelledTurnTests
         // The partner never gets an answer, so its own timeout ends the request.
         await Assert.ThrowsAnyAsync<Exception>(() => AskAsPartnerAsync(partnerTimeout, "Which plants are in stock right now?"));
 
-        // The held call is dropped when the partner stops waiting, or the cancellation never crossed the door.
-        ModelCallRecord held = await WaitForHeldCallAsync(model, windowStart, ModelCallKind.PeerGuard, 0);
-        Assert.True(held.AbortedAt is not null, "The partner's cancellation did not reach the PeerGuard call.");
-        AssertWithin(held.AbortedAt!.Value - (held.LastByteAt ?? held.StartedAt), partnerTimeout.TotalSeconds, "PeerGuard call");
+        // The held call is dropped when the partner stops waiting; otherwise the cancellation never crossed the door.
+        ModelCallRecord heldCall = await WaitForHeldCallAsync(model, windowStart, ModelCallKind.PeerGuard, 0);
+        Assert.True(heldCall.AbortedAt is not null, "The partner's cancellation did not reach the PeerGuard call.");
+        AssertWithin(heldCall.AbortedAt!.Value - (heldCall.LastByteAt ?? heldCall.StartedAt), partnerTimeout.TotalSeconds, "PeerGuard call");
 
         // A question that was never judged never reaches the agent.
         Assert.DoesNotContain(CallsSince(model, windowStart), call => call.Kind == ModelCallKind.ConsultedInventory);
@@ -253,7 +253,7 @@ public sealed class CancelledTurnTests
         AssertNothingUnrecognised(model, windowStart);
     }
 
-    /// <summary>The fake model of the run, or a skip of the test on a host booted without it.</summary>
+    /// <summary>The fake model of the run; on a host booted without it the test is skipped.</summary>
     private CancellableModelHost OpenModel()
     {
         Assert.SkipWhen(!fixture.Options.CancellableModel,
@@ -279,15 +279,16 @@ public sealed class CancelledTurnTests
         DateTimeOffset deadline = DateTimeOffset.UtcNow + DropWait;
         while (true)
         {
-            ModelCallRecord? held = CallsSince(model, windowStart)
+            // The held call of that kind and round among those the fake model saw since the window opened.
+            ModelCallRecord? heldCall = CallsSince(model, windowStart)
                 .FirstOrDefault(call => call.Kind == kind && call.Round == round && call.Held);
 
             // The call is returned once dropped or once the wait for the drop is over.
-            if (held is not null && (held.AbortedAt is not null || DateTimeOffset.UtcNow > deadline))
-                return held;
+            if (heldCall is not null && (heldCall.AbortedAt is not null || DateTimeOffset.UtcNow > deadline))
+                return heldCall;
 
             // A held call that never arrived is a fault of the test and not of the drop.
-            Assert.True(held is not null || DateTimeOffset.UtcNow <= deadline, $"No held {kind} call of round {round} reached the fake model.");
+            Assert.True(heldCall is not null || DateTimeOffset.UtcNow <= deadline, $"No held {kind} call of round {round} reached the fake model.");
             await Task.Delay(100, TestContext.Current.CancellationToken);
         }
     }
@@ -295,13 +296,13 @@ public sealed class CancelledTurnTests
     /// <summary>Asserts that Morgana dropped the held call within a second before and three seconds after the wait that was meant to end it.</summary>
     private async Task AssertHeldCallWasCancelledAsync(CancellableModelHost model, DateTimeOffset windowStart, ModelCallKind kind, int round, double waitSeconds)
     {
-        ModelCallRecord held = await WaitForHeldCallAsync(model, windowStart, kind, round);
+        ModelCallRecord heldCall = await WaitForHeldCallAsync(model, windowStart, kind, round);
 
         // A call that nobody dropped is a cancellation that never reached the model's HTTP call.
-        Assert.True(held.AbortedAt is not null, $"The held {kind} call of round {round} was never dropped by Morgana (streamed {held.Streamed}, started {held.StartedAt:O}, last byte {held.LastByteAt:O}, now {DateTimeOffset.UtcNow:O}).");
+        Assert.True(heldCall.AbortedAt is not null, $"The held {kind} call of round {round} was never dropped by Morgana (streamed {heldCall.Streamed}, started {heldCall.StartedAt:O}, last byte {heldCall.LastByteAt:O}, now {DateTimeOffset.UtcNow:O}).");
 
         // The wait is renewed by every frame, so it counts from the last byte or from the start when none was sent.
-        AssertWithin(held.AbortedAt!.Value - (held.LastByteAt ?? held.StartedAt), waitSeconds, $"{kind} call of round {round}");
+        AssertWithin(heldCall.AbortedAt!.Value - (heldCall.LastByteAt ?? heldCall.StartedAt), waitSeconds, $"{kind} call of round {round}");
     }
 
     /// <summary>Asserts that a held stream resumed after the turn closed and was dropped at the first line that followed.</summary>
@@ -309,28 +310,28 @@ public sealed class CancelledTurnTests
     {
         // The wait for the drop covers the pause of the stream and the line after it, which come after the turn budget.
         DateTimeOffset deadline = DateTimeOffset.UtcNow + DropWait + fixture.CancellableModel!.HeldStreamResumesAfter;
-        ModelCallRecord held = await WaitForHeldCallAsync(model, windowStart, kind, round);
-        while (held.AbortedAt is null && DateTimeOffset.UtcNow < deadline)
+        ModelCallRecord heldCall = await WaitForHeldCallAsync(model, windowStart, kind, round);
+        while (heldCall.AbortedAt is null && DateTimeOffset.UtcNow < deadline)
         {
             // The pause is still running or the drop has not been seen yet.
             await Task.Delay(100, TestContext.Current.CancellationToken);
-            held = await WaitForHeldCallAsync(model, windowStart, kind, round);
+            heldCall = await WaitForHeldCallAsync(model, windowStart, kind, round);
         }
 
         // A stream that never resumed proves nothing about the reader.
-        Assert.True(held.ResumedAt is not null, $"The held {kind} call of round {round} never resumed (started {held.StartedAt:O}, now {DateTimeOffset.UtcNow:O}).");
+        Assert.True(heldCall.ResumedAt is not null, $"The held {kind} call of round {round} never resumed (started {heldCall.StartedAt:O}, now {DateTimeOffset.UtcNow:O}).");
 
         // The turn closed on the budget and not on the late line.
-        Assert.True(apologyAt <= held.ResumedAt!.Value, $"The turn closed at {apologyAt:O}, after the stream resumed at {held.ResumedAt:O}.");
+        Assert.True(apologyAt <= heldCall.ResumedAt!.Value, $"The turn closed at {apologyAt:O}, after the stream resumed at {heldCall.ResumedAt:O}.");
 
         // A call that nobody dropped is a reader that kept waiting on the network.
-        Assert.True(held.AbortedAt is not null, $"The held {kind} call of round {round} was never dropped by Morgana (started {held.StartedAt:O}, resumed {held.ResumedAt:O}, last byte {held.LastByteAt:O}, now {DateTimeOffset.UtcNow:O}).");
+        Assert.True(heldCall.AbortedAt is not null, $"The held {kind} call of round {round} was never dropped by Morgana (started {heldCall.StartedAt:O}, resumed {heldCall.ResumedAt:O}, last byte {heldCall.LastByteAt:O}, now {DateTimeOffset.UtcNow:O}).");
 
         // The reader stops at the first line after the stop and the HTTP client drains for up to two seconds before closing.
-        TimeSpan sinceResume = held.AbortedAt!.Value - held.ResumedAt!.Value;
+        TimeSpan sinceResume = heldCall.AbortedAt!.Value - heldCall.ResumedAt!.Value;
         Assert.True(
             sinceResume >= TimeSpan.Zero && sinceResume <= TimeSpan.FromSeconds(3),
-            $"The {kind} call of round {round} resumed at {held.ResumedAt:O} and was dropped at {held.AbortedAt:O}, {sinceResume.TotalSeconds:F2} s later and outside [0, 3] s.");
+            $"The {kind} call of round {round} resumed at {heldCall.ResumedAt:O} and was dropped at {heldCall.AbortedAt:O}, {sinceResume.TotalSeconds:F2} s later and outside [0, 3] s.");
     }
 
     /// <summary>Asserts that an interval lies within [wait - 1 s, wait + 3 s].</summary>
@@ -387,6 +388,7 @@ public sealed class CancelledTurnTests
     /// <summary>Consults the inventory agent as the scoped partner does, on a client that gives up after the timeout.</summary>
     private async Task AskAsPartnerAsync(TimeSpan clientTimeout, string question)
     {
+        // A client that stops waiting after the timeout under test, carrying the scoped partner's token.
         using HttpClient httpClient = new HttpClient { Timeout = clientTimeout };
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
             "Bearer", api.MintToken(MorganaHostFixture.ScopedPartnerName, fixture.ScopedPartnerKey));

@@ -4,18 +4,12 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group asserting which names an MCP tool may take when it joins an agent: a name already held by
-/// Morgana's tools, the domain's or the colleagues' is refused in any case and a free name is admitted.
+/// The group asserting which names an MCP tool may take when it joins an agent: a name held by Morgana's tools, the domain's or the colleagues' is refused in any case.
+/// Deterministic and free, no MCP server is reached; every literal is spelled out so a change of the rule shows instead of a constant equal to itself.
 /// </summary>
-/// <remarks>
-/// <para>Deterministic and free: the rule is the adapter's own and no MCP server is reached.</para>
-///
-/// <para>Every literal is spelled out here rather than read from <c>Constants</c>, as the wire-contract
-/// groups do: the point is to notice the rule changing shape, not a constant equal to itself.</para>
-/// </remarks>
 public sealed class MCPToolAdmissionTests
 {
-    /// <summary>The names of an agent's tools from morgana.json and agents.json.</summary>
+    /// <summary>The names of an agent's tools: the five base tools of MorganaTool and one of the billing domain's.</summary>
     private static readonly string[] AgentToolNames =
     [
         "GetContextVariable",

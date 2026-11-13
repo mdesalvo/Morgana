@@ -4,23 +4,16 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group asserting that a domain built to be wrong stops the instance at boot rather than
-/// reaching a user as a welcome that cannot be offered.
+/// The group asserting that a domain built to be wrong stops the instance at boot rather than reaching a user as a welcome that cannot be offered.
+/// It needs Harness__MalformedDomain and an invocation of its own per malformed domain, since a plugin once loaded stays in the process.
+/// Deterministic and free: each case boots the real entry point with the malformed plugin beside the shipped domain, which the live host never loads.
 /// </summary>
-/// <remarks>
-/// <para><strong>Requires the malformed domain named at boot</strong>, process-wide like the dust budget.
-/// Run this class on its own, one invocation per malformed domain, because a plugin once loaded stays in
-/// the process and every later boot in it would refuse:</para>
-/// <code>Harness__MalformedDomain=unlabelled-intent dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.PluginValidationTests"</code>
-/// <para>Deterministic and free, no model is reached: each case boots the <b>real</b> entry point with
-/// one harness plugin built to be wrong beside the shipped domain and expects the refusal. The live host
-/// of the fixture never loads that plugin.</para>
-/// </remarks>
 public sealed class PluginValidationTests
 {
     /// <summary>The live host, read for the knob this invocation was started with.</summary>
     private readonly MorganaHostFixture fixture;
 
+    /// <summary>Receives the assembly's one live host, read only for its knob.</summary>
     public PluginValidationTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     [Fact]

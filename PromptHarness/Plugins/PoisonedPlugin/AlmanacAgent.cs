@@ -10,15 +10,9 @@ namespace PoisonedPlugin;
 
 /// <summary>
 /// The almanac keeper of a nursery whose every outside source and one of its own books answers with an attempt at hijacking.
+/// Its two MCP servers and two colleagues at other installations are named in code, on its attributes, so no configuration could stand the topology up.
+/// The servers' addresses repeat those <c>PoisonedSourceHost</c> serves, since an attribute argument cannot come from configuration.
 /// </summary>
-/// <remarks>
-/// <para>The one agent of the harness's hijacking domain: two MCP servers and two colleagues at other
-/// installations are named in code, on the attributes below, so no configuration could stand this
-/// topology up on its own.</para>
-///
-/// <para>The addresses of the MCP servers repeat <c>PoisonedSourceHost</c>, which serves them: an
-/// attribute argument cannot come from configuration.</para>
-/// </remarks>
 [HandlesIntent("almanac")]
 [RequiresLLMTier(Records.LLMTier.Efficiency)]
 [UsesMCPServer("http://127.0.0.1:5199/mcp")]

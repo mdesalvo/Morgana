@@ -12,12 +12,9 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The UserGuard's path on a user's message over a scripted model: what the guard is handed beside the message, which is the last answer
-/// the user received and the refusal when no verdict can be read. No real model is reached.
+/// The UserGuard's path on a user's message over a scripted model: the last answer the user received beside the message and the refusal when no verdict can be read.
+/// The guard is the service's own and the judge a scripted answer, so what the guard sent shows in the prompt it recorded.
 /// </summary>
-/// <remarks>
-/// Deterministic and free: the guard is the service's own and the judge is a scripted answer, so what the guard sent shows in the prompt it recorded.
-/// </remarks>
 public sealed class UserMessageCheckTests
 {
     /// <summary>The conversation most checks in this group are served on.</summary>
@@ -38,7 +35,7 @@ public sealed class UserMessageCheckTests
         LLMGuardRailService guard = UserGuard(languageModel, channelMetadataStore);
 
         // The first message of a conversation.
-        await guard.CheckUserMessageAsync(ConversationId, UserMessage);
+        await guard.CheckUserMessageAsync(ConversationId, UserMessage, TestContext.Current.CancellationToken);
 
         // The prompt carries no answer property: an answer not at hand makes no claim about the conversation.
         using JsonDocument userGuardSubject = JsonDocument.Parse(languageModel.UserPrompt!);
@@ -75,7 +72,7 @@ public sealed class UserMessageCheckTests
         });
 
         // The user writes after both.
-        await guard.CheckUserMessageAsync(ConversationId, UserMessage);
+        await guard.CheckUserMessageAsync(ConversationId, UserMessage, TestContext.Current.CancellationToken);
 
         // The guard reads the answer's text, its card's title and exactly the labels of its buttons.
         using JsonDocument userGuardSubject = JsonDocument.Parse(languageModel.UserPrompt!);
@@ -104,7 +101,7 @@ public sealed class UserMessageCheckTests
         });
 
         // The user writes after it.
-        await guard.CheckUserMessageAsync(ConversationId, UserMessage);
+        await guard.CheckUserMessageAsync(ConversationId, UserMessage, TestContext.Current.CancellationToken);
 
         // The answer has its text and neither a card nor buttons: the user saw none.
         using JsonDocument userGuardSubject = JsonDocument.Parse(languageModel.UserPrompt!);
@@ -131,7 +128,7 @@ public sealed class UserMessageCheckTests
         });
 
         // The user writes after it.
-        await guard.CheckUserMessageAsync(ConversationId, UserMessage);
+        await guard.CheckUserMessageAsync(ConversationId, UserMessage, TestContext.Current.CancellationToken);
 
         // The presentation is the answer the message is judged beside.
         using JsonDocument userGuardSubject = JsonDocument.Parse(languageModel.UserPrompt!);
@@ -156,7 +153,7 @@ public sealed class UserMessageCheckTests
         channelMetadataStore.EvictChannelMetadata(ConversationId);
 
         // The user writes after the eviction.
-        await guard.CheckUserMessageAsync(ConversationId, UserMessage);
+        await guard.CheckUserMessageAsync(ConversationId, UserMessage, TestContext.Current.CancellationToken);
 
         // Nothing is known of an answer any more: the message is judged alone.
         using JsonDocument userGuardSubject = JsonDocument.Parse(languageModel.UserPrompt!);
@@ -180,7 +177,7 @@ public sealed class UserMessageCheckTests
         });
 
         // The user of conversation B writes.
-        await guard.CheckUserMessageAsync("conversation-b", UserMessage);
+        await guard.CheckUserMessageAsync("conversation-b", UserMessage, TestContext.Current.CancellationToken);
 
         // B never received that answer: its message is judged alone.
         using JsonDocument userGuardSubject = JsonDocument.Parse(languageModel.UserPrompt!);
@@ -196,7 +193,7 @@ public sealed class UserMessageCheckTests
         LLMGuardRailService guard = UserGuard(languageModel, channelMetadataStore);
 
         // An ordinary message that nobody could judge.
-        Records.GuardRailResult verdict = await guard.CheckUserMessageAsync(ConversationId, UserMessage);
+        Records.GuardRailResult verdict = await guard.CheckUserMessageAsync(ConversationId, UserMessage, TestContext.Current.CancellationToken);
 
         // Refused: a message is never admitted unjudged.
         Assert.False(verdict.Compliant);
@@ -216,7 +213,7 @@ public sealed class UserMessageCheckTests
         LLMGuardRailService guard = UserGuard(languageModel, channelMetadataStore);
 
         // An ordinary message whose judgment never completes.
-        Records.GuardRailResult verdict = await guard.CheckUserMessageAsync(ConversationId, UserMessage);
+        Records.GuardRailResult verdict = await guard.CheckUserMessageAsync(ConversationId, UserMessage, TestContext.Current.CancellationToken);
 
         // Refused: the generic catch ran although the provider filter could not be asked.
         Assert.False(verdict.Compliant);

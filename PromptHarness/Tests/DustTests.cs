@@ -9,24 +9,10 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The Magic Dust budget mechanics, which no other scenario has ever exercised: the default budget
-/// (100, calibrated for ~10 full-length Performance turns) sits far above what any scripted
-/// conversation reaches and <c>Morgana:DustLimiting:Enabled</c> is force-disabled everywhere else.
+/// The Magic Dust budget's thresholds and lockout, which no other group reaches since every other run boots with dust limiting off.
+/// It needs Harness__DustBudgetPerConversation in an invocation of its own, a budget of at least twenty turns of the tier under test.
+/// A turn crossing two thresholds logs only the higher, so the walk measures one real turn and places the gauge a quarter of it below each threshold.
 /// </summary>
-/// <remarks>
-/// <para><strong>Requires dust limiting at boot</strong> — like the guard rail and the
-/// summarization reducer, dust limiting is process-wide for the single assembly-shared host, so
-/// enabling it would silently start throttling every other class's conversations too. Run this class
-/// on its own. The budget only has to be at least twenty times one turn of the tier under test, which
-/// the test checks and reports:</para>
-/// <code>Harness__DustBudgetPerConversation=100 dotnet test PromptHarness.csproj --filter "FullyQualifiedName~DustTests"</code>
-///
-/// <para><strong>Calibrated at runtime.</strong> The host logs one dust line per turn and the higher
-/// threshold wins when a turn crosses two, so a fixed budget would hold for one tier price only. The
-/// test measures one real turn on the tier under test, places the consumption a quarter of that turn
-/// below each threshold and lets one real turn cross it. A tier priced at zero has no budget to walk
-/// and the test is skipped.</para>
-/// </remarks>
 public sealed class DustTests
 {
     /// <summary>Seeded customer with real invoices to answer against — see BillingAgent's scenarios.</summary>
@@ -35,12 +21,12 @@ public sealed class DustTests
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
     private readonly MorganaHostFixture fixture;
 
+    /// <summary>Receives the assembly's one live host.</summary>
     public DustTests(MorganaHostFixture fixture) => this.fixture = fixture;
 
     /// <summary>
-    /// One real turn measures what a turn costs on the tier the agent runs on, then the consumption is placed
-    /// just below each threshold in turn and one real turn crosses it, so each warning and the exhaustion are
-    /// seen alone and in order, whatever provider serves the tier.
+    /// Walks the 70% warning, the 90% warning and the exhaustion in order, each crossed alone by one real turn, whatever provider serves the tier.
+    /// One real turn measures the turn's cost first, so the placements below hold on any price.
     /// </summary>
     [Fact]
     public async Task Dust_thresholds_fire_in_order()
@@ -52,11 +38,11 @@ public sealed class DustTests
         // The budget the host booted with, which every placement below is a fraction of
         double budget = fixture.Options.DustBudgetPerConversation!.Value;
 
+        // A conversation of its own, whose gauge starts full.
         (string conversationId, ChannelMessage _) = await fixture.Channel.StartConversationAsync(TimeSpan.FromSeconds(180));
 
-        // Taken once, before any turn, so the log window checked after each turn spans the whole
-        // conversation so far — a threshold is one-shot and never resent, so a turn's OWN window can
-        // miss it entirely depending on which turn happens to cross it.
+        // Taken once, before any turn, so the log window checked after each turn spans the whole conversation:
+        // a threshold is logged once and never again, so a turn's own window could miss it.
         int conversationMark = fixture.Observer.Mark();
 
         // Reaches the conversation's own record, where the consumption is read and placed
@@ -137,23 +123,22 @@ public sealed class DustTests
     }
 
     /// <summary>
-    /// A conversation whose budget is already spent is refused at the gate, whatever it asks for: a command is
-    /// told as its own outcome, a message as a notice. A resume then says the conversation is over. No model is
-    /// reached, since the spending is written on the record rather than run. It holds on a budget of zero too,
-    /// which is spent before anything is charged: run it with <c>Harness__DustBudgetPerConversation=0</c> and
-    /// this test's own name as the filter, since the walk above needs a budget to walk through.
+    /// A conversation whose budget is already spent is refused at the gate, a command told as its own outcome and a message as a notice.
+    /// No model is reached, since the spending is written on the record; it also holds on a budget of zero, run with this test's name as the filter.
     /// </summary>
     [Fact]
     public async Task Spent_budget_refuses_commands_and_messages_at_the_gate()
     {
+        // Without a boot budget nothing is ever refused for dust.
         Assert.SkipWhen(fixture.Options.DustBudgetPerConversation is null,
             "Dust limiting is off: run with Harness__DustBudgetPerConversation set, in this class's own invocation.");
 
+        // A conversation carried by billing whose consumption already equals the whole budget, delivered to the harness channel.
         ChannelApiClient api = new ChannelApiClient(fixture);
         string conversationId = ChannelApiClient.NewConversationId();
         await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", fixture.Channel.CallbackUrl);
         await api.QueryRecordAsync(conversationId,
-            $"UPDATE dust_budget SET dust_consumed = {fixture.Options.DustBudgetPerConversation!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)} WHERE id = 1;");
+            $"UPDATE dust_budget SET dust_consumed = {fixture.Options.DustBudgetPerConversation!.Value.ToString(CultureInfo.InvariantCulture)} WHERE id = 1;");
 
         // A command asked of a spent conversation is refused as that command's outcome, carrying the reason a
         // channel ends the conversation on

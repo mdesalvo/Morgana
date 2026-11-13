@@ -20,20 +20,18 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group asserting how the three tiers are built from configuration: each by the provider that it
-/// declares and a deployment that leaves one unusable refused before any turn.
+/// The group asserting how the three tiers are built from configuration: each by the provider it declares, a deployment leaving one unusable refused before any turn.
+/// The service is built directly over an in-memory configuration, so no host starts and no model is reached; every key is spelled out, so a shape changing under a deployer is noticed.
 /// </summary>
-/// <remarks>
-/// Deterministic and free: <see cref="ConfigurationLanguageModelService"/> is built directly over an in-memory configuration, so
-/// no host starts and no model is reached. Every configuration key is spelled out here rather than read
-/// from <c>Constants</c>, because the point is to notice a published shape changing under a deployer.
-/// </remarks>
 public sealed class LanguageModelTests
 {
+    /// <summary>The placeholder appsettings.json ships where a secret belongs, which counts as unconfigured.</summary>
     private const string SecurePlaceholder = "_SECURE_OVERRIDE_";
 
+    /// <summary>The placeholder appsettings.json ships where a required non-secret belongs, which counts as unconfigured.</summary>
     private const string FunctionalPlaceholder = "_FUNCTIONAL_OVERRIDE_";
 
+    /// <summary>The Anthropic model each tier runs in the complete configuration every test starts from.</summary>
     private static readonly Dictionary<string, string> AnthropicModels = new Dictionary<string, string>(StringComparer.Ordinal)
     {
         ["Economy"] = "claude-haiku-5-5",
@@ -609,6 +607,7 @@ public sealed class LanguageModelTests
         // The daemon serves exactly one request and hands back what it read.
         Task<string> recordedRequestBody = Task.Run(async () =>
         {
+            // The one call the tier makes below.
             HttpListenerContext daemonContext = await ollamaDaemon.GetContextAsync();
 
             // The body is what the client sent to the model: the options must be in it.
@@ -624,6 +623,7 @@ public sealed class LanguageModelTests
             await daemonContext.Response.OutputStream.WriteAsync(answerBytes);
             daemonContext.Response.Close();
 
+            // The body as the client sent it, for the test to read the options in.
             return requestBody;
         });
 
@@ -658,25 +658,31 @@ public sealed class LanguageModelTests
     /// <summary>Builds the service over a configuration, dropping every key under <paramref name="without"/> first.</summary>
     private static ConfigurationLanguageModelService Build(Dictionary<string, string?> values, string? without = null, MorganaLanguageModel? duplicateProvider = null)
     {
+        // A test removing a whole section, such as a tier, drops every key under it.
         if (without is not null)
             foreach (string key in values.Keys.Where(key => key.StartsWith(without, StringComparison.Ordinal)).ToList())
                 values.Remove(key);
 
+        // The configuration as a host would bind it, with all five providers registered as a deployment carrying every plugin would.
         IConfiguration configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
         MorganaLanguageModel[] providers = [new AnthropicLanguageModel(), new AzureOpenAILanguageModel(), new GoogleLanguageModel(), new OllamaLanguageModel(), new OpenAILanguageModel()];
         // The service reads Morgana's own prompt and no domain prompt, so the domain declares nothing.
         ConfigurationPromptResolverService promptResolver = new ConfigurationPromptResolverService(new ScriptedDomain());
+
+        // Building it is the whole check: a refused tier throws here, as at a host's startup.
         return new ConfigurationLanguageModelService(configuration, duplicateProvider is null ? providers : [.. providers, duplicateProvider], promptResolver);
     }
 
     /// <summary>A complete configuration with Anthropic on every tier, with the given keys replaced.</summary>
     private static Dictionary<string, string?> Configuration(params (string Key, string Value)[] replaced)
     {
+        // The framework actors on Economy and the shared reliability every tier inherits.
         Dictionary<string, string?> values = [];
         values["Morgana:ActorSystem:Tier"] = "Economy";
         values["Morgana:LanguageModels:Reliability:TimeoutSeconds"] = "60";
         values["Morgana:LanguageModels:Reliability:MaxRetries"] = "2";
 
+        // Every tier on Anthropic with a key and a catalogued model, which builds cleanly.
         foreach (string tier in new[] { "Economy", "Efficiency", "Performance" })
         {
             values[$"Morgana:LanguageModels:Tiers:{tier}:Provider"] = "Anthropic";
@@ -684,9 +690,11 @@ public sealed class LanguageModelTests
             values[$"Morgana:LanguageModels:Tiers:{tier}:Options:ModelId"] = AnthropicModels[tier];
         }
 
+        // The keys the test changes, each the one fault or feature under test.
         foreach ((string key, string value) in replaced)
             values[key] = value;
 
+        // The configuration, for Build to bind.
         return values;
     }
 }

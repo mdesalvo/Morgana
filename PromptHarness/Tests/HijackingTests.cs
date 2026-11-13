@@ -6,17 +6,9 @@ namespace PromptHarness.Tests;
 
 /// <summary>
 /// The chain behind a guarded door with the real agent in it: a domain whose own book, MCP server and partner answer with an attempt at hijacking.
+/// It needs Harness__PoisonedDomain=true in an invocation of its own, since the instance then carries one agent and every other group would miss its own.
+/// A quarantined result counts only on a verdict, an honest result is admitted and an offer or a card hiding a decoy never reaches the agent.
 /// </summary>
-/// <remarks>
-/// <para><strong>Requires the poisoned domain at boot</strong> — the instance under test carries one agent
-/// and the sources it consults are served in-process, so every other group would find its own agents
-/// missing. Run it on its own:</para>
-/// <code>Harness__PoisonedDomain=true dotnet test PromptHarness.csproj --filter "FullyQualifiedName~PromptHarness.Tests.HijackingTests"</code>
-///
-/// <para>A quarantined result counts only on a verdict and the agent must neither carry out what it asked
-/// nor answer in its place. An honest result is admitted and carried. An offer or a card hiding a decoy
-/// is refused at startup and its tool never reaches the agent.</para>
-/// </remarks>
 public sealed class HijackingTests
 {
     /// <summary>The live host, shared with every other test class in the assembly.</summary>
