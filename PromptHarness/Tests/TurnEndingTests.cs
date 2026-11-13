@@ -11,8 +11,9 @@ using Xunit;
 namespace PromptHarness.Tests;
 
 /// <summary>
-/// The group asserting what a presentation tool tells the model about the text of its turn. A landing
-/// declaration reaches the model on the landing turn alone.
+/// The group asserting what a presentation tool tells the model about the text of its turn and about a card it refuses.
+/// A landing declaration reaches the model on the landing turn alone.
+/// The rich card's limit is measured as the prose states it: three sections nested below the card's own components pass and a fourth is refused.
 /// </summary>
 /// <remarks>
 /// <para>Deterministic and free: no host, no model. A scripted chat client stands where the model would, behind
@@ -102,6 +103,28 @@ public sealed class TurnEndingTests
 
         // Without a loop there is nothing to state a fact about.
         Assert.DoesNotContain("Nothing has reached the user", result?.ToString(), StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData(3, true)]
+    [InlineData(4, false)]
+    public async Task Rich_card_nests_sections_three_deep_as_its_prose_promises(int nestedSections, bool admitted)
+    {
+        // The tool description promises "components > section > section > section" and refuses a fourth level.
+        ToolRig rig = await ToolRig.CreateAsync(new ScriptedChatClient());
+
+        // The innermost section holds one datum; each further section wraps the one before it.
+        string components = """[{"type":"key_value","key":"Total","value":"€130.00"}]""";
+        for (int sectionLevel = nestedSections; sectionLevel >= 1; sectionLevel--)
+            components = $$"""[{"type":"section","title":"Level {{sectionLevel}}","components":{{components}}}]""";
+
+        object? result = await rig.Tool.SetRichCard($$"""{"title":"Invoice","components":{{components}}}""");
+
+        // Admitted, the model reads the confirmation; refused, the depth it went past.
+        if (admitted)
+            Assert.StartsWith("Rich card set successfully.", result?.ToString(), StringComparison.Ordinal);
+        else
+            Assert.StartsWith("Error: Rich card exceeds maximum nesting depth of 3 (found: 4).", result?.ToString(), StringComparison.Ordinal);
     }
 
     [Fact]

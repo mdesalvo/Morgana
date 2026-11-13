@@ -17,7 +17,10 @@ namespace Morgana.AI.Tools;
 /// </summary>
 public class MorganaTool
 {
-    /// <summary>The deepest level a card's components may reach, the card's own components being level 1.</summary>
+    /// <summary>
+    /// How deep sections may nest below a card's own components, which sit at level 0: the card plus three levels of sections.
+    /// It is measured as the RichCardUsage policy and the tool's description state it, so the refusal speaks the model's own terms.
+    /// </summary>
     private const int MaxCardDepth = 3;
 
     /// <summary>The most components a card may hold, those inside sections included.</summary>
@@ -206,8 +209,8 @@ public class MorganaTool
                 return "Error: Rich card JSON structure is invalid.";
             }
 
-            // The card's own components are level 1 and each section opens one more, up to the limit every channel renders.
-            int depth = CalculateMaxDepth(parsedRichCard.Components, 1);
+            // The card's own components are level 0 and each section opens one more, up to the three levels every channel renders.
+            int depth = CalculateMaxDepth(parsedRichCard.Components, 0);
             if (depth > MaxCardDepth)
             {
                 toolLogger.LogWarning("SetRichCard called with excessive nesting depth: {Depth} (max 3)", depth);

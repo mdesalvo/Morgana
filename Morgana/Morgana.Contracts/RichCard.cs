@@ -4,7 +4,7 @@ namespace Morgana.Contracts;
 
 /// <summary>
 /// Rich card container for structured visual presentation of complex data such as invoices, profiles or reports.
-/// The model generates cards through the SetRichCard tool, which enforces a nesting depth of 3 levels and a maximum of 50 components in total.
+/// The model generates cards through the SetRichCard tool, which allows sections nested three deep below the card's own components and 50 components in total.
 /// Components must come from the known dictionary because Cauldron falls back to text for an unknown type.
 /// </summary>
 /// <param name="Title">The heading of the card.</param>
@@ -106,7 +106,7 @@ public record ListComponent(
 
 /// <summary>
 /// Section component that groups child components under a title and can nest other sections.
-/// Nesting is limited to a depth of 3 levels, which the SetRichCard tool enforces.
+/// Sections nest at most three deep below the card's own components, which the SetRichCard tool enforces.
 /// </summary>
 /// <param name="Title">The heading of the section.</param>
 /// <param name="Subtitle">The line under the heading; null when there is none.</param>
