@@ -47,11 +47,11 @@ public enum ModelCallKind
 /// <param name="Streamed">Whether the caller asked for a streamed answer.</param>
 /// <param name="Held">Whether the call was chosen to be held.</param>
 /// <param name="StartedAt">When the request arrived.</param>
-/// <param name="LastByteAt">When the last frame was flushed, or <c>null</c> when none was.</param>
+/// <param name="LastByteAt">When the last frame was flushed; <c>null</c> when none was.</param>
 /// <param name="Completed">Whether the whole answer was sent.</param>
-/// <param name="AbortedAt">When the caller dropped a held call, or <c>null</c> when it never did.</param>
+/// <param name="AbortedAt">When the caller dropped a held call; <c>null</c> when it never did.</param>
 /// <param name="RequestJson">The raw request body, which is what the model was handed.</param>
-/// <param name="ResumedAt">When a held streamed call sent its first frame after the pause, or <c>null</c> when it never did.</param>
+/// <param name="ResumedAt">When a held streamed call sent its first frame after the pause; <c>null</c> when it never did.</param>
 public sealed record ModelCallRecord(
     ModelCallKind Kind,
     int Round,
@@ -66,10 +66,8 @@ public sealed record ModelCallRecord(
 
 /// <summary>
 /// A fake Ollama server that answers every flow of Morgana from a script and holds the calls that a test chooses, so a cancelled wait can be proven end to end.
-/// </summary>
-/// <remarks>
 /// A held call is never completed: only the caller dropping the connection ends it, which is the fact that the tests read.
-/// </remarks>
+/// </summary>
 public sealed class CancellableModelHost : IAsyncDisposable
 {
     /// <summary>The model name that the fake answers under, echoed in every frame.</summary>
@@ -159,6 +157,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
     /// <summary>Starts the fake model on a free loopback port and returns once it listens, so the instance under test finds it at boot.</summary>
     public static async Task<CancellableModelHost> StartAsync(TimeSpan heldStreamResumesAfter)
     {
+        // A bare web application, configured by none of the suite's files.
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
 
         // Nothing here is evidence: the log would only crowd the host output the suite captures.
@@ -177,6 +176,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
         // Any other path is a call that no flow of Morgana is expected to make.
         application.MapFallback((HttpContext context) => host.RefuseUnrecognisedAsync(context));
 
+        // Listening before the instance under test boots, since its startup checks may already ask the model.
         await application.StartAsync();
 
         // The address Kestrel actually bound, which the tiers of the instance under test are pointed at.
@@ -185,6 +185,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
             .Addresses.First()
             .TrimEnd('/');
 
+        // The running fake, which the fixture stops at the end of the run.
         return host;
     }
 
@@ -214,7 +215,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
         await application.DisposeAsync();
     }
 
-    /// <summary>Answers one chat request from the script, or holds it when a test asked for that.</summary>
+    /// <summary>Answers one chat request from the script, holding it instead when a test asked for that.</summary>
     private async Task AnswerChatAsync(HttpContext context)
     {
         // The arrival time is what the cancellation bounds are measured from.
@@ -261,12 +262,12 @@ public sealed class CancellableModelHost : IAsyncDisposable
         using StreamReader reader = new StreamReader(context.Request.Body);
         string requestJson = await reader.ReadToEndAsync(context.RequestAborted);
 
-        // The call is on the record so that a test can fail on it.
+        // The call is on the record so that a test can fail on it; the caller is told the path does not exist.
         Record(new ModelCallRecord(ModelCallKind.Unrecognised, 0, false, false, DateTimeOffset.UtcNow, null, false, null, requestJson));
         context.Response.StatusCode = StatusCodes.Status404NotFound;
     }
 
-    /// <summary>Sends the frames of a streamed answer, one object per line, or pauses part of the way then resumes with unending lines when the call is held.</summary>
+    /// <summary>Sends the frames of a streamed answer one object per line; a held call pauses part of the way, then resumes with unending lines.</summary>
     private async Task StreamAsync(HttpContext context, int index, List<JsonObject> frames, bool held)
     {
         // Ollama streams one JSON object per line.
@@ -293,7 +294,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
         Update(index, record => record with { LastByteAt = DateTimeOffset.UtcNow, Completed = true });
     }
 
-    /// <summary>Sends the frames of a non-streamed answer as one object, or nothing when the call is held.</summary>
+    /// <summary>Sends the frames of a non-streamed answer as one object; a held call is sent nothing.</summary>
     private async Task AnswerWholeAsync(HttpContext context, int index, List<JsonObject> frames, bool held)
     {
         // A held call sends nothing at all: the caller waits for the whole response.
@@ -367,11 +368,11 @@ public sealed class CancellableModelHost : IAsyncDisposable
     /// <summary>Tells which flow of Morgana sent the request.</summary>
     private static ModelCallKind Classify(JsonNode? request)
     {
-        // The tools offered tell the agents apart; the guards and the classifier offer none.
-        // The names of the tools offered, which tell the agents apart.
+        // The names of the tools offered tell the agents apart; the guards and the classifier offer none.
         List<string> toolNames = (request?["tools"] as JsonArray ?? [])
             .Select(tool => tool?["function"]?["name"]?.GetValue<string>() ?? string.Empty)
             .ToList();
+
         // The conversation as the model is handed it.
         List<JsonNode?> messages = (request?["messages"] as JsonArray ?? []).ToList();
 
@@ -399,6 +400,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
         string systemText = string.Concat(messages
             .Where(message => message?["role"]?.GetValue<string>() == "system")
             .Select(message => message?["content"]?.GetValue<string>()));
+
         // The guard of the user's door.
         if (systemText.Contains(UserGuardMarker, StringComparison.Ordinal))
             return ModelCallKind.UserGuard;
@@ -426,10 +428,13 @@ public sealed class CancellableModelHost : IAsyncDisposable
     /// <summary>Counts the tool results that follow the last user message, which is the round an agent is in.</summary>
     private static int CountToolResultsInTurn(JsonNode? request)
     {
+        // The conversation as the agent hands it to the model, its own tool results included.
         List<JsonNode?> messages = (request?["messages"] as JsonArray ?? []).ToList();
 
         // Earlier turns also hold tool results, so only the messages after the last user message belong to this round.
         int lastUserIndex = messages.FindLastIndex(message => message?["role"]?.GetValue<string>() == "user");
+
+        // The round is how many tool results the turn already holds: zero on its first call.
         return messages.Skip(lastUserIndex + 1).Count(message => message?["role"]?.GetValue<string>() == "tool");
     }
 
@@ -463,6 +468,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
     /// <summary>The message objects the script answers a call with, one per streamed frame.</summary>
     private static List<JsonObject> ScriptedFrames(ModelCallKind kind, int round, JsonNode? request)
     {
+        // Each flow has its own script; an unrecognised one has none.
         switch (kind)
         {
             // The guards admit everything: the cancelled flows are the subject, not the verdicts.
@@ -508,6 +514,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
         // The schema of the consultation tool, as the agent offered it in this very request.
         JsonNode? consultationTool = (request?["tools"] as JsonArray ?? [])
             .FirstOrDefault(tool => tool?["function"]?["name"]?.GetValue<string>() == BillingOnlyTool);
+
         // The arguments start empty and take one entry per parameter of the schema.
         JsonObject arguments = new JsonObject();
 
@@ -517,6 +524,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
                 if (property.Value?["type"]?.GetValue<string>() == "string")
                     arguments[property.Key] = ConsultationQuestion;
 
+        // The arguments the billing agent's tool call carries, whatever its parameter is named.
         return arguments;
     }
 
@@ -526,6 +534,8 @@ public sealed class CancellableModelHost : IAsyncDisposable
         // The classifier receives the user's phrase as its last user message.
         JsonNode? lastUser = (request?["messages"] as JsonArray ?? [])
             .LastOrDefault(message => message?["role"]?.GetValue<string>() == "user");
+
+        // Empty when the request carries no user message, which routes the request to inventory.
         return lastUser?["content"]?.GetValue<string>() ?? string.Empty;
     }
 
@@ -567,6 +577,7 @@ public sealed class CancellableModelHost : IAsyncDisposable
             frame["eval_count"] = GeneratedTokens;
         }
 
+        // The object as Ollama's client reads it.
         return frame;
     }
 

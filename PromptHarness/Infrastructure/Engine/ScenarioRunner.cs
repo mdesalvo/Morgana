@@ -11,7 +11,7 @@ namespace PromptHarness.Infrastructure.Engine;
 /// <param name="Index">1-based run number.</param>
 /// <param name="Failures">Violated expectations; empty when the run passed.</param>
 /// <param name="Transcript">Per-turn rendering of what happened, attached to failing runs.</param>
-/// <param name="Tokens">Token usage summed over the run's turns. Judge calls are excluded: they are the harness's cost, not Morgana's.</param>
+/// <param name="Tokens">Token usage summed over the run's turns, the judge's calls excluded as the harness's cost and not Morgana's.</param>
 /// <param name="Turns">Every turn played, kept whole so a failing run's model calls can be written out.</param>
 /// <param name="ModelCalls">The LLM calls of a run made of no turns, as a calibration case that asks a guard directly; a run made of turns carries its calls on each turn instead.</param>
 public sealed record RunOutcome(
@@ -62,23 +62,23 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
     /// <summary>Human-readable report, printed on failure.</summary>
     public string Report()
     {
+        // The verdict, what the scenario protects and what a run costs, ahead of the runs that failed.
         StringBuilder report = new StringBuilder();
         report.AppendLine(CultureInfo.InvariantCulture, $"Scenario '{Scenario.Id}': {Passes}/{Runs.Count} runs passed, {Required} required.");
         report.AppendLine(Scenario.Description);
         report.AppendLine(CultureInfo.InvariantCulture, $"Tokens per run: {CallsPerRun:F1} LLM calls, in={InputTokensPerRun}, out={OutputTokensPerRun}, cacheRead={(Runs.Count == 0 ? 0 : TotalTokens.CacheReadTokens / Runs.Count)}");
 
-        // Only the failing runs get a section — a scenario that cleared its threshold with, say,
-        // 4/5 still has one failing run worth reading (see FailureLog's own reasoning for why),
-        // while the passing runs add nothing a reader needs to diagnose what went wrong.
+        // Only the failing runs get a section: one that failed under a cleared threshold is still worth reading, while
+        // a passing run adds nothing a reader needs to diagnose what went wrong.
         foreach (RunOutcome run in Runs.Where(run => !run.Passed))
         {
+            // The run's number, then each of its violated expectations.
             report.AppendLine();
             report.AppendLine(CultureInfo.InvariantCulture, $"--- run {run.Index} ---");
             foreach (string failure in run.Failures)
                 report.AppendLine(CultureInfo.InvariantCulture, $"  ✗ {failure}");
 
-            // The full per-turn transcript follows the failure list, so the reader sees not just
-            // *what* was violated but the entire conversation that produced it.
+            // The whole conversation follows the failures, so the reader sees what produced them.
             foreach (string turn in run.Transcript)
             {
                 report.AppendLine();
@@ -86,23 +86,16 @@ public sealed record ScenarioOutcome(ScenarioDefinition Scenario, int Required, 
             }
         }
 
+        // The report the failing test prints.
         return report.ToString();
     }
 }
 
 /// <summary>
-/// Replays a scenario N times against the live instance and reports how many runs held.
+/// Replays a scenario N times against the live instance and reports how many runs held, each run on a conversation of its own.
+/// A language model is the system under test, so a single run cannot tell a prompt that holds four times out of five from one
+/// that holds once: the threshold states each scenario's tolerance instead of hiding it in a retry.
 /// </summary>
-/// <remarks>
-/// <para>Repetition with a threshold, rather than a single pass/fail, is the only honest shape for
-/// a suite whose system under test is a language model: a prompt that produces the right behaviour
-/// four times out of five is materially different from one that produces it once and a single run
-/// cannot tell those apart. The threshold makes the flakiness budget explicit per scenario instead
-/// of hiding it in a retry.</para>
-///
-/// <para>Each run opens its own conversation, so nothing leaks between runs: fresh session, fresh
-/// context, fresh <c>shared_context</c> registry.</para>
-/// </remarks>
 public sealed class ScenarioRunner
 {
     /// <summary>Channel used to drive conversations.</summary>
@@ -120,6 +113,7 @@ public sealed class ScenarioRunner
     /// <summary>Provider and models under test, recorded in the harness — a token count without them means nothing.</summary>
     private readonly string llmDescriptor;
 
+    /// <summary>Binds the runner to the channel it plays turns on, the observer of their signals, the judge and the harness's options.</summary>
     public ScenarioRunner(HarnessChannel channel, TurnObserver observer, LLMJudge judge, HarnessOptions options, string llmDescriptor)
     {
         this.channel = channel;
@@ -136,7 +130,9 @@ public sealed class ScenarioRunner
     /// <summary>Runs a scenario the configured number of times.</summary>
     public async Task<ScenarioOutcome> RunAsync(ScenarioDefinition scenario)
     {
+        // The scenario's own run count; the harness default when it states none.
         int runs = scenario.Runs ?? options.DefaultRuns;
+
         // Clamped to the actual run count: a scenario cannot require more passes than it has runs,
         // which would make it permanently unpassable if MinPasses were ever misconfigured above Runs.
         int required = Math.Min(scenario.MinPasses ?? options.DefaultMinPasses, runs);
@@ -147,6 +143,7 @@ public sealed class ScenarioRunner
         for (int index = 1; index <= runs; index++)
             outcomes.Add(await RunOnceAsync(scenario, index));
 
+        // The runs measured against the threshold.
         ScenarioOutcome outcome = new ScenarioOutcome(scenario, required, outcomes);
 
         // Deliberately not Console.WriteLine: stdout is teed into the host log capture and a line
@@ -159,49 +156,52 @@ public sealed class ScenarioRunner
         HarnessWriter.Write(outcome, llmDescriptor, options.Phase, options.HarnessDirectory);
         FailureLog.Write(outcome, options.Phase, options.HarnessDirectory);
 
+        // The outcome the test asserts on and prints when it fails.
         return outcome;
     }
 
     /// <summary>Plays the scripted conversation once and collects everything that did not hold.</summary>
     private async Task<RunOutcome> RunOnceAsync(ScenarioDefinition scenario, int index)
     {
+        // What the run gathers turn by turn: its failures, its readable transcript, the turns whole and what they cost.
         List<string> failures = [];
         List<string> transcript = [];
         List<TurnResult> turns = [];
         TokenUsage tokens = TokenUsage.Zero;
+
+        // Null until the conversation opens, so an aborted start leaves nothing to end.
         string? conversationId = null;
 
         try
         {
-            // A brand-new conversation per run: fresh session, fresh context, fresh shared_context
-            // registry — nothing from a previous run's turns can leak into this one's assertions.
+            // How long each turn may take to answer before the run is aborted.
             TimeSpan timeout = TimeSpan.FromSeconds(options.TurnTimeoutSeconds);
 
-            // Only the one scenario group that means to exercise MorganaChannelAdapter opts into
-            // the degraded profile; every other scenario keeps opening on the default full-capability
-            // channel, unchanged from before this branch existed.
+            // A brand-new conversation per run, so nothing of a previous run's turns can leak into this one's assertions. Only
+            // the scenario that exercises MorganaChannelAdapter opens on the degraded profile; every other opens on the full channel.
             (string opened, ChannelMessage lastReceived) = scenario.DegradedChannel is true
                 ? await channel.StartConversationAsync(timeout, HarnessChannel.DegradedCapabilities, HarnessChannel.DegradedChannelName)
                 : await channel.StartConversationAsync(timeout);
             conversationId = opened;
 
-            // Round-robins one actor per run for a scenario pooling several — see
-            // ScenarioDefinition.CustomerCodes' own remarks for why "more stock" cannot substitute
-            // for "a different customer" when the dispositive action is one-time-only per customer.
+            // One customer per run for a scenario pooling several, since the action it plays may be taken only once per customer.
             string? customerCode = scenario.CustomerCodes is { Count: > 0 } codes
                 ? codes[(index - 1) % codes.Count]
                 : null;
 
             foreach (TurnDefinition turnDefinition in scenario.Turns)
             {
+                // What the user sends this turn, typed or carried by the button pressed.
                 string say;
+
+                // A pressed button: the scenario names its id and the value is read from what the last answer offered.
                 if (turnDefinition.Press is { } pressedId)
                 {
                     // The button's value is written at runtime, so the scenario names the button's id and the run reads the value from what was offered.
-                    QuickReply? pressed = (lastReceived.QuickReplies ?? [])
+                    QuickReply? pressedButton = (lastReceived.QuickReplies ?? [])
                         .FirstOrDefault(quickReply => string.Equals(quickReply.Id, pressedId, StringComparison.Ordinal));
 
-                    if (pressed is null)
+                    if (pressedButton is null)
                     {
                         // Later turns presuppose the press happened, so the run stops here like an aborted one.
                         failures.Add($"turn {transcript.Count + 1}: no button identified as '{pressedId}' was offered");
@@ -209,7 +209,7 @@ public sealed class ScenarioRunner
                     }
 
                     // A press sends exactly what the button carries.
-                    say = pressed.Value;
+                    say = pressedButton.Value;
                 }
                 else
                 {
@@ -219,8 +219,7 @@ public sealed class ScenarioRunner
                         : turnDefinition.Say.Replace("{{customerCode}}", customerCode, StringComparison.Ordinal);
                 }
 
-                // Mark, send, then close the window: BeginTurn/CompleteTurnAsync bracket exactly
-                // the observation period this one turn's send-and-reply spans.
+                // The observation window opens before the send and closes on the reply, so this turn's signals are the window's alone.
                 TurnScope scope = observer.BeginTurn(conversationId);
                 ChannelMessage message = await channel.SendAsync(conversationId, say, timeout);
 
@@ -228,6 +227,7 @@ public sealed class ScenarioRunner
                 lastReceived = message;
                 TurnResult turn = await observer.CompleteTurnAsync(scope, say, message);
 
+                // The turn joins the transcript a failing run prints and the turns whose model calls the failure log writes.
                 transcript.Add(turn.Describe());
                 turns.Add(turn);
 
@@ -245,6 +245,7 @@ public sealed class ScenarioRunner
                 // answers to the rules every turn answers to, so it is checked against an empty one.
                 IReadOnlyList<string> structuralFailures = ExpectationChecker.Check(turnDefinition.Expect ?? new ExpectSpec(), turn, history);
 
+                // Each failure names the turn it belongs to.
                 failures.AddRange(structuralFailures.Select(failure => $"turn {transcript.Count}: {failure}"));
 
                 // The judge is skipped once the turn already failed structurally: the run is lost
@@ -256,6 +257,8 @@ public sealed class ScenarioRunner
                     int judgeMark = observer.ModelCallMark();
                     IReadOnlyList<string> judged = await judge.EvaluateAsync(turnDefinition, turn);
                     turns[^1] = turn with { JudgeModelCalls = observer.ModelCallsSince(judgeMark) };
+
+                    // A proposition that did not come out as required fails the run like a structural failure.
                     failures.AddRange(judged.Select(failure => $"turn {transcript.Count}: {failure}"));
                 }
             }
@@ -269,12 +272,12 @@ public sealed class ScenarioRunner
         }
         finally
         {
-            // Runs even when StartConversationAsync itself threw (conversationId stays null in
-            // that case, so there is nothing to end) or when a later turn aborted mid-conversation.
+            // The conversation is ended however the run went, so its actors do not outlive it; a start that failed left none to end.
             if (conversationId is not null)
                 await channel.EndConversationAsync(conversationId);
         }
 
+        // The run as the scenario's outcome counts it.
         return new RunOutcome(index, failures, transcript, tokens, turns);
     }
 }

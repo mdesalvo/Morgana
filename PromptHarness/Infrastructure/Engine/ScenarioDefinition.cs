@@ -5,26 +5,22 @@ namespace PromptHarness.Infrastructure.Engine;
 
 /// <summary>
 /// One non-regression scenario: a scripted conversation plus what must hold at each turn.
+/// Scenarios are data, not code, because they encode prompt behaviour, which a domain author tunes most often.
 /// </summary>
-/// <remarks>
-/// Scenarios are data, not code, because what they encode is prompt behaviour — the layer that
-/// changes most often and that a domain author, not a framework developer, is expected to tune.
-/// </remarks>
 public sealed class ScenarioDefinition
 {
-    /// <summary>Stable identifier, also the file name. Appears in every failure message.</summary>
+    /// <summary>Stable identifier, also the file name, named in every failure message.</summary>
     public string Id { get; init; } = string.Empty;
 
-    /// <summary>What the scenario is protecting, in one sentence. Read by humans only.</summary>
+    /// <summary>What the scenario protects in one sentence, read by people only.</summary>
     public string Description { get; init; } = string.Empty;
 
-    /// <summary>How many times to replay the conversation. Falls back to <c>Harness:DefaultRuns</c>.</summary>
+    /// <summary>How many times to replay the conversation; <c>Harness:DefaultRuns</c> when unset.</summary>
     public int? Runs { get; init; }
 
     /// <summary>
-    /// How many of those runs must pass. Falls back to <c>Harness:DefaultMinPasses</c>. The
-    /// context-handling group sets this equal to <see cref="Runs"/>: its properties are contract;
-    /// a contract that holds four times out of five does not hold.
+    /// How many of those runs must pass; <c>Harness:DefaultMinPasses</c> when unset.
+    /// The context-handling group sets it equal to <see cref="Runs"/>: a contract that holds four times out of five does not hold.
     /// </summary>
     public int? MinPasses { get; init; }
 
@@ -32,21 +28,15 @@ public sealed class ScenarioDefinition
     public List<TurnDefinition> Turns { get; init; } = [];
 
     /// <summary>
-    /// Opens the conversation under <c>HarnessChannel.DegradedCapabilities</c> /
-    /// <c>DegradedChannelName</c> instead of the harness's default full-capability channel — the
-    /// opt-in for the one scenario that means to exercise <c>MorganaChannelAdapter</c>'s rewrite path.
+    /// Opens the conversation under <c>HarnessChannel.DegradedCapabilities</c> instead of the full-capability channel.
+    /// It is the opt-in of the one scenario that exercises <c>MorganaChannelAdapter</c>'s rewrite path.
     /// </summary>
     public bool? DegradedChannel { get; init; }
 
     /// <summary>
-    /// A pool of interchangeable actors for a scenario whose dispositive action is legitimately
-    /// one-time-only per customer (e.g. enrolling in a plan a customer may hold only once) — unlike
-    /// a re-orderable SKU, seeding "more of the same" cannot make such an action replayable against
-    /// a single fixed customer, since a fresh run's business state ("no existing plan") does not
-    /// reset between replays the way a per-conversation session does. Every occurrence of
-    /// <c>{{customerCode}}</c> in every turn's <c>say:</c> is substituted with
-    /// <c>CustomerCodes[(run - 1) % CustomerCodes.Count]</c> before the message is sent — one
-    /// customer per run, reused round-robin if there are more runs than codes.
+    /// Customers interchangeable for a scenario whose action a customer may take only once, such as enrolling in a plan.
+    /// The shop's state does not reset between runs as a session does, so each run's <c>{{customerCode}}</c> in <c>say:</c> becomes
+    /// <c>CustomerCodes[(run - 1) % CustomerCodes.Count]</c>, reused round-robin when the runs outnumber the codes.
     /// </summary>
     public List<string>? CustomerCodes { get; init; }
 }
@@ -54,25 +44,23 @@ public sealed class ScenarioDefinition
 /// <summary>A single user turn and its expectations.</summary>
 public sealed class TurnDefinition
 {
-    /// <summary>What the user says. Exactly one of <c>say:</c> and <c>press:</c> is set.</summary>
+    /// <summary>What the user says; exactly one of <c>say:</c> and <c>press:</c> is set.</summary>
     public string Say { get; init; } = string.Empty;
 
     /// <summary>The exact id of a button on the last answer (a welcome or disambiguation button is an intent name) that this turn presses instead of typing.</summary>
     public string? Press { get; init; }
 
-    /// <summary>Structural expectations, evaluated deterministically. Optional.</summary>
+    /// <summary>The structural expectations, evaluated deterministically; optional.</summary>
     public ExpectSpec? Expect { get; init; }
 
-    /// <summary>Propositions about the response text that an LLM judge must find true. Optional.</summary>
+    /// <summary>Propositions about what the user saw that the judge must find true; optional.</summary>
     public List<string>? Judge { get; init; }
 
-    /// <summary>Propositions the judge must find false. Optional.</summary>
+    /// <summary>Propositions the judge must find false; optional.</summary>
     public List<string>? JudgeNot { get; init; }
 }
 
-/// <summary>
-/// Structural expectations on a turn. Every property is optional; only the ones set are checked.
-/// </summary>
+/// <summary>Structural expectations on a turn, every property optional and only the ones set checked.</summary>
 public sealed class ExpectSpec
 {
     /// <summary>Expected <c>agentCompleted</c> on the delivered message.</summary>
@@ -91,33 +79,20 @@ public sealed class ExpectSpec
     public List<string>? NoQuickReplyIds { get; init; }
 
     /// <summary>
-    /// Assert that the escape options are not the entire emission — the precondition
-    /// <c>QuickReplyEscapeOptions</c> states in so many words: they are "an APPENDIX, never a
-    /// standalone emission", valid only alongside at least one primary option.
+    /// Asserts that the escape pair of the QuickReplyDoctrine policy is not the whole emission, since it is appended to a list of choices.
+    /// It is opt-in for turns that continue a step, where a standalone pair would gate the step behind an exit button.
     /// </summary>
-    /// <remarks>
-    /// Opt-in and deliberately so: a turn that has genuinely concluded emits exactly those two
-    /// buttons and nothing else, which is <c>ConversationClosure</c> working as intended. The
-    /// assertion belongs on turns that declare continuation, where a standalone escape pair would
-    /// gate a lawful in-progress step behind an exit button.
-    /// </remarks>
     public bool? NoStandaloneEscapeOptions { get; init; }
 
-    /// <summary>
-    /// The other half of the same rule: whenever the turn emits primary options, the escape pair
-    /// must be appended to them, so the user is never trapped inside a list of choices.
-    /// </summary>
+    /// <summary>The other half of the same rule: primary options carry the whole escape pair, so the user is never trapped inside a list of choices.</summary>
     public bool? EscapeOptionsWithPrimary { get; init; }
 
     /// <summary>Rich card presence: <c>absent</c> or <c>present</c>.</summary>
     public string? RichCard { get; init; }
 
     /// <summary>
-    /// Substrings that must appear somewhere in the rich card's flattened text (title, subtitle
-    /// and every component's own text — see <see cref="ExpectationChecker"/>'s flattening). For
-    /// deterministic values only, e.g. a seal word pinned via <c>Harness:DeterministicSealWord</c>:
-    /// the judge deliberately never sees a card's body (only its title), so a domain fact the agent
-    /// habitually delivers inside a card rather than in prose has no other way to be checked at all.
+    /// Substrings that must appear in the rich card's text, as <see cref="RichCardText"/> renders it.
+    /// It is for deterministic values only, such as the seal word that <c>Harness:DeterministicSealWord</c> pins, which a judge would read as wording.
     /// </summary>
     public List<string>? RichCardContains { get; init; }
 
@@ -125,10 +100,8 @@ public sealed class ExpectSpec
     public List<string>? ToolsCalled { get; init; }
 
     /// <summary>
-    /// Tools that must appear exactly once. What "ask a colleague ONCE" looks like from outside:
-    /// the invocation list keeps repetitions deliberately, so a second call to the same tool inside
-    /// one turn is the signal — an agent that got an unsatisfying answer and went round again
-    /// instead of owning the gap.
+    /// Tools that must appear exactly once, which is what asking a colleague once looks like from outside.
+    /// The invocation list keeps repetitions, so a second call in one turn is an agent going round again instead of owning the gap.
     /// </summary>
     public List<string>? ToolsCalledOnce { get; init; }
 
@@ -136,9 +109,8 @@ public sealed class ExpectSpec
     public List<string>? ToolsNotCalled { get; init; }
 
     /// <summary>
-    /// Tools whose result must have been withheld in the turn on a verdict: the layer that decided is the
-    /// deterministic check, a model's judgment or the provider's filter. A result withheld because no verdict
-    /// could be reached is no catch and never satisfies it.
+    /// Tools whose result must have been withheld in the turn on a verdict of the deterministic check, a model or the provider's filter.
+    /// A result withheld because no verdict could be reached is no catch and never satisfies it.
     /// </summary>
     public List<string>? ToolsQuarantined { get; init; }
 
@@ -151,43 +123,32 @@ public sealed class ExpectSpec
     /// </summary>
     public List<string>? OffersRefused { get; init; }
 
-    /// <summary>
-    /// Tools that must be called <em>before</em> the agent produces its answer for the first time —
-    /// expressed as a prefix constraint on the invocation order.
-    /// </summary>
+    /// <summary>Tools the turn must open with, in this order, before anything else it calls.</summary>
     public List<string>? ToolsCalledFirst { get; init; }
 
     /// <summary>
-    /// Context variables the turn must have read — via <c>GetContextVariable</c> (<c>Hit</c> /
-    /// <c>Miss</c>) or via the per-turn <c>HeldContextDeclaration</c> injection (<c>Declared</c>),
-    /// which hands an already-held variable's value to the model directly, with no tool call at all.
-    /// A bare name (<c>customerCode</c>) matches any of the three; prefixing it (<c>Hit:customerCode</c>
-    /// / <c>Miss:customerCode</c> / <c>Declared:customerCode</c>) asserts that specific one. A shared
-    /// variable hydrated for a follow-up agent is normally a <c>Declared</c>, not a <c>Hit</c>: the
-    /// agent already has the value in front of it and has no reason to call the tool.
+    /// Context variables the turn must have read: through <c>GetContextVariable</c> (<c>Hit</c>, <c>Miss</c>) or the held-context declaration (<c>Declared</c>).
+    /// A bare name matches any of the three and a prefixed one (<c>Hit:customerCode</c>) only that form; a shared variable hydrated for a follow-up
+    /// agent is normally <c>Declared</c>, since the agent already has the value in front of it.
     /// </summary>
     public List<string>? ContextReads { get; init; }
 
     /// <summary>Context variables that must have been written via <c>SetContextVariable</c>.</summary>
     public List<string>? ContextWrites { get; init; }
 
-    /// <summary>Assert that no context write happened at all.</summary>
+    /// <summary>Asserts that no context write happened at all.</summary>
     public bool? NoContextWrites { get; init; }
 
     /// <summary>
-    /// Assert that the turn touched the context registry not at all — neither read nor write. The
-    /// form the closed vocabulary takes for an agent that declares no <c>Scope: context</c>
-    /// parameter: there, every legal name is no name, so any access is an invention.
+    /// Asserts that the turn neither read nor wrote any context variable.
+    /// It is the closed vocabulary of an agent declaring no context parameter, for which any access is an invention.
     /// </summary>
     public bool? NoContextAccess { get; init; }
 
-    /// <summary>
-    /// The closed vocabulary: every context name touched on this turn must appear here. This is the
-    /// anti-invention assertion — a name derived from the user's message fails it.
-    /// </summary>
+    /// <summary>The closed vocabulary every context name touched on this turn must belong to, so a name derived from the user's message fails it.</summary>
     public List<string>? ContextVocabulary { get; init; }
 
-    /// <summary>Require a non-empty response text (the <c>MandatoryTextualResponse</c> policy).</summary>
+    /// <summary>Requires a non-empty response text, as the <c>MandatoryTextualResponse</c> policy does.</summary>
     public bool? TextNotEmpty { get; init; }
 
     /// <summary>Substrings that must not occur in the response text, case-insensitively.</summary>
@@ -211,31 +172,24 @@ public sealed class ExpectSpec
     /// <summary>Maximum allowed length of the delivered text, in characters.</summary>
     public int? TextMaxLength { get; init; }
 
-    /// <summary>Assert that the delivered text carries no Markdown syntax.</summary>
+    /// <summary>Asserts that the delivered text carries no Markdown syntax.</summary>
     public bool? TextNotMarkdown { get; init; }
 
     /// <summary>
-    /// Agents that must own no message in the conversation's persisted history as it stands after
-    /// this turn — named by intent (<c>billing</c>), matched against the history's own
-    /// <c>Morgana (Billing)</c> attribution. The proof that a consulted colleague left nothing
-    /// behind: it answered and the conversation has no record of it ever having spoken.
+    /// Agents, by intent, that must own no message in the persisted history after this turn, matched on the history's <c>Morgana (Billing)</c> attribution.
+    /// It proves that a consulted colleague answered and left no record of having spoken.
     /// </summary>
     public List<string>? HistoryExcludesAgents { get; init; }
 
     /// <summary>
-    /// Exact number of user messages the persisted history must carry after this turn — one per
-    /// turn played so far and nothing else. The other half of the same proof, from the question's
-    /// side: a colleague's inbound question is stored with the user role, so a consultation that
-    /// survived would show up here as a message the person never sent.
+    /// The exact number of user messages the persisted history must carry after this turn, one per turn played.
+    /// A colleague's question is stored with the user role, so a consultation that left a trace shows up as a message the person never sent.
     /// </summary>
     public int? HistoryUserMessages { get; init; }
 
     /// <summary>
-    /// Assert that the chat-history reducer actually shrank the conversation before this turn ran —
-    /// read from <c>MorganaChatHistoryProvider</c>'s own log line, the only signal there is (no span
-    /// exists for this). Requires a scenario run under <c>SummarizationTests</c>, whose lowered
-    /// <c>Harness:SummarizationThreshold</c>/<c>SummarizationTargetCount</c> are what make a
-    /// scripted-length conversation actually cross the trigger.
+    /// Asserts that the history reducer shrank the conversation before this turn, read from <c>MorganaChatHistoryProvider</c>'s log line since no span carries it.
+    /// It needs a run under <c>SummarizationTests</c>, whose lowered thresholds are what make a scripted conversation cross the trigger.
     /// </summary>
     public bool? SummarizationOccurred { get; init; }
 }
@@ -252,21 +206,18 @@ public static class ScenarioLoader
     /// <summary>Directory holding the scenario files, alongside the test assembly.</summary>
     public static string Directory => Path.Combine(AppContext.BaseDirectory, "Scenarios");
 
-    /// <summary>Loads one scenario by id (file name without extension).</summary>
+    /// <summary>Loads one scenario by id, its file name without extension, refusing a file that acts wrongly before any paid run.</summary>
     public static ScenarioDefinition Load(string id)
     {
-        // The id is also the file name — enforced here rather than only by convention, so a typo
-        // in an [InlineData("...")] test attribute fails with a clear "not found" instead of a
-        // silent mismatch discovered only when the scenario runs against the wrong expectations.
+        // The id is the file name, so a typo in an [InlineData] id fails here by name instead of running the wrong expectations.
         string path = Path.Combine(Directory, $"{id}.yaml");
         if (!File.Exists(path))
             throw new FileNotFoundException($"Scenario '{id}' not found at {path}.", path);
 
+        // The YAML read into the scenario's shape, its keys camelCase.
         ScenarioDefinition scenario = Deserializer.Deserialize<ScenarioDefinition>(File.ReadAllText(path));
 
-        // A YAML file that parses but never sets "id:" would otherwise silently produce a
-        // ScenarioDefinition whose Id doesn't round-trip back to the file it came from — every
-        // failure message and harness row keys off Id, so this catches the gap at load time.
+        // Every failure message and every journey row keys off the id, so a file that parses without "id:" is refused at load.
         if (string.IsNullOrWhiteSpace(scenario.Id))
             throw new InvalidOperationException($"Scenario file {path} declares no id.");
 
@@ -275,6 +226,8 @@ public static class ScenarioLoader
         {
             bool says = !string.IsNullOrWhiteSpace(scenario.Turns[turnIndex].Say);
             bool presses = !string.IsNullOrWhiteSpace(scenario.Turns[turnIndex].Press);
+
+            // Both or neither: the turn number tells the author where to look.
             if (says == presses)
                 throw new InvalidOperationException($"Scenario file {path}: turn {turnIndex + 1} must declare exactly one of 'say' and 'press'.");
         }

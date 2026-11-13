@@ -6,42 +6,18 @@ using PromptHarness.Infrastructure.Wiring;
 namespace PromptHarness.Infrastructure.Reporting;
 
 /// <summary>
-/// Persists the transcript of every run that did not hold, next to the scenario's journey file —
-/// whether or not the scenario itself cleared its threshold.
+/// Persists the transcript and the model calls of every run that did not hold, beside the scenario's journey, whether or not the scenario cleared its threshold.
+/// The journey row says that a scenario went 2/5 and never why, while a paid run's evidence must survive a closed terminal; a scenario passing at its
+/// threshold keeps its report too, since its one failing run is the warning with no margin left. The report is rewritten whole and deleted once every run holds.
 /// </summary>
-/// <remarks>
-/// <para><strong>Why this exists.</strong> Every run of this suite is billed and until now the only
-/// place a failure was legible was the assertion message on a terminal: the journey row records
-/// <em>that</em> a scenario went 2/5, never <em>why</em>. Lose the console (a closed window, a
-/// truncated pipe, a session that ends) and the money is spent with nothing left to diagnose from.
-/// The transcript is the expensive part of a run; writing it to disk costs nothing.</para>
-///
-/// <para><strong>The gate is the run, not the scenario</strong> and that distinction was learned
-/// the same way as the original lesson above. A scenario at 4/5 against a threshold of 4 *passes*;
-/// under the first version of this class that verdict deleted the transcript of the one run
-/// that failed inside it. That is precisely the transcript worth keeping: a scenario sitting on its
-/// threshold has no margin left, so its single failing run is the early warning for the phase after
-/// next. `behaviour-conversation-closure` did exactly this at A2.5.5 and the evidence went with it.
-/// A report is now written whenever <em>any</em> run failed and removed only when every run held.</para>
-///
-/// <para>Kept out of the journey file on purpose. A journey row is a naked number that stays
-/// comparable across phases; a failure report is a bulky, transient artefact of one measurement.
-/// It is rewritten whole on every run of the scenario and deleted once the scenario is clean —
-/// a stale report from two phases ago is worse than none, because it reads as current.</para>
-/// </remarks>
 public static class FailureLog
 {
-    /// <summary>
-    /// Writes the transcript of every run that failed, or removes a previous report once every
-    /// run of the scenario held. A scenario that passes *at* its threshold still leaves a report.
-    /// </summary>
+    /// <summary>Writes the transcript of every run that failed; once every run of the scenario held, it removes a previous report instead.</summary>
     public static void Write(ScenarioOutcome outcome, string phase, string harnessDirectory)
     {
         try
         {
-            // Shares HarnessWriter's directory resolution (same configured root, "failures"
-            // subfolder) so the two artefacts always sit next to each other regardless of where
-            // HarnessDirectory points.
+            // A "failures" folder under the journey directory, so the two always sit together wherever HarnessDirectory points.
             string directory = Path.Combine(HarnessWriter.ResolveDirectory(harnessDirectory), "failures");
             string path = Path.Combine(directory, $"{outcome.Scenario.Id}.log");
             string modelPath = Path.Combine(directory, $"{outcome.Scenario.Id}.model.log");
@@ -50,6 +26,7 @@ public static class FailureLog
             // that run is the one worth reading. Delete only when there is nothing to report.
             if (outcome.Passes == outcome.Runs.Count)
             {
+                // A clean scenario leaves no report, since a stale one would read as current.
                 File.Delete(path);
                 File.Delete(modelPath);
                 return;
@@ -60,9 +37,7 @@ public static class FailureLog
                 ? $"verdict: passed at threshold — {outcome.Runs.Count - outcome.Passes} run(s) failed, no margin left\n"
                 : "verdict: FAILED — below threshold\n";
 
-            // Rewritten whole every time, not appended to: a failure report describes the most
-            // recent measurement only, so an old report from a previous phase must not survive
-            // mixed in with the current one.
+            // The report describes the latest measurement only, so it replaces whatever an earlier phase left.
             System.IO.Directory.CreateDirectory(directory);
             File.WriteAllText(path,
                 $"phase: {phase}\n"
@@ -82,17 +57,17 @@ public static class FailureLog
         }
         catch (UnauthorizedAccessException)
         {
-            // Same reasoning: a read-only checkout is not a test failure.
+            // A read-only checkout is not a test failure either.
         }
     }
 
-    /// <summary>
-    /// Renders every LLM call of the failing runs: instructions, tools, the messages read and the answer.
-    /// </summary>
+    /// <summary>Renders every model call of the failing runs: instructions, tools, the messages read and the answer.</summary>
     private static string ModelReport(ScenarioOutcome outcome)
     {
+        // The calls of every failing run, run by run.
         StringBuilder report = new StringBuilder();
 
+        // A passing run has nothing to diagnose.
         foreach (RunOutcome run in outcome.Runs.Where(run => !run.Passed))
         {
             report.AppendLine(CultureInfo.InvariantCulture, $"=== run {run.Index} ===");
@@ -104,68 +79,65 @@ public static class FailureLog
 
             for (int turnIndex = 0; turnIndex < run.Turns.Count; turnIndex++)
             {
+                // Each turn is headed by what the user sent, so its calls are read against it.
                 TurnResult turn = run.Turns[turnIndex];
                 report.AppendLine();
                 report.AppendLine(CultureInfo.InvariantCulture, $"--- turn {turnIndex + 1}: {turn.UserMessage}");
 
+                // The calls Morgana made for the turn, in the order they were made.
                 for (int callIndex = 0; callIndex < turn.Calls.Count; callIndex++)
-                {
-                    ModelCall call = turn.Calls[callIndex];
-                    report.AppendLine();
-                    report.AppendLine(CultureInfo.InvariantCulture, $"[call {callIndex + 1}] {call.Usage}");
-                    AppendNumbered(report, "instructions", call.Instructions, instructionTexts);
-                    AppendNumbered(report, "tools", call.ToolDefinitions, toolTexts);
-                    report.AppendLine("input:");
-                    report.AppendLine(call.InputMessages ?? "(none recorded)");
-                    report.AppendLine("output:");
-                    report.AppendLine(call.OutputMessages ?? "(none recorded)");
-                }
+                    AppendCall(report, $"[call {callIndex + 1}]", turn.Calls[callIndex], instructionTexts, toolTexts);
 
                 // The judge's calls follow the turn's: what it was shown and what it decided, so a red
-                // verdict is read on its own evidence and never bought again with another run.
+                // verdict is read on its own evidence and never bought again with another run. The judge offers no tools.
                 for (int callIndex = 0; callIndex < turn.JudgeCalls.Count; callIndex++)
-                {
-                    ModelCall call = turn.JudgeCalls[callIndex];
-                    report.AppendLine();
-                    report.AppendLine(CultureInfo.InvariantCulture, $"[judge call {callIndex + 1}] {call.Usage}");
-                    AppendNumbered(report, "instructions", call.Instructions, instructionTexts);
-                    report.AppendLine("input:");
-                    report.AppendLine(call.InputMessages ?? "(none recorded)");
-                    report.AppendLine("output:");
-                    report.AppendLine(call.OutputMessages ?? "(none recorded)");
-                }
+                    AppendCall(report, $"[judge call {callIndex + 1}]", turn.JudgeCalls[callIndex], instructionTexts, null);
             }
 
             // A run that has no turns, such as a calibration case, carries its calls directly:
             // its failure is read on the guard's own evidence.
             for (int callIndex = 0; callIndex < run.Calls.Count; callIndex++)
-            {
-                ModelCall call = run.Calls[callIndex];
-                report.AppendLine();
-                report.AppendLine(CultureInfo.InvariantCulture, $"[call {callIndex + 1}] {call.Usage}");
-                AppendNumbered(report, "instructions", call.Instructions, instructionTexts);
-                AppendNumbered(report, "tools", call.ToolDefinitions, toolTexts);
-                report.AppendLine("input:");
-                report.AppendLine(call.InputMessages ?? "(none recorded)");
-                report.AppendLine("output:");
-                report.AppendLine(call.OutputMessages ?? "(none recorded)");
-            }
+                AppendCall(report, $"[call {callIndex + 1}]", run.Calls[callIndex], instructionTexts, toolTexts);
 
+            // A blank line ends the run's section.
             report.AppendLine();
         }
 
+        // The whole model report.
         return report.ToString();
+    }
+
+    /// <summary>Writes one model call under its heading: its usage, its instructions and tools by number once seen, then what it read and answered.</summary>
+    /// <param name="toolTexts">The run's tool lists already written; <c>null</c> for a caller that offers none, such as the judge.</param>
+    private static void AppendCall(StringBuilder report, string heading, ModelCall call, List<string> instructionTexts, List<string>? toolTexts)
+    {
+        // The heading carries the call's token usage, the first thing a cost question asks.
+        report.AppendLine();
+        report.AppendLine(CultureInfo.InvariantCulture, $"{heading} {call.Usage}");
+
+        // The instructions and the tools repeat across a run's calls, so each distinct text is written once.
+        AppendNumbered(report, "instructions", call.Instructions, instructionTexts);
+        if (toolTexts is not null)
+            AppendNumbered(report, "tools", call.ToolDefinitions, toolTexts);
+
+        // What the model was handed and what it answered, which is where why it acted as it did is read.
+        report.AppendLine("input:");
+        report.AppendLine(call.InputMessages ?? "(none recorded)");
+        report.AppendLine("output:");
+        report.AppendLine(call.OutputMessages ?? "(none recorded)");
     }
 
     /// <summary>Writes a repeating text in full the first time it appears in a run, by its number afterwards.</summary>
     private static void AppendNumbered(StringBuilder report, string label, string? text, List<string> seen)
     {
+        // A call whose span carried no such text says so, rather than looking like one with an empty text.
         if (text is null)
         {
             report.AppendLine(CultureInfo.InvariantCulture, $"{label}: (none recorded)");
             return;
         }
 
+        // A text already written in this run is cited by its number.
         int number = seen.IndexOf(text) + 1;
         if (number > 0)
         {
@@ -173,6 +145,7 @@ public static class FailureLog
             return;
         }
 
+        // A text met for the first time is numbered and written whole.
         seen.Add(text);
         report.AppendLine(CultureInfo.InvariantCulture, $"{label} #{seen.Count}:");
         report.AppendLine(text);

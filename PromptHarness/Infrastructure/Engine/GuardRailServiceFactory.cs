@@ -50,7 +50,7 @@ public static class GuardRailServiceFactory
         // The language models of the deployment under test, exactly as the host reads them.
         ILanguageModelService languageModelService = new ConfigurationLanguageModelService(configuration, languageModels, promptResolver, loggerFactory);
 
-        // The guard itself.
+        // The guard under test, on the deployment's own tiers, so a verdict here is the one production would give.
         return new LLMGuardRailService(languageModelService, promptResolver, mcpClientRegistryService, channelMetadataStore, configuration, NullLogger.Instance);
     }
 

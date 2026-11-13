@@ -3,40 +3,28 @@ using System.Text;
 namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
-/// Tees <see cref="Console.Out"/> into an in-memory ring of lines so the harness can read the
-/// host's own log stream while it runs in the same process.
+/// Tees <see cref="Console.Out"/> into an in-memory list of lines, so the harness reads the host's log while it runs in the same process.
+/// It is how the suite sees the names of the context variables an agent touches, which never become span attributes since a misbehaving model would leak user text through them.
+/// It must be installed before the host builds its logging; its time-window correlation holds only because the suite runs serially (see <c>AssemblyInfo.cs</c>).
 /// </summary>
-/// <remarks>
-/// <para>This is how the suite observes the <em>names</em> of the context variables an agent reads
-/// and writes. Those names are not span attributes and must never become them: span attributes reach
-/// every configured exporter and a variable name is exactly the place where a misbehaving model
-/// would leak user-supplied text. The log line, which already exists for diagnostics and stays
-/// inside the process, is the honest place to read them from.</para>
-///
-/// <para>Installation must happen <strong>before</strong> the host builds its logging stack: the
-/// console logger captures <c>Console.Out</c> once, when its provider is constructed.</para>
-///
-/// <para>Correlation is by time window, not by conversation id — the tool log lines carry no
-/// conversation id. That is sound only because the suite runs strictly serially; see
-/// <c>AssemblyInfo.cs</c>, which disables xUnit parallelisation for this very reason.</para>
-/// </remarks>
 public sealed class HostOutputCapture : TextWriter
 {
     /// <summary>The writer that was installed before the capture took over; every write is forwarded to it when echoing.</summary>
     private readonly TextWriter inner;
 
-    /// <summary>Whether writes are forwarded to the original console (noisy, opt-in via <c>Harness:EchoHostOutput</c>).</summary>
+    /// <summary>Whether writes are forwarded to the original console, a noisy option that <c>Harness:EchoHostOutput</c> turns on.</summary>
     private readonly bool echo;
 
-    /// <summary>Completed lines, in arrival order. Guarded by <see cref="gate"/>.</summary>
+    /// <summary>Completed lines in arrival order, written under <see cref="gate"/>.</summary>
     private readonly List<string> lines = [];
 
-    /// <summary>Partial line being accumulated between newline characters. Guarded by <see cref="gate"/>.</summary>
+    /// <summary>The line being accumulated until its newline, written under <see cref="gate"/>.</summary>
     private readonly StringBuilder pending = new StringBuilder();
 
     /// <summary>Single lock protecting <see cref="lines"/> and <see cref="pending"/>.</summary>
     private readonly Lock gate = new Lock();
 
+    /// <summary>Wraps the console writer that was installed, echoing to it when asked.</summary>
     private HostOutputCapture(TextWriter inner, bool echo)
     {
         this.inner = inner;
@@ -49,34 +37,35 @@ public sealed class HostOutputCapture : TextWriter
     /// <summary>Replaces <see cref="Console.Out"/> with a tee and returns it.</summary>
     public static HostOutputCapture Install(bool echo)
     {
-        // Wrap whatever Console.Out currently is (so echo can still forward to the real console)
-        // before replacing it; TextWriter.Synchronized wraps the capture itself so writes from the
-        // host's own multithreaded logging pipeline don't tear a line in half mid-write.
+        // The real console is kept for the echo, then replaced by the capture, synchronized so the host's
+        // logging threads never tear a line in half.
         HostOutputCapture capture = new HostOutputCapture(Console.Out, echo);
         Console.SetOut(TextWriter.Synchronized(capture));
+
+        // The capture the fixture marks and reads around each turn.
         return capture;
     }
 
     /// <inheritdoc />
     public override void Write(char value)
     {
+        // A diagnosing run sees the host's output on the real console too.
         if (echo)
             inner.Write(value);
 
-        // Everything TextWriter offers ultimately funnels through this one overload (see the
-        // string overload below), so the line-accumulation logic only has to live in one place.
+        // Every write reaches the lines through this one place, the string overload included.
         lock (gate)
         {
+            // A newline completes the line being accumulated.
             if (value == '\n')
             {
-                // TrimEnd('\r') handles the host's line endings being \r\n: the \r arrives as its
-                // own character right before this \n and would otherwise be captured as part of
-                // the line, which the regex-based parsing downstream does not expect.
+                // A Windows line ending leaves its carriage return before the newline, which the parsing downstream does not expect.
                 lines.Add(pending.ToString().TrimEnd('\r'));
                 pending.Clear();
             }
             else
             {
+                // Any other character extends the line in progress.
                 pending.Append(value);
             }
         }
@@ -85,11 +74,11 @@ public sealed class HostOutputCapture : TextWriter
     /// <inheritdoc />
     public override void Write(string? value)
     {
+        // A null write carries no text.
         if (value is null)
             return;
 
-        // Delegates character-by-character to the overload above rather than duplicating the
-        // line-splitting logic — slower, but this is diagnostic output, not a hot path.
+        // Character by character through the one place that splits lines: the host's log is no hot path.
         foreach (char character in value)
             Write(character);
     }
@@ -97,8 +86,7 @@ public sealed class HostOutputCapture : TextWriter
     /// <summary>Index of the next line to be captured; the harness marks it before a turn and reads the tail after.</summary>
     public int Mark()
     {
-        // The count itself is the mark: Since(mark) below simply skips everything before this
-        // index once more lines have been appended, so no separate cursor object is needed.
+        // The number of lines so far is the mark: what is appended after it is what the turn wrote.
         lock (gate)
             return lines.Count;
     }
@@ -106,9 +94,7 @@ public sealed class HostOutputCapture : TextWriter
     /// <summary>Returns the lines captured since <paramref name="mark"/>.</summary>
     public IReadOnlyList<string> Since(int mark)
     {
-        // Guards against a mark taken before the buffer had grown to that size — cannot normally
-        // happen (marks only ever come from this same growing list), but returning empty rather
-        // than throwing on an out-of-range slice keeps a defensive caller from crashing on it.
+        // A mark at the end means nothing was written since; the lines after it otherwise.
         lock (gate)
             return mark >= lines.Count ? [] : lines[mark..];
     }

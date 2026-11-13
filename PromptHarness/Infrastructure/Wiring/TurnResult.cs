@@ -16,29 +16,21 @@ public enum ContextOperation
     Set,
 
     /// <summary>
-    /// The variable was handed to the model directly in the per-turn <c>HeldContextDeclaration</c>
-    /// injection (name and value), so no <c>GetContextVariable</c> call happened — there was nothing
-    /// left to look up. The proof of hydration for an already-held variable, replacing <c>Hit</c> in
-    /// that case: a follow-up agent, or a later turn of the same agent, reads its held variables from
-    /// the declaration, not from a tool call.
+    /// The variable was handed to the model in the per-turn <c>HeldContextDeclaration</c>, so no <c>GetContextVariable</c> call was needed.
+    /// It is the proof of hydration for a held variable, which a follow-up agent reads from the declaration rather than from a tool call.
     /// </summary>
     Declared
 }
 
 /// <summary>A single context-variable access observed on a turn, in the order it happened.</summary>
-/// <param name="Operation">Whether the access was a hit, a miss or a write.</param>
+/// <param name="Operation">Whether the access was a hit, a miss, a declaration or a write.</param>
 /// <param name="VariableName">Name the agent used — the thing the closed-vocabulary assertions are about.</param>
 public sealed record ContextAccess(ContextOperation Operation, string VariableName);
 
 /// <summary>
-/// One consultation served during a turn, read from the <c>morgana.consultation</c> span.
+/// One consultation served during a turn, read from the <c>morgana.consultation</c> span: the one window onto the other side of the exchange.
+/// It shows which tools the colleague reached for and whether it ended waiting for something back, as a colleague that demanded a value instead of answering does.
 /// </summary>
-/// <remarks>
-/// The only window there is onto the other side of the exchange. The asking agent's own span shows
-/// that a colleague was called; this shows what the colleague did about it — which of its tools it
-/// reached for and whether it ended the exchange waiting for something back, which is what a
-/// colleague that demanded a value instead of answering looks like from outside.
-/// </remarks>
 /// <param name="Caller">Intent that asked.</param>
 /// <param name="Target">Intent that answered.</param>
 /// <param name="ToolsInvoked">Tools the answering agent called, in order.</param>
@@ -67,8 +59,15 @@ public sealed record WithheldToolObservation(string ToolName, string Outcome, st
 /// <param name="ErrorType">The technical cause when the door could not judge; null otherwise.</param>
 public sealed record SecurityEventObservation(string Door, string Outcome, string? Source, string? ErrorType);
 
-/// <summary>One LLM call as the model saw it: its cost, its instructions, its tools, the messages it read and its answer.</summary>
-/// <remarks>The texts are the OpenTelemetry <c>gen_ai.*</c> content attributes, as JSON; null when the host records no content.</remarks>
+/// <summary>
+/// One LLM call as the model saw it: its cost, its instructions, its tools, the messages it read and its answer.
+/// The texts are the OpenTelemetry <c>gen_ai.*</c> content attributes as JSON, null when the host records no content.
+/// </summary>
+/// <param name="Usage">The tokens the call consumed.</param>
+/// <param name="Instructions">The system instructions it was given.</param>
+/// <param name="ToolDefinitions">The tools it was offered.</param>
+/// <param name="InputMessages">The messages it read.</param>
+/// <param name="OutputMessages">What it answered.</param>
 public sealed record ModelCall(
     TokenUsage Usage,
     string? Instructions,
@@ -96,12 +95,8 @@ public sealed record ModelCall(
 /// <param name="ClassifierConfidence">Confidence from the same span, parsed from its string tag.</param>
 /// <param name="Consultations">Consultations served during the turn, in the order they closed; empty on a turn that asked no colleague.</param>
 /// <param name="CumulativeLogLines">
-/// Host log lines since conversation start, not just since this turn began — empty unless the
-/// caller passed a conversation-start mark into <c>TurnObserver.CompleteTurnAsync</c>. What a
-/// one-shot, edge-triggered signal (a dust-budget threshold, never resent once crossed) needs: which
-/// exact turn crosses it is a token-cost measurement that can shift by a turn or two between runs, so
-/// checking "has this happened by now" against the whole conversation is the only way to assert on it
-/// without pinning to a turn index that variance can invalidate. See <c>ExpectationChecker.CheckDust</c>.
+/// Host log lines since conversation start, empty unless the caller passed a conversation-start mark into <c>TurnObserver.CompleteTurnAsync</c>.
+/// A signal sent once, such as a dust threshold, is crossed on a turn that varies between runs, so it is asserted against the whole conversation.
 /// </param>
 /// <param name="ModelCalls">Every LLM call of the turn as the model saw it, classification included; the forensic record of a failing run.</param>
 /// <param name="JudgeModelCalls">The judge's own calls on this turn, kept apart so that the turn's cost stays Morgana's alone.</param>
@@ -131,10 +126,7 @@ public sealed record TurnResult(
     IReadOnlyList<SecurityEventObservation>? SecurityEventWindow = null,
     IReadOnlyList<SecurityEventObservation>? ProcessSecurityEvents = null)
 {
-    /// <summary>Consultations served during the turn, never null.</summary>
-    public IReadOnlyList<ConsultationObservation> Consulted => Consultations ?? [];
-
-    /// <summary>Never null even when the caller didn't ask for cumulative tracking — see the parameter's own remarks.</summary>
+    /// <summary>The host log lines since conversation start, never null; empty when the caller asked for no cumulative tracking.</summary>
     public IReadOnlyList<string> Cumulative => CumulativeLogLines ?? [];
 
     /// <summary>The turn's LLM calls as the model saw them, never null.</summary>
@@ -163,20 +155,25 @@ public sealed record TurnResult(
             bool insideError = false;
             foreach (string line in LogLines)
             {
+                // A fail or crit entry opens an error.
                 if (line.StartsWith("fail:", StringComparison.Ordinal) || line.StartsWith("crit:", StringComparison.Ordinal))
                     insideError = true;
+
+                // Any other unindented line opens an entry of a lower level, which ends the error.
                 else if (line.Length > 0 && !char.IsWhiteSpace(line[0]))
                     insideError = false;
 
+                // The error's own lines, its exception included, are kept.
                 if (insideError)
                     errors.Add(line);
             }
 
+            // Every error entry of the turn, which Describe appends to a failing turn.
             return errors;
         }
     }
 
-    /// <summary>Names read via <c>GetContextVariable</c>, whether the read hit or missed.</summary>
+    /// <summary>Names read, by a hit, a miss or the held-context declaration.</summary>
     public IReadOnlyList<string> ContextReads
         => [.. ContextAccesses.Where(a => a.Operation != ContextOperation.Set).Select(a => a.VariableName)];
 
@@ -190,9 +187,10 @@ public sealed record TurnResult(
     /// <summary>Quick replies delivered with the message, empty when none.</summary>
     public IReadOnlyList<QuickReply> QuickReplies => Message.QuickReplies ?? [];
 
-    /// <summary>A compact rendering of the turn, used in assertion failure messages.</summary>
-    // One line per structural signal the harness can see, so a failure message shows everything
-    // ExpectationChecker could have checked against, not just the one property that failed.
+    /// <summary>
+    /// A compact rendering of the turn, used in assertion failure messages.
+    /// It carries one line per structural signal, so a failure shows everything ExpectationChecker could check and not only the property that failed.
+    /// </summary>
     public string Describe()
         => $"""
             user: {UserMessage}

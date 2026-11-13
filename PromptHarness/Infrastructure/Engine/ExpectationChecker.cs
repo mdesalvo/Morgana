@@ -10,52 +10,47 @@ using PromptHarness.Infrastructure.Wiring;
 namespace PromptHarness.Infrastructure.Engine;
 
 /// <summary>
-/// Evaluates a turn's structural expectations. Deterministic by construction: everything it reads
-/// is either on the delivered <see cref="ChannelMessage"/> or on the span and log signals the
-/// <see cref="TurnObserver"/> collected — never on the wording of the response.
+/// Evaluates a turn's structural expectations, deterministically.
+/// Everything it reads is on the delivered <see cref="ChannelMessage"/> or among the span and log signals the <see cref="TurnObserver"/> collected,
+/// never in the wording of the response.
 /// </summary>
 public static partial class ExpectationChecker
 {
-    /// <summary>The two ids the framework reserves for escaping a flow, declared once in <c>morgana.json</c>.</summary>
+    /// <summary>The ids of the escape pair that the QuickReplyDoctrine policy of <c>morgana.json</c> appends to a list of choices.</summary>
     private static readonly HashSet<string> EscapeOptionIds =
         new HashSet<string>(["continue_agent", "exit_agent"], StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Matches <c>MorganaChatHistoryProvider</c>'s per-turn log line, which fires every turn a
-    /// reducer is configured regardless of whether it actually shrank anything this time — the two
-    /// counts are what distinguish "reducer present" from "reduction happened".
+    /// Matches <c>MorganaChatHistoryProvider</c>'s per-turn log line of a reduced view.
+    /// It is written every turn a reducer is configured, so only its two counts tell a reduction from a reducer that kept everything.
     /// </summary>
     [GeneratedRegex(@"PROVIDING reduced view \((?<full>\d+) → (?<reduced>\d+) messages\)", RegexOptions.CultureInvariant)]
     private static partial Regex SummarizationLogPattern { get; }
 
     /// <summary>Returns one message per violated expectation; empty when the turn conforms.</summary>
-    /// <param name="history">
-    /// The conversation's persisted history, fetched by the runner only when the turn declares an
-    /// expectation about it — every other signal here is already in hand when the turn ends, while
-    /// this one costs a round trip to the host.
-    /// </param>
+    /// <param name="history">The persisted history, fetched only for a turn that declares an expectation on it, since it costs a round trip to the host.</param>
     public static IReadOnlyList<string> Check(ExpectSpec expect, TurnResult turn, IReadOnlyList<MorganaChatMessage>? history = null)
     {
+        // Every violated expectation of the turn, reported together.
         List<string> failures = [];
 
-        // Every check below follows the same shape: a property being null/unset means "the
-        // scenario doesn't care about this", so nothing is added to failures; only an explicitly
-        // stated expectation that does not match observed reality produces a message.
+        // An expectation left unset is one the scenario does not make, so only a stated one that the turn contradicts adds a message.
         if (expect.AgentCompleted is { } expectedCompleted && turn.Message.AgentCompleted != expectedCompleted)
             failures.Add($"agentCompleted: expected {expectedCompleted}, got {turn.Message.AgentCompleted}");
 
         // "none" is a turn that Morgana answered herself, with no morgana.agent span: an intent no agent handles.
         if (string.Equals(expect.Agent, "none", StringComparison.OrdinalIgnoreCase))
         {
+            // Any agent span at all contradicts it.
             if (turn.AgentName is not null)
                 failures.Add($"agent: expected none, got {turn.AgentName}");
         }
+        // A named agent must be the one whose span the turn carried.
         else if (expect.Agent is { Length: > 0 } expectedAgent
             && !string.Equals(turn.AgentName, expectedAgent, StringComparison.OrdinalIgnoreCase))
             failures.Add($"agent: expected {expectedAgent}, got {turn.AgentName ?? "(none)"}");
 
-        // Delegated to specialised methods below, one per concern, so a scenario touching several
-        // of these still produces every relevant failure in one pass rather than stopping at the first.
+        // One method per concern, every one run, so a scenario touching several reports every failure in one pass.
         CheckQuickReplies(expect, turn, failures);
         CheckRichCard(expect, turn, failures);
         CheckRichCardContains(expect, turn, failures);
@@ -69,12 +64,14 @@ public static partial class ExpectationChecker
         CheckSummarization(expect, turn, failures);
         CheckHistory(expect, history, failures);
 
+        // The scenario's verdict on the turn: it passes when nothing was added.
         return failures;
     }
 
     /// <summary>What the conversation's persisted history does and does not carry.</summary>
     private static void CheckHistory(ExpectSpec expect, IReadOnlyList<MorganaChatMessage>? history, List<string> failures)
     {
+        // A turn declaring nothing about the history has nothing to check here.
         if (expect.HistoryExcludesAgents is not { Count: > 0 } && expect.HistoryUserMessages is null)
             return;
 
@@ -86,19 +83,25 @@ public static partial class ExpectationChecker
             return;
         }
 
+        // Each agent named must own no message: a consulted colleague answers without leaving a trace.
         foreach (string agent in expect.HistoryExcludesAgents ?? [])
         {
             // Matched on the parenthesised intent the persistence layer appends to the display name,
             // so an agent's own messages are distinguished from the framework's unqualified "Morgana".
             string attribution = $"({agent})";
             int owned = history.Count(message => message.AgentName.Contains(attribution, StringComparison.OrdinalIgnoreCase));
+
+            // Even one message means the agent spoke in a conversation it was only consulted for.
             if (owned > 0)
                 failures.Add($"historyExcludesAgents: '{agent}' owns {owned} message(s) in the persisted history");
         }
 
+        // One user message per turn played: a colleague's question stored with the user role would show up as one more.
         if (expect.HistoryUserMessages is { } expectedUserMessages)
         {
             int actual = history.Count(message => message.Type == ChatMessageType.User);
+
+            // A different count is a message the person never sent or one that was lost.
             if (actual != expectedUserMessages)
                 failures.Add($"historyUserMessages: expected {expectedUserMessages}, got {actual}");
         }
@@ -107,6 +110,7 @@ public static partial class ExpectationChecker
     /// <summary>Verdict of the <c>morgana.guard</c> span.</summary>
     private static void CheckGuard(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
+        // The verdict itself; a turn with no guard span says so, since a guard switched off writes none.
         if (expect.GuardCompliant is { } expectedCompliant && turn.GuardCompliant != expectedCompliant)
             failures.Add($"guardCompliant: expected {expectedCompliant}, got {turn.GuardCompliant?.ToString() ?? "(no guard span — is Harness:EnableUserGuardrail on?)"}");
 
@@ -198,39 +202,44 @@ public static partial class ExpectationChecker
         if (expect.Classified is { } expectedClassified && (turn.ClassifierIntent is not null) != expectedClassified)
             failures.Add($"classified: expected {expectedClassified}, got {turn.ClassifierIntent is not null}");
 
+        // The intent the classifier chose; a follow-up turn has none, since it skips classification.
         if (expect.ClassifierIntent is { Length: > 0 } expectedIntent
             && !string.Equals(turn.ClassifierIntent, expectedIntent, StringComparison.OrdinalIgnoreCase))
             failures.Add($"classifierIntent: expected {expectedIntent}, got {turn.ClassifierIntent ?? "(none — was this a follow-up turn?)"}");
 
+        // A confidence below the floor fails, as does a missing one: a correct intent chosen half-heartedly is a classifier near its edge.
         if (expect.ClassifierMinConfidence is { } minimumConfidence
             && (turn.ClassifierConfidence is not { } actualConfidence || actualConfidence < minimumConfidence))
             failures.Add(string.Create(CultureInfo.InvariantCulture, $"classifierMinConfidence: expected at least {minimumConfidence:F2}, got {turn.ClassifierConfidence?.ToString("F2", CultureInfo.InvariantCulture) ?? "(none)"}"));
     }
 
     /// <summary>
-    /// Whether <c>MorganaChatHistoryProvider</c>'s reducer actually shrank the conversation before
-    /// this turn — the log line fires every turn a reducer is configured, so "occurred" means the
-    /// two counts in the last such line for this turn differ, not merely that the line exists.
+    /// Whether <c>MorganaChatHistoryProvider</c>'s reducer shrank the conversation before this turn.
+    /// The log line is written every turn a reducer is configured, so a reduction means the two counts of the last such line differ.
     /// </summary>
     private static void CheckSummarization(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
+        // A turn declaring nothing about the reducer has nothing to check here.
         if (expect.SummarizationOccurred is not { } expectedOccurred)
             return;
 
-        // Take the last match, not the first: a turn can carry the line more than once if the
-        // agent's own tool-loop causes ProvideChatHistoryAsync to be called via a nested path — the
-        // most recent read is the one that decided what the LLM actually saw this turn.
+        // The last line of the turn decides: each run of the agent's tool loop reads the history again: the latest
+        // read is what the model saw.
         Match? match = null;
         foreach (string line in turn.LogLines)
         {
             Match candidate = SummarizationLogPattern.Match(line);
+
+            // A later reduced-view line replaces an earlier one.
             if (candidate.Success)
                 match = candidate;
         }
 
+        // A reduction handed the model fewer messages than the history holds.
         bool occurred = match is not null
             && int.Parse(match.Groups["full"].Value, CultureInfo.InvariantCulture) > int.Parse(match.Groups["reduced"].Value, CultureInfo.InvariantCulture);
 
+        // The message tells a missing reducer from one that kept everything.
         if (occurred != expectedOccurred)
             failures.Add($"summarizationOccurred: expected {expectedOccurred}, got {occurred}" + (match is null ? " (no reducer log line seen — is a reducer configured?)" : $" ({match.Groups["full"].Value} → {match.Groups["reduced"].Value} messages)"));
     }
@@ -238,29 +247,35 @@ public static partial class ExpectationChecker
     /// <summary>Cardinality and identity of the quick replies delivered with the message.</summary>
     private static void CheckQuickReplies(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
+        // The buttons delivered with the message, empty when it carried none.
         IReadOnlyList<QuickReply> quickReplies = turn.QuickReplies;
 
-        // Cardinality is a small mini-language in the YAML ("none", "any", "count:N", "min:N"),
-        // split on the first colon so "count:3" separates into a verb and an operand.
+        // The cardinality is written "none", "any", "count:N" or "min:N", split on the first colon into a verb and an operand.
         if (expect.QuickReplies is { Length: > 0 } cardinality)
         {
             string[] parts = cardinality.Split(':', 2);
+
+            // A verb other than the four checks nothing.
             switch (parts[0].Trim().ToLowerInvariant())
             {
+                // Buttons on a turn that must offer none.
                 case "none" when quickReplies.Count > 0:
                     failures.Add($"quickReplies: expected none, got {quickReplies.Count} ({FormatIds(quickReplies)})");
                     break;
 
+                // No button on a turn that must offer some.
                 case "any" when quickReplies.Count == 0:
                     failures.Add("quickReplies: expected at least one, got none");
                     break;
 
+                // A number of buttons other than the exact one required.
                 case "count":
                     int expectedCount = int.Parse(parts[1], CultureInfo.InvariantCulture);
                     if (quickReplies.Count != expectedCount)
                         failures.Add($"quickReplies: expected exactly {expectedCount}, got {quickReplies.Count} ({FormatIds(quickReplies)})");
                     break;
 
+                // Fewer buttons than the minimum required.
                 case "min":
                     int minimumCount = int.Parse(parts[1], CultureInfo.InvariantCulture);
                     if (quickReplies.Count < minimumCount)
@@ -269,8 +284,7 @@ public static partial class ExpectationChecker
             }
         }
 
-        // Presence/absence of specific ids — independent of the cardinality check above, so a
-        // scenario can combine e.g. "min:2" with "must include this specific id" in one turn.
+        // Each required id must be among the buttons, whatever the cardinality above asked.
         foreach (string id in expect.QuickReplyIds ?? [])
         {
             if (!quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase)))
@@ -282,16 +296,15 @@ public static partial class ExpectationChecker
             && !quickReplies.Select(reply => reply.Label).SequenceEqual(expectedLabels, StringComparer.Ordinal))
             failures.Add($"quickReplyLabels: expected [{string.Join(" | ", expectedLabels)}], got [{string.Join(" | ", quickReplies.Select(reply => reply.Label))}]");
 
+        // Each forbidden id must be absent from the buttons.
         foreach (string id in expect.NoQuickReplyIds ?? [])
         {
             if (quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase)))
                 failures.Add($"noQuickReplyIds: '{id}' present but must not be");
         }
 
-        // The two escape-pair rules are complementary halves of one policy (QuickReplyEscapeOptions
-        // in the framework's own prose): this one fails when the escape pair is emitted alone, with
-        // no primary option beside it — "must not stand alone" — see the property's own <remarks>
-        // for why it's opt-in rather than always checked.
+        // The escape pair of QuickReplyDoctrine is appended to a list of choices and never stands alone: emitted with no primary
+        // option beside it, it gates a step still in progress behind an exit button.
         if (expect.NoStandaloneEscapeOptions is true
             && quickReplies.Count > 0
             && quickReplies.All(reply => EscapeOptionIds.Contains(reply.Id)))
@@ -299,9 +312,7 @@ public static partial class ExpectationChecker
                 $"noStandaloneEscapeOptions: the turn emitted only the escape pair ({FormatIds(quickReplies)}) "
               + "with no primary option beside it");
 
-        // The other half: whenever there's at least one non-escape (primary) option, both escape
-        // ids must also be present — "must always be appended to a choice list" — checked by
-        // negating EscapeOptionIds.All, i.e. failing when the pair is *not* complete.
+        // The other half of the same rule: a list of primary options must carry the whole escape pair, so the user is never trapped in it.
         if (expect.EscapeOptionsWithPrimary is true
             && quickReplies.Any(reply => !EscapeOptionIds.Contains(reply.Id))
             && !EscapeOptionIds.All(id => quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase))))
@@ -313,34 +324,39 @@ public static partial class ExpectationChecker
     /// <summary>Presence or absence of a rich card.</summary>
     private static void CheckRichCard(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
+        // A turn declaring nothing about the card has nothing to check here.
         if (expect.RichCard is not { Length: > 0 } expectation)
             return;
 
+        // Whether the delivered message carried a card at all.
         bool present = turn.Message.RichCard is not null;
+
+        // A word other than the two checks nothing.
         switch (expectation.Trim().ToLowerInvariant())
         {
+            // A card on a turn that must carry none, named by its title.
             case "absent" when present:
                 failures.Add($"richCard: expected absent, got '{turn.Message.RichCard!.Title}'");
                 break;
 
+            // No card on a turn that must carry one.
             case "present" when !present:
                 failures.Add("richCard: expected present, got none");
                 break;
         }
     }
 
-    /// <summary>
-    /// Deterministic substrings that must appear somewhere in the rich card's own text — the
-    /// structural layer's only window into a card's body, since <c>LLMJudge</c> deliberately never
-    /// sees anything past the title (see <see cref="ScenarioDefinition.RichCardContains"/>).
-    /// </summary>
+    /// <summary>Deterministic substrings that must appear in the rich card's text, as <see cref="RichCardText"/> renders it for the judge too.</summary>
     private static void CheckRichCardContains(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
+        // A turn declaring no substring has nothing to check here.
         if (expect.RichCardContains is not { Count: > 0 } required)
             return;
 
+        // The card's whole text; no card leaves every substring missing.
         string flattened = turn.Message.RichCard is null ? string.Empty : RichCardText.Flatten(turn.Message.RichCard);
 
+        // Each substring is looked for on its own, so every missing one is reported.
         foreach (string substring in required)
         {
             if (!flattened.Contains(substring, StringComparison.OrdinalIgnoreCase))
@@ -351,36 +367,42 @@ public static partial class ExpectationChecker
     /// <summary>Which tools the turn invoked and in what order.</summary>
     private static void CheckTools(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
+        // The tools the turn called in order, repetitions kept.
         IReadOnlyList<string> invoked = turn.ToolsInvoked;
 
+        // Each required tool must have been called at least once.
         foreach (string tool in expect.ToolsCalled ?? [])
         {
             if (!invoked.Contains(tool, StringComparer.OrdinalIgnoreCase))
                 failures.Add($"toolsCalled: '{tool}' was not invoked (got {FormatList(invoked)})");
         }
 
+        // A second call to the same tool in one turn is an agent going round again instead of owning the gap.
         foreach (string tool in expect.ToolsCalledOnce ?? [])
         {
             int calls = invoked.Count(name => string.Equals(name, tool, StringComparison.OrdinalIgnoreCase));
+
+            // Never called or called more than once both break it.
             if (calls != 1)
                 failures.Add($"toolsCalledOnce: '{tool}' was invoked {calls} time(s) (got {FormatList(invoked)})");
         }
 
+        // Each forbidden tool must never have been called.
         foreach (string tool in expect.ToolsNotCalled ?? [])
         {
             if (invoked.Contains(tool, StringComparer.OrdinalIgnoreCase))
                 failures.Add($"toolsNotCalled: '{tool}' was invoked (got {FormatList(invoked)})");
         }
 
-        // A prefix check, not an exact-match one: the turn may invoke more tools after the
-        // required opening sequence, so invoked only has to be at least as long as prefix and
-        // agree position-by-position for that leading portion.
+        // The turn must open with these tools in this order, whatever it calls after them.
         List<string> prefix = expect.ToolsCalledFirst ?? [];
         if (prefix.Count > 0)
         {
+            // The calls must be at least as many as the prefix and agree with it position by position.
             bool matches = invoked.Count >= prefix.Count
                 && prefix.Select((tool, index) => string.Equals(tool, invoked[index], StringComparison.OrdinalIgnoreCase)).All(match => match);
 
+            // A turn that opened otherwise, such as one that answered before looking a value up.
             if (!matches)
                 failures.Add($"toolsCalledFirst: expected the turn to open with {FormatList(prefix)}, got {FormatList(invoked)}");
         }
@@ -389,10 +411,12 @@ public static partial class ExpectationChecker
     /// <summary>Context reads, writes and the closed vocabulary.</summary>
     private static void CheckContext(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
+        // Each declared read must have happened, in the form its prefix names if it names one.
         foreach (string entry in expect.ContextReads ?? [])
         {
             (string? operation, string variable) = ParseContextReadEntry(entry);
 
+            // A bare name matches a hit, a miss or a declaration; a prefixed one matches only that form.
             bool found = operation is null
                 ? turn.ContextReads.Contains(variable, StringComparer.OrdinalIgnoreCase)
                 : turn.ContextAccesses.Any(access =>
@@ -400,6 +424,7 @@ public static partial class ExpectationChecker
                     && string.Equals(access.Operation.ToString(), operation, StringComparison.OrdinalIgnoreCase)
                     && string.Equals(access.VariableName, variable, StringComparison.OrdinalIgnoreCase));
 
+            // The failure lists every read the turn did make.
             if (!found)
             {
                 string got = string.Join(", ", turn.ContextAccesses
@@ -409,25 +434,28 @@ public static partial class ExpectationChecker
             }
         }
 
+        // Each declared write must have happened: a value the user gave and the agent did not write is lost to every later turn.
         foreach (string variable in expect.ContextWrites ?? [])
         {
             if (!turn.ContextWrites.Contains(variable, StringComparer.OrdinalIgnoreCase))
                 failures.Add($"contextWrites: '{variable}' was never written (got {FormatList(turn.ContextWrites)})");
         }
 
+        // A turn that must write nothing, such as one with no value to keep.
         if (expect.NoContextWrites is true && turn.ContextWrites.Count > 0)
             failures.Add($"noContextWrites: expected none, got {FormatList(turn.ContextWrites)}");
 
+        // An agent declaring no context parameter has no legal name, so any access is an invention.
         if (expect.NoContextAccess is true && turn.ContextAccesses.Count > 0)
             failures.Add($"noContextAccess: expected the turn to touch no context variable, got {string.Join(", ", turn.ContextAccesses.Select(access => $"{access.Operation}:{access.VariableName}"))}");
 
-        // The anti-invention check: every name the turn actually touched (read or write) must
-        // appear in the scenario's declared vocabulary. One failure per offending access, not just
-        // the first, so a turn that invents several names in one go doesn't hide the rest.
+        // The anti-invention check: every name the turn read or wrote must be in the declared vocabulary,
+        // one failure per offending access so a turn inventing several names hides none of them.
         if (expect.ContextVocabulary is { Count: > 0 } vocabulary)
         {
             foreach (ContextAccess access in turn.ContextAccesses)
             {
+                // A name outside the vocabulary was derived from somewhere the agent had no right to take a name from.
                 if (!vocabulary.Contains(access.VariableName, StringComparer.OrdinalIgnoreCase))
                     failures.Add($"contextVocabulary: '{access.VariableName}' ({access.Operation}) is outside the declared vocabulary {FormatList(vocabulary)}");
             }
@@ -437,29 +465,33 @@ public static partial class ExpectationChecker
     /// <summary>Properties of the response text itself.</summary>
     private static void CheckText(ExpectSpec expect, TurnResult turn, List<string> failures)
     {
+        // A turn always carries prose (MandatoryTextualResponse): buttons or a card alone are a fault.
         if (expect.TextNotEmpty is true && string.IsNullOrWhiteSpace(turn.Text))
             failures.Add("textNotEmpty: the response carried no text");
 
+        // Each forbidden substring is looked for on its own, ignoring case.
         foreach (string forbidden in expect.TextNotContains ?? [])
         {
             if (turn.Text.Contains(forbidden, StringComparison.OrdinalIgnoreCase))
                 failures.Add($"textNotContains: response contains '{forbidden}'");
         }
 
+        // A length-capped channel must have received text within its limit.
         if (expect.TextMaxLength is { } maxLength && turn.Text.Length > maxLength)
             failures.Add($"textMaxLength: expected at most {maxLength} characters, got {turn.Text.Length}");
 
+        // A channel without markdown must have received plain words.
         if (expect.TextNotMarkdown is true && ContainsMarkdownSyntax(turn.Text))
             failures.Add($"textNotMarkdown: response still carries Markdown syntax: {turn.Text}");
     }
 
     /// <summary>
-    /// Detects Markdown syntax in delivered text, re-derived locally from the parsed document
-    /// rather than by calling into <c>MorganaChannelAdapter</c>'s own private detector — the harness
-    /// judges the delivered text on its own terms, keeping the black-box boundary structural.
+    /// Detects Markdown syntax in delivered text, derived here from the parsed document.
+    /// The harness never calls <c>MorganaChannelAdapter</c>'s own detector: it judges the delivered text from outside the black box.
     /// </summary>
     private static bool ContainsMarkdownSyntax(string text)
     {
+        // Every node of the parse is examined, inline ones included.
         MarkdownDocument document = Markdown.Parse(text);
         foreach (MarkdownObject node in document.Descendants())
         {
@@ -469,6 +501,7 @@ public static partial class ExpectationChecker
                 return true;
         }
 
+        // Only paragraphs of literals with soft breaks: plain text.
         return false;
     }
 
@@ -480,12 +513,10 @@ public static partial class ExpectationChecker
     private static string FormatList(IReadOnlyCollection<string> values)
         => values.Count == 0 ? "none" : string.Join(", ", values);
 
-    /// <summary>
-    /// Splits a <c>contextReads</c> entry into its optional outcome prefix and variable name —
-    /// <c>"Hit:customerCode"</c> → <c>("Hit", "customerCode")</c>, <c>"customerCode"</c> → <c>(null, "customerCode")</c>.
-    /// </summary>
+    /// <summary>Splits a <c>contextReads</c> entry into its optional form prefix and variable name: <c>Hit:customerCode</c> gives <c>Hit</c> and <c>customerCode</c>.</summary>
     private static (string? Operation, string Variable) ParseContextReadEntry(string entry)
     {
+        // A variable name never holds a colon, so the first one ends the prefix; none means a bare name.
         int colon = entry.IndexOf(':');
         return colon < 0 ? (null, entry) : (entry[..colon], entry[(colon + 1)..]);
     }

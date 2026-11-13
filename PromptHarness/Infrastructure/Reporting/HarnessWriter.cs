@@ -7,28 +7,10 @@ using PromptHarness.Infrastructure.Engine;
 namespace PromptHarness.Infrastructure.Reporting;
 
 /// <summary>
-/// Keeps each scenario's journey: one local file per scenario, one row per revision phase, carrying
-/// the pass rate and the token cost of a run.
+/// Keeps each scenario's journey: one local file per scenario, one row per revision phase with the pass rate and the token cost of a run.
+/// A journey keeps where the prose came from beside where it is; a re-run phase replaces its row, since a phase is a state of the prose.
+/// A row carries numbers only: what a movement means is written by hand in <c>JOURNEY.md</c>.
 /// </summary>
-/// <remarks>
-/// <para><strong>Why a journey and not a snapshot.</strong> The point of the harness is comparison;
-/// a file that is overwritten on every run answers "where is it now" while losing "where it came
-/// from". Here the movement is inside the file: <c>v0</c> is the original assessment and every
-/// phase after it shows what the revision bought or cost.</para>
-///
-/// <para>Re-running a phase replaces its row rather than appending a second one. A phase is a state
-/// of the prose, not a count of how many times it was measured: the three runs it took to settle
-/// A2.1 are one row and the diff against A2.0 stays readable.</para>
-///
-/// <para>A row is deliberately naked — numbers only. What a movement <em>means</em> and which of
-/// them were regressions worth reverting, belongs to <c>JOURNEY.md</c> next to these files, written
-/// by hand.</para>
-///
-/// <para><strong>Not versioned.</strong> The directory is a local measurement log
-/// (<see cref="HarnessOptions.HarnessDirectory"/>), not a repository artefact: every run is billed
-/// while reviewing token-count diffs as pull-request noise buys nothing. Comparison across phases
-/// still works — it just happens on whoever's disk is running the suite, not in git history.</para>
-/// </remarks>
 public static class HarnessWriter
 {
     /// <summary>Header of the journey table, rewritten whenever a file is created.</summary>
@@ -39,16 +21,17 @@ public static class HarnessWriter
     /// <summary>Matches a table row and captures its phase, so a re-run of the same phase replaces it.</summary>
     private static readonly Regex RowPattern = new Regex(@"^\| *(?<phase>[^|]+?) *\|", RegexOptions.Multiline);
 
-    /// <summary>Appends (or replaces) this phase's row in the scenario's journey.</summary>
+    /// <summary>Writes this phase's row into the scenario's journey, replacing the row of a phase measured before.</summary>
     public static void Write(ScenarioOutcome outcome, string llmDescriptor, string phase, string harnessDirectory)
     {
         try
         {
+            // The journey directory, created on the first run of a machine.
             string directory = ResolveDirectory(harnessDirectory);
             System.IO.Directory.CreateDirectory(directory);
 
-            // Composes one Markdown table row: phase, date, pass fraction, threshold and the
-            // per-run cost figures — averaged, since a scenario replays several times per phase.
+            // One table row: phase, date, pass fraction, threshold and the cost figures averaged per run,
+            // since a scenario replays several times per phase.
             string path = Path.Combine(directory, $"{outcome.Scenario.Id}.md");
             string row =
                 $"| {phase} "
@@ -60,8 +43,7 @@ public static class HarnessWriter
               + $"| {outcome.OutputTokensPerRun} "
               + $"| {Average(outcome.TotalTokens.CacheReadTokens, outcome.Runs.Count)} |";
 
-            // First measurement of this scenario ever (no file yet) creates a fresh journey with
-            // its header and description; every subsequent run merges its row into the existing one.
+            // A scenario's first measurement creates its journey with header and description; every later run merges its row.
             File.WriteAllText(path, File.Exists(path)
                 ? Merge(File.ReadAllText(path), phase, row, llmDescriptor)
                 : Create(outcome, llmDescriptor, row));
@@ -73,13 +55,14 @@ public static class HarnessWriter
         }
         catch (UnauthorizedAccessException)
         {
-            // Same reasoning: a read-only checkout is not a test failure.
+            // A read-only checkout is not a test failure either.
         }
     }
 
     /// <summary>Builds a fresh journey file for a scenario measured for the first time.</summary>
     private static string Create(ScenarioOutcome outcome, string llmDescriptor, string row)
     {
+        // The scenario's id and description, its length and the models under test, then the table with its first row.
         StringBuilder file = new StringBuilder();
         file.AppendLine(CultureInfo.InvariantCulture, $"# {outcome.Scenario.Id}");
         file.AppendLine();
@@ -93,35 +76,35 @@ public static class HarnessWriter
         file.AppendLine(TableHeader);
         file.AppendLine(row);
 
+        // The whole journey file as first written.
         return file.ToString();
     }
 
     /// <summary>Replaces this phase's row if present, appends it otherwise and refreshes the LLM line.</summary>
     private static string Merge(string existing, string phase, string row, string llmDescriptor)
     {
+        // The file line by line, without the newline that closes it.
         string[] lines = existing.TrimEnd('\n').Split('\n');
 
-        // Single pass over the file: refreshes the "- llm:" summary line in place (the model bound
-        // to a tier can change between phases even when the phase name doesn't) while looking for
-        // an existing row for this same phase to replace.
+        // One pass refreshes the "- llm:" line and looks for this phase's row to replace.
         for (int index = 0; index < lines.Length; index++)
         {
+            // The model bound to a tier can change between phases even when the phase name does not.
             if (lines[index].StartsWith("- llm:", StringComparison.Ordinal))
                 lines[index] = $"- llm: {llmDescriptor}";
 
+            // A row whose first cell is this phase is the one a re-run replaces.
             Match match = RowPattern.Match(lines[index]);
             if (match.Success && match.Groups["phase"].Value == phase)
             {
-                // Found this phase's row already in the table — replace it in place and return
-                // immediately, rather than falling through to the append path below.
+                // The phase is a state of the prose, so its new measurement takes the old row's place and the table ends there.
                 lines[index] = row;
 
                 return string.Join('\n', lines) + "\n";
             }
         }
 
-        // No existing row for this phase was found — it's a new phase, so the row is appended as
-        // the new last line of the table.
+        // A new phase: its row becomes the last line of the table.
         return string.Join('\n', lines) + "\n" + row + "\n";
     }
 
@@ -129,15 +112,11 @@ public static class HarnessWriter
     private static long Average(long total, int count) => count == 0 ? 0 : total / count;
 
     /// <summary>
-    /// Resolves <see cref="HarnessOptions.HarnessDirectory"/>: an absolute path is used as-is; a
-    /// relative one resolves against the project directory (taken from this file's own compile-time
-    /// path), not the build output — a location that shifts with the build configuration is not a
-    /// stable place to point a relative path at.
+    /// Resolves <see cref="HarnessOptions.HarnessDirectory"/>: an absolute path as it is, a relative one against the project directory.
+    /// The build output moves with the build configuration, so the project directory is read from this file's compile-time path.
     /// </summary>
     internal static string ResolveDirectory(string configured, [CallerFilePath] string sourceFilePath = "")
-        // sourceFilePath is this file's own compile-time path, two levels below the project root
-        // (PromptHarness/Infrastructure/Reporting/HarnessWriter.cs) — ".." twice to climb out of
-        // Reporting/ and Infrastructure/ and land on PromptHarness/ itself, not just Infrastructure/.
+        // This file sits in Infrastructure/Reporting, two levels below the project root, hence the two climbs.
         => Path.IsPathRooted(configured)
             ? configured
             : Path.GetFullPath(Path.Combine(Path.GetDirectoryName(sourceFilePath)!, "..", "..", configured));

@@ -22,20 +22,10 @@ namespace PromptHarness.Infrastructure.Engine;
 public sealed record JudgeVerdict(bool Holds, string Reason);
 
 /// <summary>
-/// Evaluates natural-language propositions about a response — the properties no structural
-/// assertion can reach, such as "asks for the operand in prose without enumerating options".
+/// Evaluates natural-language propositions about a response, the properties no structural assertion can reach.
+/// It runs on the deployment's own <see cref="Morgana.AI.Records.LLMTier.Efficiency"/> tier whatever <c>Morgana:ActorSystem:Tier</c> says, so a verdict
+/// never moves with the deployment; it reads exactly what a user saw: the tool trace would let it judge on evidence the user never had.
 /// </summary>
-/// <remarks>
-/// <para>The judge runs on the <see cref="Morgana.AI.Records.LLMTier.Efficiency"/> client, whatever tier the framework
-/// actors of the deployment under test run on, so a verdict never changes with <c>Morgana:ActorSystem:Tier</c>.
-/// It reuses the tiers of that deployment and adds no provider, key or dependency of its own.</para>
-///
-/// <para>It is deliberately given exactly what a user would see (the text, the button labels and
-/// the card as rendered) and nothing else. Feeding it the tool trace would let it justify a verdict
-/// from evidence the user never had, which is exactly the class of judgement the structural layer
-/// already owns; showing it less than the screen is the opposite error and convicts a response that
-/// answered on a card.</para>
-/// </remarks>
 public sealed class LLMJudge
 {
     /// <summary>The options the verdict is read back with.</summary>
@@ -51,22 +41,19 @@ public sealed class LLMJudge
     /// <exception cref="InvalidOperationException">Thrown, on the first judgement, when the Efficiency tier is not configured.</exception>
     private LLMJudge(ILanguageModelService llmService, HarnessPromptService harnessPromptService)
     {
+        // The prose of every judged turn, read at each judgement.
         this.harnessPromptService = harnessPromptService;
 
         // The instructions are read from morgana.json asynchronously, so the agent is composed at the first judgement.
         judgeAgent = new Lazy<Task<AIAgent>>(() => ComposeJudgeAgentAsync(llmService));
     }
 
-    /// <summary>
-    /// Builds a judge over the same tiers and credentials the instance under test uses, on the four
-    /// providers Morgana ships.
-    /// </summary>
+    /// <summary>Builds a judge over the same tiers and credentials the instance under test uses, on the five providers Morgana ships.</summary>
     /// <exception cref="InvalidOperationException">Thrown when a tier is configured in a way the host would refuse.</exception>
     public static LLMJudge Create(IConfiguration configuration, ILoggerFactory loggerFactory)
     {
-        // These two exist only to satisfy the LLM classes' constructors — the judge never resolves
-        // an agent's own prompt, so a minimal, standalone chain is enough here rather than the
-        // full agent-configuration stack the host itself builds.
+        // The resolver gives the judge Morgana's own policies and the tiers their framework prompts; the judge never
+        // resolves an agent's prompt, so a standalone chain is enough where the host builds the whole stack.
         IAgentConfigurationService agentConfigurationService =
             new EmbeddedAgentConfigurationService(loggerFactory.CreateLogger("Harness.Judge"));
         IPromptResolverService promptResolverService =
@@ -81,11 +68,13 @@ public sealed class LLMJudge
             new OllamaLanguageModel(loggerFactory),
             new OpenAILanguageModel(loggerFactory)
         ];
+        // The tiers of the deployment under test, built as the host builds them, so a tier the host refuses is refused here too.
         ILanguageModelService llmService = new ConfigurationLanguageModelService(configuration, languageModels, promptResolverService, loggerFactory);
 
         // The judge's prose is composed over the same resolver that gives it Morgana's own policies.
         HarnessPromptService harnessPromptService = new HarnessPromptService(promptResolverService);
 
+        // The agent itself is composed at the first judgement, when morgana.json is read.
         return new LLMJudge(llmService, harnessPromptService);
     }
 
@@ -105,17 +94,13 @@ public sealed class LLMJudge
         });
     }
 
-    /// <summary>
-    /// Judges every proposition of a turn and returns one failure message per verdict that did not
-    /// come out as the scenario requires.
-    /// </summary>
+    /// <summary>Judges every proposition of a turn and returns one failure message per verdict that did not come out as the scenario requires.</summary>
     public async Task<IReadOnlyList<string>> EvaluateAsync(TurnDefinition turnDefinition, TurnResult turn)
         => await EvaluateAsync(turnDefinition.Judge, turnDefinition.JudgeNot, turn.UserMessage, turn.Text, turn.QuickReplies, turn.Message.RichCard);
 
     /// <summary>
-    /// Judges propositions about a bare <see cref="ChannelMessage"/> that never went through a
-    /// scripted turn — Presentation has no <see cref="TurnResult"/> behind it, since no
-    /// <c>ScenarioRunner</c> turn ever ran to produce one.
+    /// Judges propositions about a bare <see cref="ChannelMessage"/> that never went through a scripted turn.
+    /// Morgana's presentation has no <see cref="TurnResult"/> behind it, since no turn ran to produce one.
     /// </summary>
     public async Task<IReadOnlyList<string>> EvaluateAsync(IReadOnlyList<string>? judge, IReadOnlyList<string>? judgeNot, ChannelMessage message)
         => await EvaluateAsync(judge, judgeNot, null, message.Text ?? string.Empty, message.QuickReplies ?? [], message.RichCard);
@@ -125,6 +110,7 @@ public sealed class LLMJudge
     private async Task<IReadOnlyList<string>> EvaluateAsync(
         IReadOnlyList<string>? judge, IReadOnlyList<string>? judgeNot, string? userMessage, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
     {
+        // One line per proposition that did not come out as required, both polarities together.
         List<string> failures = [];
 
         // "judge:" propositions must all hold — a failure is any one the judge found false.
@@ -135,8 +121,7 @@ public sealed class LLMJudge
                 failures.Add($"judge: \"{proposition}\" did not hold — {verdict.Reason}");
         }
 
-        // "judgeNot:" propositions must all fail to hold — the polarity is inverted from above:
-        // here it's the judge finding TRUE that produces a failure message.
+        // "judgeNot:" propositions must all fail to hold: the polarity is inverted and a proposition the judge finds true is the failure.
         foreach (string proposition in judgeNot ?? [])
         {
             JudgeVerdict? verdict = await VerdictOrFailureAsync("judgeNot", proposition, failures, userMessage, text, quickReplies, richCard);
@@ -148,10 +133,7 @@ public sealed class LLMJudge
         return failures;
     }
 
-    /// <summary>
-    /// Returns the judge's verdict on a proposition or, where the judge could not answer, records why
-    /// among the failures and returns null.
-    /// </summary>
+    /// <summary>Returns the judge's verdict on a proposition or, where the judge could not answer, records why among the failures and returns null.</summary>
     /// <param name="polarity">The scenario key the proposition was declared under, named in the failure.</param>
     private async Task<JudgeVerdict?> VerdictOrFailureAsync(
         string polarity, string proposition, List<string> failures, string? userMessage, string text, IReadOnlyList<QuickReply> quickReplies, RichCard? richCard)
@@ -171,9 +153,8 @@ public sealed class LLMJudge
     }
 
     /// <summary>
-    /// Waits before each judging attempt: none, then a short one, then a longer one. Three entries
-    /// mean three attempts and the list IS the retry policy — there is no separate count to keep
-    /// in step with it.
+    /// The waits of the judging attempts: none, then a short one, then a longer one.
+    /// Three entries mean three attempts, so the list is the whole retry policy with no separate count to keep in step.
     /// </summary>
     private static readonly TimeSpan[] JudgeRetryWaits =
         [TimeSpan.Zero, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(6)];
@@ -219,15 +200,15 @@ public sealed class LLMJudge
                 // An answer that still carries no verdict is an unusable one, retried like any other.
                 return response.Result ?? throw new JsonException("Judge returned no verdict");
             }
-            // Every attempt is caught, the last one included. Filtering on the first let the last
-            // exception escape into ScenarioRunner, which aborts the whole run — so an unusable
-            // judge answer cost a paid run and was reported as "run aborted", a line that reads
-            // like a broken scenario and is not one.
             catch (Exception ex)
             {
+                // Every attempt is caught, the last one included: an exception escaping into ScenarioRunner would abort a paid run
+                // and read as a broken scenario. The first line of the failure is kept for the message that ends the attempts.
                 lastFailure = $"{ex.GetType().Name}: {ex.Message.Split('\n')[0]}";
             }
 
+            // A failed attempt waits its own entry before the next one: none after the first, so the first two attempts are back to back.
+            // The longest wait comes after the last attempt, with none left to follow it.
             if (wait > TimeSpan.Zero)
                 await Task.Delay(wait);
         }

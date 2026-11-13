@@ -9,32 +9,16 @@ using Morgana.Contracts;
 namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
-/// Reads the two structural signals a turn leaves behind inside the host process: the
-/// <c>morgana.agent</c> span and the context-related log lines — from <c>MorganaTool</c>
-/// (HIT/MISS/SET) and from <c>MorganaAIContextProvider</c>'s per-turn declaration.
+/// Reads the signals a turn leaves inside the host process: Morgana's spans and security counter and the context log lines of <c>MorganaTool</c> and <c>MorganaAIContextProvider</c>.
+/// All of them are production instrumentation the suite only listens to, since an assertion needing a hook of its own would measure the rig;
+/// the listener also makes the sources create real activities with every exporter off, so no collector is needed.
 /// </summary>
-/// <remarks>
-/// <para>Neither signal exists for the harness's benefit — both are production instrumentation the
-/// suite merely listens to. That is the point: an assertion that needs a hook the framework does
-/// not otherwise have is an assertion measuring the test rig.</para>
-///
-/// <para>The <see cref="ActivityListener"/> also has a side effect worth knowing: it makes
-/// <c>ActivitySource.StartActivity</c> return real activities even with every exporter disabled,
-/// which is precisely how the suite gets span data without an OTLP collector in the loop.</para>
-/// </remarks>
 public sealed class TurnObserver : IDisposable
 {
     /// <summary>
-    /// Matches the context-tool log lines emitted by <c>MorganaTool</c>, built from the framework's
-    /// own message template rather than from a copy of it.
+    /// Matches the context-access log lines of <c>MorganaTool</c>, built from the framework's own message template rather than from a copy.
+    /// They are the only place a variable's name becomes observable, so a reworded line must break here in the same commit, never pass silently.
     /// </summary>
-    /// <remarks>
-    /// These lines are the only place a context variable's NAME becomes observable — a span carries
-    /// tool names and no data — so the whole context-handling group rests on them and a reworded
-    /// log line would otherwise turn into a silent pass. Deriving the pattern from
-    /// <see cref="Constants.ObservableLogs"/> makes that impossible: the wording travels and a
-    /// renamed placeholder stops matching here at the same commit it changes there.
-    /// </remarks>
     private static readonly Regex ContextAccessPattern = new Regex(
         PatternFrom(
             Constants.ObservableLogs.ContextAccessHead,
@@ -45,10 +29,8 @@ public sealed class TurnObserver : IDisposable
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>
-    /// Matches <c>MorganaAIContextProvider</c>'s per-turn declaration line — the proof that one or
-    /// more variables were handed to the model directly, without a <c>GetContextVariable</c> call.
-    /// The line is only ever logged when the session holds at least one variable, so an empty
-    /// session simply produces no match here — nothing to skip specially.
+    /// Matches <c>MorganaAIContextProvider</c>'s per-turn declaration line, the proof that variables were handed to the model without a <c>GetContextVariable</c> call.
+    /// The line is logged only when the session holds a variable, so an empty session simply produces no match.
     /// </summary>
     private static readonly Regex DeclaredContextPattern = new Regex(
         PatternFrom(
@@ -58,26 +40,22 @@ public sealed class TurnObserver : IDisposable
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     /// <summary>
-    /// Turns a logging message template into a regex: everything outside the placeholders is matched
-    /// literally and each named placeholder is replaced by what the caller wants read out of it.
+    /// Turns a logging message template into a regex: the text matched literally, each named placeholder replaced by what the caller reads out of it.
+    /// A placeholder the caller does not name stays literal and never matches, so a template that grew a field fails every scenario at once.
     /// </summary>
-    /// <remarks>
-    /// The template is escaped FIRST and the placeholders are then found in their escaped form, so a
-    /// template containing regex metacharacters — the parentheses around the tool's class name do —
-    /// stays literal. A placeholder the caller does not name is left escaped and simply never matches,
-    /// which is the loud failure wanted: a template that grew a field the harness does not know about
-    /// fails every scenario at once rather than quietly matching a prefix of the line.
-    /// </remarks>
     /// <param name="template">The framework's own message template.</param>
     /// <param name="groups">Placeholder (as written in the template) to the sub-pattern replacing it.</param>
     /// <returns>A pattern matching the rendered line.</returns>
     private static string PatternFrom(string template, params (string Placeholder, string Pattern)[] groups)
     {
+        // Escaped first, so the parentheses around the tool's class name stay literal.
         string pattern = Regex.Escape(template);
 
+        // Each placeholder is found in its escaped form, as the template now holds it.
         foreach ((string placeholder, string replacement) in groups)
             pattern = pattern.Replace(Regex.Escape(placeholder), replacement);
 
+        // The pattern of the rendered line.
         return pattern;
     }
 
@@ -97,10 +75,8 @@ public sealed class TurnObserver : IDisposable
     private readonly ConcurrentDictionary<string, List<ClassifierSpan>> classifierSpans = new ConcurrentDictionary<string, List<ClassifierSpan>>();
 
     /// <summary>
-    /// Every closed LLM span, in completion order: its token usage and what the model read and wrote. Not
-    /// keyed by conversation: the MEAI spans carry <c>gen_ai.*</c> attributes and no conversation id, so
-    /// they are attributed to a turn by position in this list — sound for the same reason the log
-    /// correlation is and no more.
+    /// Every closed LLM span in completion order, with its token usage and what the model read and wrote.
+    /// The spans carry no conversation id, so a turn claims them by position, which holds only because the suite runs serially.
     /// </summary>
     private readonly List<ModelCall> llmSpans = [];
 
@@ -125,12 +101,14 @@ public sealed class TurnObserver : IDisposable
     /// <summary>Milliseconds to let the console logger's background queue drain before reading.</summary>
     private readonly int logDrainMilliseconds;
 
-    /// <summary>Starts listening. Must be constructed before the first turn, not before the host.</summary>
+    /// <summary>Starts listening; it must exist before the first turn, which may come after the host started.</summary>
     public TurnObserver(HostOutputCapture output, int logDrainMilliseconds)
     {
+        // The host's captured log and how long its background queue is given to drain before a turn reads it.
         this.output = output;
         this.logDrainMilliseconds = logDrainMilliseconds;
 
+        // Every span of the two sources is recorded in full, whatever the host's own sampling says.
         listener = new ActivityListener
         {
             // "Morgana" carries the pipeline spans; "Morgana.AI.LLM" is the MEAI decorator every
@@ -140,6 +118,7 @@ public sealed class TurnObserver : IDisposable
             ActivityStopped = OnActivityStopped
         };
 
+        // From here every span the host closes on the two sources reaches OnActivityStopped.
         ActivitySource.AddActivityListener(listener);
 
         // The names are read before the listener exists: reading them is what makes Telemetry create its
@@ -152,6 +131,7 @@ public sealed class TurnObserver : IDisposable
         {
             InstrumentPublished = (Instrument instrument, MeterListener meterListener) =>
             {
+                // Every other instrument of the meter is left unheard.
                 if (instrument.Meter.Name == meterName && instrument.Name == securityCounterName)
                     meterListener.EnableMeasurementEvents(instrument);
             }
@@ -167,9 +147,7 @@ public sealed class TurnObserver : IDisposable
     /// <summary>Opens an observation window for a turn about to be sent.</summary>
     public TurnScope BeginTurn(string conversationId)
     {
-        // Snapshot the count, not a reference into the list: the list keeps growing as this turn's
-        // LLM calls complete, so "how many entries existed before this turn" has to be captured now
-        // and compared against later, in CompleteTurnAsync, rather than watched live.
+        // The number of model calls closed so far: the turn's own calls are the ones that close after it.
         int llmMark;
         lock (llmGate)
             llmMark = llmSpans.Count;
@@ -179,9 +157,7 @@ public sealed class TurnObserver : IDisposable
         lock (securityGate)
             securityEventMark = securityEvents.Count;
 
-        // Five independent marks — log line count, agent/guard/classifier span counts for this
-        // conversation and global LLM-span count — each a watermark that CompleteTurnAsync will
-        // read everything *past* to isolate what happened during this one turn specifically.
+        // One mark per signal, the log, each kind of span and the security events: CompleteTurnAsync reads what lies past each.
         return new TurnScope(
             conversationId,
             output.Mark(),
@@ -195,11 +171,8 @@ public sealed class TurnObserver : IDisposable
     }
 
     /// <summary>
-    /// Current position in the captured log — the counterpart to <see cref="TurnScope.LogMark"/> but
-    /// takeable once, at conversation start, for callers that need a cumulative window spanning
-    /// every turn since (e.g. a one-shot signal like a dust-budget threshold, which a single turn's
-    /// own window can miss entirely depending on which turn happens to cross it — see
-    /// <c>ScenarioRunner</c>'s use of this for <c>TurnResult.CumulativeLogLines</c>).
+    /// The current position in the captured log, taken once at conversation start for a window spanning every turn since.
+    /// A signal sent once, such as a dust threshold, falls on a turn that varies, so <c>DustTests</c> reads it across the whole conversation.
     /// </summary>
     public int Mark() => output.Mark();
 
@@ -220,29 +193,25 @@ public sealed class TurnObserver : IDisposable
     }
 
     /// <summary>Closes the window and assembles what was observed alongside the delivered message.</summary>
-    /// <param name="conversationLogMark">
-    /// When given, <see cref="TurnResult.CumulativeLogLines"/> is populated with every log line
-    /// since this mark (conversation start) rather than left empty — see <see cref="Mark"/>.
-    /// </param>
+    /// <param name="conversationLogMark">A mark from <see cref="Mark"/>; given, <see cref="TurnResult.CumulativeLogLines"/> holds every log line since it.</param>
     public async Task<TurnResult> CompleteTurnAsync(TurnScope scope, string userMessage, ChannelMessage message, int? conversationLogMark = null)
     {
         // The console logger writes on a background queue, so the last tool lines of a turn can
         // still be in flight when the webhook has already been delivered.
         await Task.Delay(logDrainMilliseconds);
 
-        // Everything logged since BeginTurn's mark — this is the raw material both the context-
-        // access parsing below and, unparsed, TurnResult.LogLines (used for failure diagnosis) work from.
+        // Everything logged since the turn's mark: the context accesses are parsed from it and failures print it whole.
         IReadOnlyList<string> lines = output.Since(scope.LogMark);
 
-        // Parse every context-tool log line in this window into a structured access. Lines that
-        // don't match either pattern (ordinary framework noise) are silently skipped rather than
-        // treated as an error — this parser only cares about the subset it recognises.
+        // Every context line of the window becomes an access; any other line is ordinary framework output and is skipped.
         List<ContextAccess> accesses = [];
         foreach (string line in lines)
         {
+            // A tool's access: one line per call.
             Match match = ContextAccessPattern.Match(line);
             if (match.Success)
             {
+                // The operation word of the line, which the pattern allows to be only one of the three.
                 ContextOperation operation = match.Groups["op"].Value switch
                 {
                     Constants.ObservableLogs.Hit => ContextOperation.Hit,
@@ -254,8 +223,7 @@ public sealed class TurnObserver : IDisposable
                 continue;
             }
 
-            // One DECLARED line can name several variables at once ("customerCode, invoiceId") —
-            // one ContextAccess per name, same as a tool-log line would produce one per call.
+            // One declaration line can name several variables at once, each becoming an access of its own.
             Match declared = DeclaredContextPattern.Match(line);
             if (declared.Success)
             {
@@ -264,20 +232,17 @@ public sealed class TurnObserver : IDisposable
             }
         }
 
-        // The most recent agent span recorded for this conversation since the turn began, if any —
-        // spans.Count > scope.SpanCount is what filters out spans from earlier turns of the same
-        // conversation; [^1] takes the latest of whatever new ones landed during this turn.
+        // The latest agent span the conversation closed since the mark; none on a turn no agent took.
         AgentSpan? span = agentSpans.TryGetValue(scope.ConversationId, out List<AgentSpan>? spans) && spans.Count > scope.SpanCount
             ? spans[^1]
             : null;
 
-        // Same "count > mark, take the latest" read as the agent span above, applied to the guard
-        // and classifier dictionaries — both are null on any turn that skipped that step (e.g. a
-        // follow-up turn skips classification, a guard-disabled run never produces a guard span).
+        // The latest guard span since the mark; none on a run with the guard off.
         GuardSpan? guard = guardSpans.TryGetValue(scope.ConversationId, out List<GuardSpan>? guards) && guards.Count > scope.GuardSpanCount
             ? guards[^1]
             : null;
 
+        // The latest classifier span since the mark; none on a follow-up turn, which skips classification.
         ClassifierSpan? classifier = classifierSpans.TryGetValue(scope.ConversationId, out List<ClassifierSpan>? classifiers) && classifiers.Count > scope.ClassifierSpanCount
             ? classifiers[^1]
             : null;
@@ -289,12 +254,12 @@ public sealed class TurnObserver : IDisposable
                 ? [.. served.Skip(scope.ConsultationSpanCount)]
                 : [];
 
-        // LLM spans are process-wide, not per-conversation (see the field's own remarks on why),
-        // so isolating this turn's usage means skipping every span that existed before BeginTurn's
-        // mark and summing whatever landed after — sound only because the suite runs serially.
+        // The model calls closed since the mark are the turn's, which holds only because the suite runs serially.
         List<ModelCall> modelCalls;
         lock (llmGate)
             modelCalls = [.. llmSpans.Skip(scope.LlmSpanCount)];
+
+        // Their usage summed, the call count included.
         TokenUsage usage = modelCalls.Aggregate(TokenUsage.Zero, (total, next) => total + next.Usage);
 
         // Every tool result withheld during the turn, with the layer that decided it: a result the
@@ -314,6 +279,7 @@ public sealed class TurnObserver : IDisposable
             securityEventsSinceStart = [.. securityEvents];
         }
 
+        // Everything the turn's expectations, the judge and the failure log read.
         return new TurnResult(
             scope.ConversationId,
             userMessage,
@@ -348,12 +314,13 @@ public sealed class TurnObserver : IDisposable
     /// <summary>Records one measurement of the security counter with the door it happened at and what was decided there.</summary>
     private void OnSecurityMeasurement(Instrument instrument, long measurement, ReadOnlySpan<KeyValuePair<string, object?>> tags, object? state)
     {
+        // The four tags a check reads; a door and an outcome are always set by the framework, a source and a cause only sometimes.
         string door = string.Empty;
         string outcome = string.Empty;
         string? source = null;
         string? errorType = null;
 
-        // The counter carries other tags too (the intent of the agent) which no check here reads.
+        // Each tag is read into its field; the others, such as the agent's intent, no check reads.
         foreach (KeyValuePair<string, object?> tag in tags)
         {
             switch (tag.Key)
@@ -387,28 +354,34 @@ public sealed class TurnObserver : IDisposable
         // A child of the agent span carries no conversation tag of its own: its parent does.
         for (Activity? spanInChain = activity; spanInChain is not null; spanInChain = spanInChain.Parent)
         {
+            // The first span up the chain that names a conversation decides.
             if (spanInChain.GetTagItem(Telemetry.ConversationId) is string conversationId)
                 return conversationId;
         }
 
+        // A span outside every conversation, such as one of a startup examination.
         return null;
     }
 
     /// <summary>Reads a string tag of an event; null when the event does not carry it.</summary>
     private static string? ReadEventTag(ActivityEvent activityEvent, string tagName)
     {
+        // An event carries few tags, so they are read one by one.
         foreach (KeyValuePair<string, object?> tag in activityEvent.Tags)
         {
+            // The tag asked for, read as text.
             if (tag.Key == tagName)
                 return tag.Value as string;
         }
 
+        // The event does not carry it.
         return null;
     }
 
     /// <summary>Records every tool-withheld event of a stopped span against the conversation it belongs to.</summary>
     private void RecordWithheldTools(Activity activity)
     {
+        // A span may carry several events, one per tool withheld while it was current.
         foreach (ActivityEvent activityEvent in activity.Events)
         {
             // Only the event the framework adds when it keeps a tool result from the model is of interest.
@@ -420,6 +393,7 @@ public sealed class TurnObserver : IDisposable
             if (conversationId is null)
                 continue;
 
+            // The tool, the outcome, the layer that decided and its finding, as the event carries them.
             Append(withheldTools, conversationId, new WithheldToolObservation(
                 ReadEventTag(activityEvent, Telemetry.ToolName) ?? string.Empty,
                 ReadEventTag(activityEvent, Telemetry.SecurityOutcome) ?? string.Empty,
@@ -428,16 +402,14 @@ public sealed class TurnObserver : IDisposable
         }
     }
 
-    /// <summary>Records a closed agent span against its conversation, or an LLM span's token usage.</summary>
+    /// <summary>Records a closed pipeline span against its conversation and a closed model call with its token usage.</summary>
     private void OnActivityStopped(Activity activity)
     {
         // The withheld-tool event lands on whichever span was current when the tool ran, which may be
         // a tool span of the LLM source, so it is read before the routing below discards that source.
         RecordWithheldTools(activity);
 
-        // This callback fires for every activity from either listened-to source (see the
-        // constructor), so the first job is figuring out which kind just closed and routing
-        // accordingly — the two branches below populate entirely different collections.
+        // A span of either source arrives here: a model call is recorded apart from the pipeline's spans.
         if (activity.Source.Name == "Morgana.AI.LLM")
         {
             // Only a chat span is a round trip to the model. The same source also closes a span per tool
@@ -447,9 +419,7 @@ public sealed class TurnObserver : IDisposable
             if (!string.Equals(operation, "chat", StringComparison.Ordinal))
                 return;
 
-            // One MEAI-decorated LLM call just completed; its gen_ai.* tags carry token usage per
-            // the OpenTelemetry semantic conventions. Recorded with Calls: 1 so that summing a
-            // list of these later also yields the call count, not just token totals.
+            // The usage of one call under the OpenTelemetry gen_ai.* names, counted as one call so a sum also counts the round trips.
             TokenUsage usage = new TokenUsage(
                 ReadTokenTag(activity, "gen_ai.usage.input_tokens"),
                 ReadTokenTag(activity, "gen_ai.usage.output_tokens"),
@@ -466,23 +436,23 @@ public sealed class TurnObserver : IDisposable
                 activity.GetTagItem("gen_ai.input.messages") as string,
                 activity.GetTagItem("gen_ai.output.messages") as string);
 
+            // Calls close on the provider's threads, hence the gate.
             lock (llmGate)
                 llmSpans.Add(call);
 
+            // A model call is no pipeline span.
             return;
         }
 
-        // No conversation id tag means this span cannot be attributed to any conversation's
-        // history — nothing useful to record, so it's dropped rather than filed under a null key.
+        // A pipeline span naming no conversation belongs to no turn.
         if (activity.GetTagItem(Telemetry.ConversationId) is not string conversationId)
             return;
 
+        // Any other span of the pipeline, such as the turn's or the router's, gives a turn nothing to assert on.
         switch (activity.OperationName)
         {
+            // The agent's tools travel as one comma-joined tag and are split back in call order, which toolsCalledFirst reads.
             case Telemetry.AgentActivity:
-                // agent.tools_invoked is a single comma-joined string tag (spans can't carry
-                // arrays), so it has to be split back into an ordered list here — order matters,
-                // since ExpectationChecker's toolsCalledFirst assertion depends on invocation order.
                 string toolsInvoked = activity.GetTagItem(Telemetry.AgentToolsInvoked) as string ?? string.Empty;
 
                 Append(agentSpans, conversationId, new AgentSpan(
@@ -490,9 +460,8 @@ public sealed class TurnObserver : IDisposable
                     [.. toolsInvoked.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]));
                 break;
 
+            // The same tag on the answering side: the only place the harness sees which tools a colleague reached for.
             case Telemetry.ConsultationActivity:
-                // Same comma-joined tag the agent span carries, set on the answering agent's side:
-                // this is the only place the harness can see which tools the colleague reached for.
                 string consultationTools = activity.GetTagItem(Telemetry.AgentToolsInvoked) as string ?? string.Empty;
 
                 Append(consultationSpans, conversationId, new ConsultationObservation(
@@ -504,6 +473,7 @@ public sealed class TurnObserver : IDisposable
                     activity.GetTagItem(Telemetry.ConsultationAnswer) as string));
                 break;
 
+            // The guard's verdict, the layer that decided and its cause when it could not judge.
             case Telemetry.GuardActivity:
                 Append(guardSpans, conversationId, new GuardSpan(
                     activity.GetTagItem(Telemetry.GuardCompliant) as bool?,
@@ -512,50 +482,44 @@ public sealed class TurnObserver : IDisposable
                     activity.GetTagItem(Telemetry.ErrorType) as string));
                 break;
 
+            // The confidence travels as text from the classification's metadata, so an unreadable one becomes unknown, never a crash.
             case Telemetry.ClassifierActivity:
-                // classification.confidence is stored as a string tag (ConversationSupervisorActor
-                // sets it from a Dictionary<string,string>), so it's parsed tolerantly here rather
-                // than cast — an unparseable value becomes "unknown", not a listener crash.
-                double? confidence = activity.GetTagItem(Telemetry.ClassificationConfidence) is string raw
-                    && double.TryParse(raw, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed)
-                        ? parsed
+                double? confidence = activity.GetTagItem(Telemetry.ClassificationConfidence) is string confidenceText
+                    && double.TryParse(confidenceText, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsedConfidence)
+                        ? parsedConfidence
                         : null;
 
                 Append(classifierSpans, conversationId, new ClassifierSpan(
                     activity.GetTagItem(Telemetry.ClassificationIntent) as string,
                     confidence));
                 break;
-
-            // Any other activity on the "Morgana" source that isn't one of the three turn-level
-            // spans this observer cares about (e.g. a finer-grained internal span) is not relevant.
         }
     }
 
-    /// <summary>
-    /// Appends one closed span to its conversation's list, creating the list on first contact.
-    /// Shared by all three span kinds above — each just supplies its own dictionary and record.
-    /// </summary>
+    /// <summary>Appends one observation to its conversation's list, creating the list on its first observation.</summary>
     private static void Append<T>(ConcurrentDictionary<string, List<T>> spans, string conversationId, T span)
         => spans.AddOrUpdate(conversationId, _ => [span], (_, existing) =>
         {
+            // Spans close on several threads at once, so the list is written under its own lock.
             lock (existing)
                 existing.Add(span);
 
+            // The same list, grown by one.
             return existing;
         });
 
     /// <summary>
-    /// Reads a token count that providers report as any integral type, or as a string on some
-    /// paths. Missing or unparseable means zero: a token count is a measurement, never an
-    /// assertion and it must not be able to fail a scenario.
+    /// Reads a token count that providers report as any numeric type or as text; missing or unreadable means zero.
+    /// A token count is a measurement, never an assertion, so it must not be able to fail a scenario.
     /// </summary>
     private static long ReadTokenTag(Activity activity, string tag)
+        // Each form a provider writes maps to the count; anything else reads as no tokens.
         => activity.GetTagItem(tag) switch
         {
             long value => value,
             int value => value,
             double value => (long)value,
-            string text when long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsed) => parsed,
+            string text when long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out long parsedCount) => parsedCount,
             _ => 0
         };
 
@@ -569,9 +533,7 @@ public sealed class TurnObserver : IDisposable
     private sealed record ClassifierSpan(string? Intent, double? Confidence);
 }
 
-/// <summary>
-/// Token usage aggregated over the LLM calls of a turn — the measurement A2 has to move.
-/// </summary>
+/// <summary>Token usage summed over the LLM calls of a turn, the cost a prompt revision is expected to move.</summary>
 /// <param name="InputTokens">Prompt tokens billed at full rate.</param>
 /// <param name="OutputTokens">Completion tokens.</param>
 /// <param name="CacheReadTokens">Prompt tokens served from the provider's prompt cache.</param>
@@ -601,10 +563,7 @@ public sealed record TokenUsage(
         => $"{Calls} call(s), in={InputTokens}, out={OutputTokens}, cacheRead={CacheReadTokens}, cacheWrite={CacheWriteTokens}";
 }
 
-/// <summary>
-/// Marks the start of a turn's observation window: where the log stood and how many agent, guard
-/// and classifier spans the conversation had already produced.
-/// </summary>
+/// <summary>Marks the start of a turn's observation window: where the log stood and how many of each signal had already been recorded.</summary>
 /// <param name="ConversationId">Conversation being observed.</param>
 /// <param name="LogMark">Index into the captured log at the moment the turn was sent.</param>
 /// <param name="SpanCount">Agent spans already recorded for the conversation.</param>

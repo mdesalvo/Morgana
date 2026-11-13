@@ -3,10 +3,9 @@ using Microsoft.Extensions.AI;
 namespace PromptHarness.Infrastructure;
 
 /// <summary>
-/// Stands where the model would in the deterministic groups: answers each request with the next scripted
-/// response and keeps every request it received.
+/// Stands where the model would in the deterministic groups: answers each request with the next scripted response and keeps every request it received.
+/// A model called more often than scripted is a test fault, so an exhausted script throws; a silent model is a client with no script.
 /// </summary>
-/// <remarks>A model called more often than scripted is a test fault, so an exhausted script throws rather than answering; a silent model is a client with no script.</remarks>
 /// <param name="responses">The answers to give, one per request, in order.</param>
 public sealed class ScriptedChatClient(params ChatResponse[] responses) : IChatClient
 {
@@ -31,6 +30,7 @@ public sealed class ScriptedChatClient(params ChatResponse[] responses) : IChatC
         if (pending.Count == 0)
             throw new InvalidOperationException("The script has no answer left for this request");
 
+        // The answers are given in the order the case wrote them, one per request.
         return Task.FromResult(pending.Dequeue());
     }
 
@@ -39,6 +39,8 @@ public sealed class ScriptedChatClient(params ChatResponse[] responses) : IChatC
     {
         // The same scripted answer as a stream: each of its contents arrives as an update of its own.
         ChatResponse response = await GetResponseAsync(messages, options, cancellationToken);
+
+        // The agent's streaming path reads the answer piece by piece, as a provider would deliver it.
         foreach (ChatResponseUpdate update in response.ToChatResponseUpdates())
             yield return update;
     }

@@ -4,19 +4,10 @@ using System.Reflection;
 namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
-/// The second Morgana of a federation run: another installation, in another process, publishing the
-/// agent the instance under test consults across the wire.
+/// The second Morgana of a federation run: another installation in another process, publishing the agent the instance under test consults across the wire.
+/// Configuration reaches a Morgana through its process's environment, so two installations in one process could not disagree about their partners.
+/// It is the shipped host started from Morgana.Web's own output, where the example domain is deployed, told who its partner is.
 /// </summary>
-/// <remarks>
-/// <para>A process rather than a second host beside the first, because configuration reaches a
-/// Morgana through the environment and an environment belongs to a process: two installations in one
-/// could not disagree about who their partners are, which is the whole of what this one is here to
-/// disagree about.</para>
-///
-/// <para>It serves the example domain (the greenhouse the asking side has no books for) and is
-/// started from Morgana.Web's own output, where that plugin is already deployed beside the entry
-/// point. Nothing about it is special-cased: it is the shipped host, told who its partner is.</para>
-/// </remarks>
 public sealed class FederatedPeerHost : IAsyncDisposable
 {
     /// <summary>Where this installation answers, as the instance under test will be told to reach it.</summary>
@@ -28,7 +19,7 @@ public sealed class FederatedPeerHost : IAsyncDisposable
     /// <summary>Throwaway directory holding the conversations this installation is asked to open.</summary>
     private readonly string storagePath;
 
-    /// <summary>Starts the second installation and holds what is needed to stop it again.</summary>
+    /// <summary>Holds the running installation and its storage, so both can be stopped and removed again.</summary>
     private FederatedPeerHost(Process process, string baseAddress, string storagePath)
     {
         this.process = process;
@@ -36,10 +27,7 @@ public sealed class FederatedPeerHost : IAsyncDisposable
         BaseAddress = baseAddress;
     }
 
-    /// <summary>
-    /// Launches the second installation and waits until it answers, so a consultation never lands on
-    /// a host that is still validating its own startup.
-    /// </summary>
+    /// <summary>Launches the second installation and waits until it answers, so a consultation never lands on a host still validating its startup.</summary>
     /// <param name="port">Port it binds, already reserved by the caller.</param>
     /// <param name="environment">What this installation is told about itself, layered over what it inherits.</param>
     /// <param name="startupTimeoutSeconds">How long it is given to answer before the run gives up on it.</param>
@@ -48,10 +36,14 @@ public sealed class FederatedPeerHost : IAsyncDisposable
         IReadOnlyDictionary<string, string> environment,
         int startupTimeoutSeconds)
     {
+        // Loopback on the reserved port, the address the instance under test is told to consult.
         string baseAddress = $"http://127.0.0.1:{port}";
+
+        // Storage of its own, so the conversations it is asked to open never mix with the instance under test's.
         string storagePath = Path.Combine(Path.GetTempPath(), "morgana-harness-peer", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(storagePath);
 
+        // The shipped host under dotnet, as a deployment runs it.
         ProcessStartInfo startInfo = new ProcessStartInfo("dotnet")
         {
             UseShellExecute = false,
@@ -69,9 +61,11 @@ public sealed class FederatedPeerHost : IAsyncDisposable
         foreach ((string key, string value) in environment)
             startInfo.Environment[key] = value;
 
+        // Its address and storage are the two things no inherited setting may decide.
         startInfo.Environment["ASPNETCORE_URLS"] = baseAddress;
         startInfo.Environment["Morgana__ConversationPersistence__StoragePath"] = storagePath;
 
+        // The installation that answers the consultations for the whole run.
         Process process = Process.Start(startInfo)
             ?? throw new InvalidOperationException("The second installation of the federation run could not be started.");
 
@@ -79,23 +73,25 @@ public sealed class FederatedPeerHost : IAsyncDisposable
         _ = process.StandardOutput.ReadToEndAsync();
         _ = process.StandardError.ReadToEndAsync();
 
+        // A consultation sent before the host answers would read as a federation failure.
         await WaitForHealthyAsync(process, baseAddress, startupTimeoutSeconds);
 
+        // The running installation, which the fixture stops at the end of the run.
         return new FederatedPeerHost(process, baseAddress, storagePath);
     }
 
-    /// <summary>Where the shipped host is deployed, recorded at build time by the harness project.</summary>
-    /// <remarks>
-    /// A child process needs the runtime configuration and dependency manifest generated in that
-    /// output, neither of which travels into this one. The example plugin is already deployed
-    /// there, which is the domain this installation has to serve.
-    /// </remarks>
+    /// <summary>
+    /// Where the shipped host is deployed, recorded at build time by the harness project.
+    /// A child process needs the runtime configuration and dependency manifest of that output, where the example plugin it serves is also deployed.
+    /// </summary>
     private static string ResolveEntryPoint()
     {
+        // The path the harness project wrote into this assembly when it built.
         string? entryPoint = Assembly.GetExecutingAssembly()
             .GetCustomAttributes<AssemblyMetadataAttribute>()
             .FirstOrDefault(metadata => metadata.Key == "MorganaWebEntryPoint")?.Value;
 
+        // A host that was not built cannot be started, so the run stops here with the path that was looked at.
         if (entryPoint is null || !File.Exists(entryPoint))
         {
             throw new InvalidOperationException(
@@ -103,17 +99,20 @@ public sealed class FederatedPeerHost : IAsyncDisposable
                 + "Build Morgana.Web in the same configuration as this suite.");
         }
 
+        // The host's own dll, which dotnet runs.
         return entryPoint;
     }
 
-    /// <summary>Polls until the second installation answers, or gives up on it.</summary>
+    /// <summary>Polls until the second installation answers, giving up on it once the budget is spent.</summary>
     /// <param name="process">The installation being waited for; one that has already exited is not waited out.</param>
     /// <param name="baseAddress">Where it was told to answer.</param>
     /// <param name="startupTimeoutSeconds">How long it is given.</param>
     private static async Task WaitForHealthyAsync(Process process, string baseAddress, int startupTimeoutSeconds)
     {
+        // The probe asks the health endpoint, which answers once the boot's checks have passed.
         using HttpClient httpClient = new HttpClient { BaseAddress = new Uri(baseAddress), Timeout = TimeSpan.FromSeconds(5) };
 
+        // The installation is waited for until the run's budget for its startup is spent.
         DateTime deadline = DateTime.UtcNow.AddSeconds(startupTimeoutSeconds);
         while (DateTime.UtcNow < deadline)
         {
@@ -128,6 +127,7 @@ public sealed class FederatedPeerHost : IAsyncDisposable
 
             try
             {
+                // A healthy answer means the boot passed its checks and the actor system runs.
                 using HttpResponseMessage response = await httpClient.GetAsync("/api/morgana/health");
                 if (response.IsSuccessStatusCode)
                     return;
@@ -141,9 +141,11 @@ public sealed class FederatedPeerHost : IAsyncDisposable
                 // A probe that outlived its own timeout; the next one decides.
             }
 
+            // The next probe follows after a short pause.
             await Task.Delay(250);
         }
 
+        // The budget is spent and nothing answered.
         throw new TimeoutException($"The second installation did not answer at {baseAddress} within {startupTimeoutSeconds}s.");
     }
 
@@ -152,6 +154,7 @@ public sealed class FederatedPeerHost : IAsyncDisposable
     {
         try
         {
+            // A running installation holds its port, so it is stopped with everything it started.
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
@@ -163,10 +166,12 @@ public sealed class FederatedPeerHost : IAsyncDisposable
             // Already gone, which is the state this was after anyway.
         }
 
+        // The handle is released once the process is gone.
         process.Dispose();
 
         try
         {
+            // The conversations it opened are throwaway, like the run's own storage.
             if (Directory.Exists(storagePath))
                 Directory.Delete(storagePath, recursive: true);
         }

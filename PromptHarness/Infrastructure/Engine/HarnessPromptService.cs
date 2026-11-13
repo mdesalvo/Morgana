@@ -6,10 +6,7 @@ using Morgana.AI.Interfaces;
 
 namespace PromptHarness.Infrastructure.Engine;
 
-/// <summary>
-/// Composes the judge's instructions from <c>harness.json</c> beneath the framework primer.
-/// </summary>
-/// <remarks>The file is matched by its name suffix, so the prose survives a rename of the assembly.</remarks>
+/// <summary>Composes the judge's instructions from <c>harness.json</c> beneath the framework primer.</summary>
 public sealed class HarnessPromptService
 {
     /// <summary>The <c>morgana.json</c> prompt whose policies the primer glosses.</summary>
@@ -27,27 +24,22 @@ public sealed class HarnessPromptService
     /// <summary>Morgana's own prompt from the embedded <c>morgana.json</c>, whose policies the judge's primer glosses.</summary>
     private readonly Lazy<Task<Records.Prompt>> morganaPrompt;
 
-    /// <summary>
-    /// Initializes the service over the resolver of Morgana's own prompt.
-    /// </summary>
+    /// <summary>Binds the service to the resolver of Morgana's own prompt.</summary>
     public HarnessPromptService(IPromptResolverService promptResolverService)
     {
+        // Resolved on the first judged turn and kept, so every judge of the run reads the same policies.
         morganaPrompt = new Lazy<Task<Records.Prompt>>(() => promptResolverService.ResolveAsync(MorganaPromptId));
     }
 
     /// <summary>Writes a placeholder name the way the texts of <c>harness.json</c> carry it, <c>((name))</c>.</summary>
     private static string Placeholder(string name) => $"(({name}))";
 
-    /// <summary>
-    /// Returns the prompt declared in <c>harness.json</c> under the given id.
-    /// </summary>
+    /// <summary>Returns the prompt declared in <c>harness.json</c> under the given id, throwing for an id the file does not declare.</summary>
     public Records.Prompt Resolve(string promptId) =>
         harnessPrompts.Value.FirstOrDefault(prompt => string.Equals(prompt.ID, promptId, StringComparison.OrdinalIgnoreCase))
         ?? throw new KeyNotFoundException($"Prompt '{promptId}' is not declared in harness.json.");
 
-    /// <summary>
-    /// Returns an injection of a harness prompt with its placeholders filled by the given values.
-    /// </summary>
+    /// <summary>Returns an injection of a harness prompt with its placeholders filled by the given values.</summary>
     public string ResolvePromptInjection(string promptId, string injectionName, params (string Placeholder, string Value)[] values)
     {
         // The injections of the prompt that was asked for: a prompt that declares none is an authoring defect and not an empty set.
@@ -59,9 +51,7 @@ public sealed class HarnessPromptService
         return Spliced(text, $"The {promptId} prompt in harness.json declares no '{injectionName}' injection.", values);
     }
 
-    /// <summary>
-    /// Fills the placeholders of an injection's text with the values of the call.
-    /// </summary>
+    /// <summary>Fills the placeholders of an injection's text with the values of the call.</summary>
     /// <param name="text">The injection as authored; empty when the prompt declares none.</param>
     /// <param name="absence">What the exception says when the text is empty.</param>
     /// <param name="values">Placeholder name to the value that it stands for.</param>
@@ -79,9 +69,7 @@ public sealed class HarnessPromptService
         return text;
     }
 
-    /// <summary>
-    /// Composes the judge's instructions: the framework primer then the judge's own target and instructions.
-    /// </summary>
+    /// <summary>Composes the judge's instructions: the framework primer then the judge's own target and instructions.</summary>
     public async Task<string> ComposeJudgeInstructionsAsync()
     {
         // The policies are read live from morgana.json, so the primer names exactly those that bind.
@@ -109,8 +97,8 @@ public sealed class HarnessPromptService
 
     /// <summary>
     /// States the policies already binding on every agent, each under the one line the primer gives it.
+    /// The names are <c>morgana.json</c>'s while each line is the primer's reading of the policy for the judge.
     /// </summary>
-    /// <remarks>The names are <c>morgana.json</c>'s while each line is the primer's reading of the policy for the judge.</remarks>
     private string BindingPolicies(Records.Prompt morgana)
     {
         // The policies that morgana.json binds on every agent.
@@ -145,6 +133,7 @@ public sealed class HarnessPromptService
 
     /// <summary>
     /// Reads <c>harness.json</c> out of this assembly.
+    /// The file is matched by its name suffix, so the prose survives a rename of the assembly.
     /// </summary>
     private static Records.Prompt[] LoadHarnessPrompts()
     {

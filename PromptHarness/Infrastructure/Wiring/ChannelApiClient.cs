@@ -13,8 +13,8 @@ using Morgana.Contracts;
 namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
-/// The REST API as a channel calls it, raw: status codes and bodies come back unread, so the deterministic
-/// groups assert exactly what a channel would receive. Conversations are seeded on record, never run.
+/// The REST API as a channel calls it, raw: status codes and bodies come back unread, so the deterministic groups assert exactly what a channel receives.
+/// Conversations are seeded on record, never run.
 /// </summary>
 /// <param name="fixture">The live host, whose storage, keys and address every call targets.</param>
 public sealed class ChannelApiClient(MorganaHostFixture fixture)
@@ -37,17 +37,18 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
                 new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey)), SecurityAlgorithms.HmacSha256)
         });
 
-    /// <summary>
-    /// Calls one endpoint for a conversation, with the body a channel would send there. A null token
-    /// sends no Authorization header at all.
-    /// </summary>
+    /// <summary>Calls one endpoint for a conversation with the body a channel would send there; a null token sends no Authorization header at all.</summary>
     public async Task<HttpResponseMessage> SendAsync(string method, string path, string conversationId, string? token)
     {
+        // A call carries the token it is given, so a gate is tested on exactly the credential the case names.
         using HttpClient httpClient = new HttpClient();
         if (token is not null)
             httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
+        // The path names the conversation where the route has a place for it.
         string address = $"{fixture.BaseAddress}{path.Replace("{id}", conversationId)}";
+
+        // A read carries no body.
         if (method == "GET")
             return await httpClient.GetAsync(address);
 
@@ -59,6 +60,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
             : path.EndsWith("/command", StringComparison.Ordinal) ? new { name = "compact" }
             : null;
 
+        // A post with no body is sent bare, as a channel ending or resuming a conversation sends it.
         return body is null
             ? await httpClient.PostAsync(address, content: null)
             : await httpClient.PostAsJsonAsync(address, body);
@@ -70,9 +72,11 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
     /// </summary>
     public async Task<HttpResponseMessage> PostJsonAsync(string path, string json, CancellationToken cancellationToken = default)
     {
+        // Always the harness channel's own token: these calls test what lies behind the authentication gate.
         using HttpClient httpClient = new HttpClient();
         httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", HarnessToken());
 
+        // The body goes out as written, never re-serialized.
         return await httpClient.PostAsync($"{fixture.BaseAddress}{path}", new StringContent(json, Encoding.UTF8, "application/json"), cancellationToken);
     }
 
@@ -81,18 +85,15 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
         PostJsonAsync($"/api/morgana/conversation/{routeConversationId}/command", json, cancellationToken);
 
     /// <summary>
-    /// Starts a conversation with a well-formed handshake as the harness channel. The callback points
-    /// nowhere on purpose: nothing here reads the presentation, whose delivery simply fails.
+    /// Starts a conversation with a well-formed handshake as the harness channel.
+    /// The callback points nowhere on purpose: nothing here reads the presentation, whose delivery simply fails.
     /// </summary>
     public Task<HttpResponseMessage> StartAsync(string conversationId) =>
         PostJsonAsync("/api/morgana/conversation/start",
             """{"conversationId":"{id}","channelMetadata":{"coordinates":{"channelName":"harness","deliveryMode":"webhook","callbackUrl":"http://127.0.0.1:1/hook"},"capabilities":{"supportsRichCards":true,"supportsQuickReplies":true,"supportsStreaming":true,"supportsMarkdown":true}}}"""
                 .Replace("{id}", conversationId));
 
-    /// <summary>
-    /// Puts a conversation on record without starting it, as a previous process would have left it: the
-    /// handshake written by the host's own persistence service, plus, when asked, the agent carrying it.
-    /// </summary>
+    /// <summary>Puts a conversation on record without starting it, as a previous process would have left it: its handshake and, when asked, the agent carrying it.</summary>
     /// <param name="activeAgent">Intent of the agent left mid-exchange; null when none is.</param>
     /// <param name="callbackUrl">
     /// Where Morgana delivers what it tells the user, for a test that reads it; null leaves the deliveries to
@@ -100,6 +101,7 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
     /// </param>
     public async Task SeedConversationOnRecordAsync(string conversationId, string? activeAgent, string? callbackUrl = null)
     {
+        // The handshake is written by the host's own persistence, so the host reads it as one it settled itself.
         SQLiteConversationPersistenceService persistenceService = HostPersistenceService();
 
         // A SignalR channel with nobody connected takes every push at once: whatever a command or a
@@ -113,9 +115,11 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
                 SupportsRichCards: true, SupportsQuickReplies: true, SupportsStreaming: true, SupportsMarkdown: true, MaxMessageLength: null)
         });
 
+        // A conversation Morgana is holding herself has no agent row.
         if (activeAgent is null)
             return;
 
+        // The agent's row is written straight into the conversation's database, since no call leaves an agent carrying a conversation without a turn.
         await using SqliteConnection connection = new SqliteConnection(
             $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.sqlite")}");
         await connection.OpenAsync();
@@ -133,15 +137,17 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
     }
 
     /// <summary>
-    /// Runs <paramref name="sql"/> on the conversation's own database, answering the first value it reads: how a
-    /// test puts a record in a state no call reaches, or reads one no endpoint reports.
+    /// Runs <paramref name="sql"/> on the conversation's own database, answering the first value it reads.
+    /// It is how a test puts a record in a state no call reaches or reads what no endpoint reports.
     /// </summary>
     public async Task<object?> QueryRecordAsync(string conversationId, string sql)
     {
+        // Unpooled, so the file is released the moment the query ends and the host meets no lingering connection.
         await using SqliteConnection connection = new SqliteConnection(
             $"Data Source={Path.Combine(fixture.StoragePath, $"morgana-{conversationId}.sqlite")};Pooling=False");
         await connection.OpenAsync();
         await using SqliteCommand command = connection.CreateCommand();
+        // The first column of the first row, null when the statement reads nothing.
         command.CommandText = sql;
         return await command.ExecuteScalarAsync();
     }

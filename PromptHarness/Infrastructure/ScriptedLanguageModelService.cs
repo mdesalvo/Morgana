@@ -19,10 +19,14 @@ public sealed class ScriptedLanguageModelService : ILanguageModelService
     }
 
     /// <summary>Scripts the guard's answer as the task it replies with.</summary>
-    private ScriptedLanguageModelService(Func<Task<string>> answer) => this.answer = answer;
+    private ScriptedLanguageModelService(Func<Task<string>> answer)
+        // Both public ways in end here, an immediate answer being a task already completed.
+        => this.answer = answer;
 
-    /// <summary>Scripts a guard whose answer arrives when the test releases it, so concurrent callers meet a judgment in progress.</summary>
-    /// <remarks>A factory rather than a public overload: a script that only throws would fit both shapes of answer.</remarks>
+    /// <summary>
+    /// Scripts a guard whose answer arrives when the test releases it, so concurrent callers meet a judgment in progress.
+    /// It is a factory rather than a public overload because a script that only throws would fit both shapes of answer.
+    /// </summary>
     public static ScriptedLanguageModelService AnsweringLater(Func<Task<string>> answer) => new ScriptedLanguageModelService(answer);
 
     /// <summary>The system prompt of the last call.</summary>

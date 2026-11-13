@@ -11,31 +11,11 @@ using Xunit;
 namespace PromptHarness.Infrastructure.Wiring;
 
 /// <summary>
-/// Boots the real Morgana host in-process on an ephemeral Kestrel port and keeps it alive for the
-/// whole test assembly.
+/// Boots the real Morgana host in-process on an ephemeral Kestrel port and keeps it alive for the whole test assembly.
+/// The suite talks to it only over HTTP, as a channel does, while living in its process lets it listen to spans and read the log with no collector.
+/// It republishes the configuration Morgana.Web resolves (appsettings and the shared user secrets) as environment variables, then overrides the storage,
+/// the exporters, the limits, the guards and a per-run key for the <c>harness</c> issuer that never touches disk.
 /// </summary>
-/// <remarks>
-/// <para><strong>Why in-process and yet black-box.</strong> The suite talks to Morgana only over
-/// HTTP — the same REST surface any channel uses, with the same JWT gate and the same webhook
-/// delivery path — so nothing about the pipeline is mocked or shortcut. Hosting it inside the test
-/// process buys two things a child process could not give: an <see cref="System.Diagnostics.ActivityListener"/>
-/// that reads <c>morgana.agent</c> spans with no exporter or collector in the loop and a tee on
-/// <c>Console.Out</c> that reads the tool log lines. Both are read-only observers.</para>
-///
-/// <para><strong>Configuration inheritance.</strong> The harness owns no <c>Morgana:</c>
-/// configuration of its own. It resolves the very same stack <c>Morgana.Web</c> resolves
-/// (<c>appsettings.json</c> + the shared user-secrets store, keyed by the <c>UserSecretsId</c> both
-/// projects declare) and then republishes every resolved <c>Morgana:</c> key to the host as an
-/// environment variable. Propagating explicitly — rather than trusting the host to re-resolve the
-/// same secrets — keeps the suite correct under every runner, including those whose entry assembly
-/// carries no <c>UserSecretsId</c> attribute of its own.</para>
-///
-/// <para><strong>What the harness overrides</strong> on top of that inherited configuration:
-/// a throwaway SQLite storage path, telemetry exporters off (the in-process listener needs none),
-/// rate and dust limiting off (they would throttle a repeated-run suite), the guard rails per
-/// <c>Harness:EnableUserGuardrail</c> and <c>Harness:EnablePeerGuardrail</c> plus a freshly-minted symmetric key for the <c>harness</c> issuer — so
-/// the channel's credentials live for the duration of one run and never touch disk.</para>
-/// </remarks>
 public sealed class MorganaHostFixture : IAsyncLifetime
 {
     /// <summary>Configuration resolved by the harness: the host's own appsettings plus the shared secrets store.</summary>
@@ -44,20 +24,16 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>Harness knobs from <c>appsettings.Harness.json</c>.</summary>
     public HarnessOptions Options { get; private set; } = null!;
 
-    /// <summary>Base address of the host under test, e.g. <c>http://127.0.0.1:43117</c>.</summary>
+    /// <summary>Base address of the host under test, such as <c>http://127.0.0.1:43117</c>.</summary>
     public string BaseAddress { get; private set; } = string.Empty;
 
     /// <summary>Symmetric key minted for this run and shared with the host as the <c>harness</c> issuer key.</summary>
     public string IssuerKey { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Partner this run declares, admitted to <see cref="ScopedPartnerAgent"/> and to no other agent,
-    /// so the scope half of the A2A gate has something to actually refuse.
+    /// The partner this run declares, admitted to <see cref="ScopedPartnerAgent"/> and to no other agent, so the scope half of the A2A gate has something to refuse.
+    /// It is declared per run rather than shipped, since a deployment carrying a partner nobody onboarded would be a worse default than the test is worth.
     /// </summary>
-    /// <remarks>
-    /// Declared per run rather than shipped: it exists to be turned away and a deployment carrying a
-    /// partner nobody onboarded would be a worse default than the test is worth.
-    /// </remarks>
     public const string ScopedPartnerName = "harness-peer";
 
     /// <summary>The one published agent <see cref="ScopedPartnerName"/> is admitted to.</summary>
@@ -67,37 +43,30 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public string ScopedPartnerKey { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Conversations <see cref="ScopedPartnerName"/> may open in an hour. Declared because the
-    /// instance under test demands a ceiling of every admitted partner, high enough never to be reached.
+    /// The conversations <see cref="ScopedPartnerName"/> may open in an hour, high enough never to be reached.
+    /// The instance under test demands a limit of every admitted partner, which is why one is declared at all.
     /// </summary>
     public const int ScopedPartnerConversationsPerHour = 100_000;
 
     /// <summary>
-    /// Position this run's partner takes in <c>Morgana:AgentToAgent:Partners</c>, past the last entry
-    /// the host's own configuration declares. Read by the group that boots a doomed host to break one
-    /// declaration at a time.
+    /// The position this run's partner takes in <c>Morgana:AgentToAgent:Partners</c>, past the last entry the host's own configuration declares.
+    /// The group booting a doomed host reads it to break one declaration at a time.
     /// </summary>
     public int ScopedPartnerIndex { get; private set; }
 
     /// <summary>
-    /// A second partner, admitted to the same agent but allowed to open exactly one conversation an
-    /// hour, so the ceiling can be observed doing something rather than merely being declared.
+    /// A second partner admitted to the same agent but allowed one conversation an hour, so the limit can be seen doing something.
+    /// The count is per issuer: meeting it on the partner every other group calls would turn every later consultation into a refusal.
     /// </summary>
-    /// <remarks>
-    /// Separate from <see cref="ScopedPartnerName"/> because the count is per issuer: a ceiling worth
-    /// testing has to be met; meeting it on the partner every other group calls would turn every
-    /// later consultation into a refusal.
-    /// </remarks>
     public const string MeteredPartnerName = "harness-peer-metered";
 
     /// <summary>Conversations <see cref="MeteredPartnerName"/> may open in an hour: the second is refused.</summary>
     public const int MeteredPartnerConversationsPerHour = 1;
 
-    /// <summary>What <see cref="MeteredPartnerName"/> reads when it has opened its one conversation.</summary>
-    /// <remarks>
-    /// Written on that partner's own entry, so a turned-away colleague is answered in this
-    /// deployment's voice rather than with a status code the asking model would narrate.
-    /// </remarks>
+    /// <summary>
+    /// What <see cref="MeteredPartnerName"/> reads once it has opened its one conversation, written on that partner's own entry.
+    /// A turned-away colleague is answered in this deployment's voice rather than with a status code the asking model would narrate.
+    /// </summary>
     public const string MeteredPartnerRefusal = "The nursery cannot take on further exchanges with you this hour.";
 
     /// <summary>Symmetric key minted for this run under <see cref="MeteredPartnerName"/>.</summary>
@@ -106,16 +75,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>Position <see cref="MeteredPartnerName"/> takes in <c>Morgana:AgentToAgent:Partners</c>.</summary>
     public int MeteredPartnerIndex { get; private set; }
 
-    /// <summary>
-    /// The first position in <c>Morgana:AgentToAgent:Partners</c> no declaration occupies, which the
-    /// group booting a doomed host writes its own broken entry into.
-    /// </summary>
+    /// <summary>The first position in <c>Morgana:AgentToAgent:Partners</c> no declaration occupies, where the doomed-host group writes its broken entry.</summary>
     public int FreePartnerIndex { get; private set; }
 
-    /// <summary>
-    /// The other installation of a federation run, as the instance under test knows it: the name its
-    /// one agent consults a colleague at, written on the attribute in that plugin's code.
-    /// </summary>
+    /// <summary>The other installation of a federation run as the instance under test knows it: the partner name written on its one agent's attribute.</summary>
     public const string FederatedPeerName = "annex";
 
     /// <summary>The name that installation knows this one by, which its gate expects in the token.</summary>
@@ -124,10 +87,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>The agent the other installation publishes and this one has no books for.</summary>
     public const string FederatedPeerAgent = "inventory";
 
-    /// <summary>The colleague as it appears in the asking agent's own tool list.</summary>
-    public const string FederatedPeerFunction = "consult_annex_inventory";
-
-    /// <summary>The other installation of this run, or <c>null</c> when the run stands none up.</summary>
+    /// <summary>The other installation of this run; <c>null</c> when the run stands none up.</summary>
     public FederatedPeerHost? Peer { get; private set; }
 
     /// <summary>Where the other installation answers, claimed before either host starts.</summary>
@@ -157,10 +117,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>Slot the federated relationship occupies, read from both ends of it.</summary>
     private int FederatedPartnerIndex { get; set; }
 
-    /// <summary>
-    /// Directory holding the per-conversation databases this run creates, read by the one assertion
-    /// that asks which conversation a request was served on rather than what came back from it.
-    /// </summary>
+    /// <summary>The directory of the per-conversation databases this run creates, read by the tests that look at the record itself.</summary>
     public string StoragePath => storagePath;
 
     /// <summary>Tee on the host's stdout; the turn observer reads tool log lines from it.</summary>
@@ -178,10 +135,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>Scenario engine bound to this host.</summary>
     public ScenarioRunner Runner { get; private set; } = null!;
 
-    /// <summary>
-    /// The judge <see cref="Runner"/> was built over, exposed for the one caller that judges a bare
-    /// <see cref="Morgana.Contracts.ChannelMessage"/> outside any scripted turn (Presentation).
-    /// </summary>
+    /// <summary>The judge <see cref="Runner"/> was built over, for the group that judges Morgana's presentation outside any scripted turn.</summary>
     public LLMJudge Judge { get; private set; } = null!;
 
     /// <summary>Logger factory handed to the judge's LLM client; deliberately silent.</summary>
@@ -208,17 +162,14 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         if (Options.CancellableModel && (Options.FederatedPeer || Options.PoisonedDomain))
             throw new InvalidOperationException("Harness:CancellableModel rewrites every tier and runs in an invocation of its own, apart from Harness:FederatedPeer and Harness:PoisonedDomain.");
 
-        // Step 2: mint per-run, disposable identity — a fresh JWT signing key (never written to
-        // disk) and a scratch directory for the SQLite databases this run's conversations create.
+        // Step 2: keys minted for this run alone and never written to disk, plus a scratch directory for the run's conversations.
         IssuerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         ScopedPartnerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         MeteredPartnerKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         storagePath = Path.Combine(Path.GetTempPath(), "morgana-harness", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(storagePath);
 
-        // Step 3: claim the port the host will bind to. Reserved up front (not left to Kestrel's
-        // own ":0" auto-pick) because the harness needs the number *before* starting the host, to
-        // build its own channel and health-check URLs against it.
+        // Step 3: the host's port is claimed before it starts, since the channel and the health probe are built on its address.
         int port = ReserveEphemeralPort();
         BaseAddress = $"http://127.0.0.1:{port}";
 
@@ -227,6 +178,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // without an address is refused at boot.
         if (Options.FederatedPeer)
         {
+            // The other installation's address and the one secret both installations share.
             federatedPeerPort = ReserveEphemeralPort();
             FederatedPeerAddress = $"http://127.0.0.1:{federatedPeerPort}";
             FederationKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
@@ -239,8 +191,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             CancellableModel = await CancellableModelHost.StartAsync(TimeSpan.FromSeconds(CancellableTurnSeconds + 2));
         }
 
-        // Step 4: publish the resolved configuration (plus the harness's own overrides) as
-        // environment variables, which is how the child host process picks it up.
+        // Step 4: the resolved configuration and the harness's overrides become environment variables, which is how the host reads them.
         ApplyHostEnvironment();
 
         // Step 4b: on a federation run, the other installation goes up first. It inherits everything
@@ -265,18 +216,15 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // console logger latches Console.Out once, when its provider is created.
         Output = HostOutputCapture.Install(Options.EchoHostOutput);
 
-        // The observer listens before the host boots: the startup examines the MCP servers' offers and
-        // a refusal there is counted once, at that moment, or never seen by a scenario asserting it.
+        // The observer listens before the host boots: a refusal of an MCP server's offer is counted once, at startup,
+        // so a listener started later would never see it.
         Observer = new TurnObserver(Output, Options.LogDrainMilliseconds);
 
-        // Step 5: launch the real Morgana.Web entry point on a background thread and block here
-        // until it answers its health endpoint (or fails fast — see WaitForHealthyAsync).
+        // Step 5: the real Morgana.Web entry point on a background thread, waited for until it answers its health endpoint or fails.
         StartHost();
-
         await WaitForHealthyAsync();
 
-        // Step 6: now that the host is up, wire the harness's own channel (a live webhook receiver
-        // + REST client) against it.
+        // Step 6: the harness's own channel against the running host, its webhook receiver listening before any conversation starts.
         Channel = new HarnessChannel(
             BaseAddress,
             IssuerKey,
@@ -284,9 +232,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             drainTrailingSideMessages: Options.DustBudgetPerConversation is not null);
         await Channel.StartAsync();
 
-        // Step 7: assemble the scenario engine last, since it depends on everything above —
-        // the channel to drive conversations, the observer to read signals and a judge built
-        // over the same LLM configuration the instance under test uses.
+        // Step 7: the scenario engine last, over the channel, the observer and a judge on the instance's own tiers, whose logging stays silent.
         judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
 
         // The judge's own calls are evidence of a failing run too, so its configuration records their content.
@@ -295,16 +241,18 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             .AddInMemoryCollection([new KeyValuePair<string, string?>("Morgana:OpenTelemetry:EnableSensitiveData", "true")])
             .Build();
         Judge = LLMJudge.Create(judgeConfiguration, judgeLoggerFactory);
+
         // The descriptor is read once so the scenario runner and the groups that write their own journey rows record the same models.
         LLMDescriptor = DescribeLlm();
+
+        // The engine every scenario group runs through.
         Runner = new ScenarioRunner(Channel, Observer, Judge, Options, LLMDescriptor);
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        // Tear down in reverse order of acquisition: stop accepting webhook callbacks first, then
-        // release the span/log listeners, then the judge's (otherwise silent) logger factory.
+        // Torn down in reverse order of acquisition: the webhook receiver first, then the listeners and the judge's logging.
         if (Channel is not null)
             await Channel.DisposeAsync();
 
@@ -332,6 +280,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // lifetime handle to signal from here. Only the throwaway databases are ours to clean up.
         try
         {
+            // The run's databases are throwaway.
             if (Directory.Exists(storagePath))
                 Directory.Delete(storagePath, recursive: true);
         }
@@ -342,30 +291,23 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Renders the provider and the model bound to each tier, e.g.
-    /// <c>Economy=Anthropic/claude-haiku-5-5, Efficiency=Anthropic/claude-sonnet-5-5, Performance=Anthropic/claude-opus-5-5</c>. Recorded in
-    /// every harness file: a token count is only comparable against the same models.
+    /// Renders the provider and the model bound to each tier, such as <c>Economy=Anthropic/claude-haiku-5-5</c>, recorded in every journey file.
+    /// A token count is only comparable against the same models.
     /// </summary>
     private string DescribeLlm()
     {
-        // Walk the three tiers and read the provider and the model bound to each — the same shape ScenarioRunner
-        // reports per-scenario cost against, so a harness row is always legible without cross-referencing appsettings.
+        // Each tier with its provider and model, so a journey row reads without the configuration beside it.
         IEnumerable<string> tiers = Configuration.GetSection("Morgana:LanguageModels:Tiers").GetChildren()
             .Select(tier => $"{tier.Key}={tier["Provider"] ?? "(unset)"}/{tier["Options:ModelId"] ?? "(unset)"}");
 
+        // The three tiers on one line.
         return string.Join(", ", tiers);
     }
 
-    /// <summary>
-    /// Resolves the same configuration stack the host resolves: its <c>appsettings.json</c> (linked
-    /// into this project's output), the harness knobs, the shared user-secrets store and the
-    /// environment.
-    /// </summary>
+    /// <summary>Resolves the configuration the host resolves: its <c>appsettings.json</c>, the harness knobs, the shared user secrets and the environment.</summary>
     private static IConfiguration BuildHarnessConfiguration()
-        // Layered in precedence order, each provider overriding the previous: the host's own
-        // appsettings.json (linked into this project's output by the .csproj), then the harness's
-        // own knobs, then the shared user-secrets store (the actual provider/keys/tiers), then
-        // whatever the environment already carries — so a CI runner's env vars still win last.
+        // Each layer overrides the one before: the host's appsettings linked into this output, the harness's knobs, the secrets
+        // holding the provider, keys and tiers, then the environment, so a CI runner's variables win last.
         => new ConfigurationBuilder()
             .SetBasePath(AppContext.BaseDirectory)
             .AddJsonFile("appsettings.json", optional: false)
@@ -374,19 +316,14 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             .AddEnvironmentVariables()
             .Build();
 
-    /// <summary>
-    /// Publishes the resolved configuration to the host process-wide, then layers the harness
-    /// overrides on top.
-    /// </summary>
+    /// <summary>Publishes the resolved configuration to the host process-wide, then layers the harness overrides on top.</summary>
     private void ApplyHostEnvironment()
     {
-        // Republish every resolved "Morgana:" key verbatim, translating IConfiguration's colon
-        // section separator into the double-underscore form the environment-variable configuration
-        // provider expects (ASP.NET Core's own convention). This is what makes the child host see
-        // the exact same provider/keys/tiers the harness itself resolved, without re-reading the
-        // secrets store a second time.
+        // Every resolved "Morgana:" key becomes an environment variable in the double-underscore form, so the host reads exactly the
+        // provider, keys and tiers the harness resolved, under any runner, without reading the secrets store again.
         foreach (KeyValuePair<string, string?> entry in Configuration.AsEnumerable())
         {
+            // A section heading carries no value; keys outside Morgana: are the harness's own.
             if (entry.Value is null || !entry.Key.StartsWith("Morgana:", StringComparison.Ordinal))
                 continue;
 
@@ -402,6 +339,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // default: naming it here is what lets a run that swaps the domain leave it out, since the
         // default directory is always scanned and every domain found there is merged into the installation.
         Environment.SetEnvironmentVariable("Morgana__Plugins__Directories__0", "domain-plugins");
+
+        // The two guards stay off unless a run asks for them, since every guarded turn or question costs one more model call.
         Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnableUserGuardrail", Options.EnableUserGuardrail ? "true" : "false");
         Environment.SetEnvironmentVariable("Morgana__ActorSystem__EnablePeerGuardrail", Options.EnablePeerGuardrail ? "true" : "false");
 
@@ -410,79 +349,64 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Morgana__OpenTelemetry__EnableSensitiveData", "true");
 
         // Unset by default: only RateLimitTests sets it, in its own filtered dotnet test invocation, so no
-        // other group's conversation is ever refused for calling too often
+        // other group's conversation is ever refused for calling too often.
         Environment.SetEnvironmentVariable("Morgana__RateLimiting__Enabled", Options.RateLimitPerMinute is null ? "false" : "true");
         if (Options.RateLimitPerMinute is { } rateLimitPerMinute)
             Environment.SetEnvironmentVariable("Morgana__RateLimiting__MaxMessagesPerMinute", rateLimitPerMinute.ToString(CultureInfo.InvariantCulture));
 
-        // Unset by default (see HarnessOptions.DustBudgetPerConversation's own remarks): only
-        // DustTests sets this, in its own filtered dotnet test invocation, so the rest of the suite
-        // always runs against a budget no scripted few-turn conversation could ever dent.
+        // Unset by default: only DustTests sets it, in its own invocation, so every other group runs with no dust limit at all.
         if (Options.DustBudgetPerConversation is { } dustBudget)
         {
+            // The ledger on, with the small budget the dust group crosses in a few turns.
             Environment.SetEnvironmentVariable("Morgana__DustLimiting__Enabled", "true");
             Environment.SetEnvironmentVariable("Morgana__DustLimiting__BudgetPerConversation", dustBudget.ToString(CultureInfo.InvariantCulture));
         }
         else
         {
+            // No ledger, so no conversation of a repeated suite is ever locked out.
             Environment.SetEnvironmentVariable("Morgana__DustLimiting__Enabled", "false");
         }
 
-        // Examples' InventoryTool reads this to pin the order seal word to a known constant instead
-        // of a fresh random one — see GenerateSealWord's and HarnessOptions.DeterministicSealWord's
-        // own remarks. Without it, a scripted scenario could never recite the seal word back in its
-        // second turn, since nothing in the harness DSL can capture a value the model invents
-        // mid-run and reuse it in a later turn's fixed text.
+        // The example plugin's InventoryTool reads this to pin the order's seal word, which a scripted scenario must recite back
+        // in a later turn since no scenario can carry a value the model invents into a later say:.
         Environment.SetEnvironmentVariable("Harness__DeterministicSealWord", Options.DeterministicSealWord);
 
-        // Unset by default (see HarnessOptions.SummarizationThreshold's own remarks): only
-        // SummarizationTests sets these, in its own filtered dotnet test invocation, so the rest of
-        // the suite always runs against the inherited, unmodified reducer configuration.
+        // Unset by default: only SummarizationTests sets these, in its own invocation, so every other group runs on the inherited reducer.
         if (Options.SummarizationThreshold is { } summarizationThreshold)
             Environment.SetEnvironmentVariable("Morgana__HistoryReducer__SummarizationThreshold", summarizationThreshold.ToString(CultureInfo.InvariantCulture));
         if (Options.SummarizationTargetCount is { } summarizationTargetCount)
             Environment.SetEnvironmentVariable("Morgana__HistoryReducer__SummarizationTargetCount", summarizationTargetCount.ToString(CultureInfo.InvariantCulture));
 
-        // Telemetry stays on as an ActivitySource — the in-process listener is what reads it — but
-        // no exporter is wanted: OTLP would spam a collector that may not be listening. The
-        // exporter list is variable-length, so every configured entry is walked and switched off
-        // by its own index rather than assuming how many there are.
+        // The spans stay on for the in-process listener, while every configured exporter is switched off by its own index:
+        // an OTLP exporter would flood a collector that may not be listening.
         int exporterIndex = 0;
         foreach (IConfigurationSection _ in Configuration.GetSection("Morgana:OpenTelemetry:Exporters").GetChildren())
             Environment.SetEnvironmentVariable($"Morgana__OpenTelemetry__Exporters__{exporterIndex++}__Enabled", "false");
 
-        // The harness channel is declared here and nowhere else, appended past the last issuer the
-        // host's own appsettings holds: an instrument's identity is not something a deployed
-        // installation should carry, while a name plus a per-run key is all the admission needs. The
-        // key is minted for this run alone, so these credentials are never durable enough to leak.
-        // The ring this host's own agents sign under is coined at startup and configured nowhere,
-        // so it is not written here.
+        // The harness channel is declared here alone, past the last issuer of the host's appsettings, with a key minted for this run:
+        // a deployed installation never carries the instrument's identity. The ring of the host's own agents is coined at startup
+        // and configured nowhere, so it is not written here.
         int harnessIssuerIndex = Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren().Count();
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{harnessIssuerIndex}__Name", HarnessChannel.IssuerName);
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{harnessIssuerIndex}__SymmetricKey", IssuerKey);
 
-        // One partner appended past the last index the host's own appsettings uses: admitted to a
-        // single agent, which is the only way the scope half of the A2A gate can be observed at all —
-        // refusing an unauthenticated call proves the door is shut, not that it is shut selectively.
-        // Its key, its reach and its ceiling are one entry, so there is no second half to forget.
+        // One partner past the last index of the host's appsettings, admitted to a single agent: refusing an unauthenticated call proves
+        // the door is shut, while this proves it is shut selectively. Its key, its reach and its limit are one entry.
         ScopedPartnerIndex = Configuration.GetSection("Morgana:AgentToAgent:Partners").GetChildren().Count();
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__Name", ScopedPartnerName);
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__SymmetricKey", ScopedPartnerKey);
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__Enabled", "true");
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__OnAgents__0", ScopedPartnerAgent);
 
-        // How many conversations this partner may open in an hour, which the instance under test
-        // demands of every admitted partner. Far above anything a scripted suite could reach: the
-        // ceiling exists here to satisfy a declaration, never to be met.
+        // The limit every admitted partner must declare, far above anything a scripted suite reaches: it satisfies the declaration and is never met.
         Environment.SetEnvironmentVariable(
             $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__Enabled", "true");
         Environment.SetEnvironmentVariable(
             $"Morgana__AgentToAgent__Partners__{ScopedPartnerIndex}__InboundPolicy__RateLimiting__MaxConversationsPerHour",
             ScopedPartnerConversationsPerHour.ToString(CultureInfo.InvariantCulture));
 
-        // The same admission with a ceiling that can actually be met, with the sentence this deployment
-        // turns a partner away with. One conversation an hour is the smallest bound that still lets the
-        // first exchange be served, which is what makes the second one's refusal mean something.
+        // The same admission with a limit that can be met and the sentence a turned-away partner reads: one conversation an hour lets
+        // the first exchange be served, which makes the second one's refusal mean something.
         MeteredPartnerIndex = ScopedPartnerIndex + 1;
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__Name", MeteredPartnerName);
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{MeteredPartnerIndex}__SymmetricKey", MeteredPartnerKey);
@@ -520,9 +444,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Logging__LogLevel__Morgana", Options.HostLogLevel);
     }
 
-    /// <summary>
-    /// Points the three tiers at the fake model and sets the turn budget, the guards and the dust ledger that the cancellation group measures.
-    /// </summary>
+    /// <summary>Points the three tiers at the fake model and sets the turn budget, the guards and the dust ledger that the cancellation group measures.</summary>
     private void ApplyCancellableModelEnvironment()
     {
         // Every tier answers from the fake model, whichever provider the inherited configuration names.
@@ -550,47 +472,38 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         Environment.SetEnvironmentVariable("Morgana__DustLimiting__BudgetPerConversation", "1000000");
     }
 
-    /// <summary>
-    /// Asks the OS for a free TCP port by binding and immediately releasing it. Kestrel could pick
-    /// its own with <c>:0</c>, but the harness needs the number up front to address the host.
-    /// </summary>
+    /// <summary>Asks the system for a free TCP port by binding and releasing it, since the harness needs the number before the host binds it.</summary>
     private static int ReserveEphemeralPort()
     {
-        // Binding to port 0 asks the OS kernel to allocate the next free ephemeral port; reading it
-        // back from LocalEndpoint and immediately stopping the listener frees it again for Kestrel
-        // to bind moments later — a brief, practically-safe race, not a true reservation.
+        // The port is freed again for Kestrel to bind moments later: a brief race, safe in practice, rather than a true reservation.
         TcpListener listener = new TcpListener(IPAddress.Loopback, 0);
         listener.Start();
         int port = ((IPEndPoint)listener.LocalEndpoint).Port;
         listener.Stop();
 
+        // The number the host and the channel are built on.
         return port;
     }
 
     /// <summary>
-    /// Invokes <c>Morgana.Web</c>'s entry point on a background thread. The content root is this
-    /// project's output directory, which holds both the linked <c>appsettings.json</c> and the
-    /// <c>plugins/</c> folder the plugin loader scans.
+    /// Invokes <c>Morgana.Web</c>'s entry point on a background thread.
+    /// The content root is this project's output, which holds the linked <c>appsettings.json</c> and the plugin directories the loader scans.
     /// </summary>
     private void StartHost()
     {
-        // typeof(Program) resolves against whichever assembly the compiler sees a global-namespace
-        // "Program" type in first; the guard right below exists precisely because that resolution
-        // is implicit, not because this line itself can fail.
+        // The assembly of the global-namespace Program the compiler resolved, which must be Morgana.Web's.
         Assembly hostAssembly = typeof(Program).Assembly;
 
-        // Program is a global-namespace type, so a same-named type appearing in this assembly would
-        // silently win the lookup and we would end up re-entering the test runner's own entry point.
+        // A same-named type in this assembly would win the lookup silently and the harness would re-enter the test runner's own entry point.
         if (hostAssembly.GetName().Name != "Morgana.Web")
             throw new InvalidOperationException(
                 $"Expected the global Program type to come from Morgana.Web, but it came from {hostAssembly.GetName().Name}.");
 
+        // The host's Main, invoked directly.
         MethodInfo entryPoint = hostAssembly.EntryPoint
             ?? throw new InvalidOperationException("Morgana.Web exposes no entry point.");
 
-        // Reconstruct the same command-line arguments `dotnet run` would pass, since the entry
-        // point is being invoked directly rather than through a process boundary that would
-        // otherwise supply them.
+        // The arguments a launch would have passed, since no process boundary supplies them here.
         string[] arguments =
         [
             "--urls", BaseAddress,
@@ -604,28 +517,23 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             "--applicationName", hostAssembly.GetName().Name!
         ];
 
-        // The host must run on its own thread: InitializeAsync needs to return control so the test
-        // process can poll the health endpoint and top-level Main here would otherwise block
-        // until Kestrel shuts down (i.e. never, until the whole process exits).
+        // The host runs on its own thread, since its Main blocks until Kestrel stops and InitializeAsync must go on to probe its health.
         Thread hostThread = new Thread(() =>
         {
             try
             {
-                // Top-level statements with a top-level await compile to an async entry point, so
-                // Invoke hands back a Task: awaiting it is the only way a startup failure surfaces
-                // here instead of vanishing on a thread nobody joins.
+                // The entry point is asynchronous: waiting on its task is how a startup failure surfaces instead of vanishing on a thread nobody joins.
                 if (entryPoint.Invoke(null, [arguments]) is Task hostTask)
                     hostTask.GetAwaiter().GetResult();
             }
             catch (TargetInvocationException ex)
             {
-                // Reflection wraps whatever the invoked method threw; unwrap it so
-                // WaitForHealthyAsync reports the host's real startup error, not a generic
-                // "invocation failed" wrapper with the useful part buried in InnerException.
+                // The host's own startup error, unwrapped, is what WaitForHealthyAsync reports.
                 hostFailure = ex.InnerException ?? ex;
             }
             catch (Exception ex)
             {
+                // A failure thrown through the task arrives unwrapped.
                 hostFailure = ex;
             }
         })
@@ -634,6 +542,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             Name = "morgana-harness-host"
         };
 
+        // A background thread, so the host never keeps the test process alive after the run.
         hostThread.Start();
     }
 
@@ -643,21 +552,19 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <exception cref="InvalidOperationException">Thrown when the host failed to start, with its own startup error as the inner exception.</exception>
     private async Task WaitForHealthyAsync()
     {
+        // A probe that answers or fails within seconds, so a slow boot is retried rather than waited on.
         using HttpClient httpClient = new HttpClient();
         httpClient.BaseAddress = new Uri(BaseAddress);
         httpClient.Timeout = TimeSpan.FromSeconds(5);
 
+        // What the last probe saw, reported if the budget runs out.
         string lastProbe = "never answered";
 
-        // Poll on a fixed cadence until either the host answers or the configured startup budget
-        // runs out — Kestrel's own startup (plugin scan, agent registry, LLM tier validation) has
-        // no synchronous "ready" signal this process can await directly.
+        // The boot (plugin scan, registry, tier checks) offers no ready signal, so the probe repeats until the budget runs out.
         DateTime deadline = DateTime.UtcNow.AddSeconds(Options.StartupTimeoutSeconds);
         while (DateTime.UtcNow < deadline)
         {
-            // Checked every iteration, not just once: the host can crash after already having
-            // answered a transient probe failure and a fail-fast startup error is worth surfacing
-            // immediately rather than waiting out the rest of the timeout for nothing.
+            // A boot that refused is reported at once, with its own error, rather than after the rest of the budget.
             if (hostFailure is not null)
                 throw new InvalidOperationException(
                     "Morgana failed to start. Startup validation is fail-fast: check the LLM provider, its Tiers map and " +
@@ -665,62 +572,57 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
             try
             {
+                // A healthy answer ends the wait: the actor system runs and the controllers are mapped.
                 using HttpResponseMessage response = await httpClient.GetAsync("/api/morgana/health");
                 if (response.IsSuccessStatusCode)
                     return;
 
-                // Not a success but not an exception either — the host is up and answering, just
-                // not yet healthy (e.g. still validating startup). Keep the response body around so
-                // a timeout, if it comes to that, shows the last thing the host actually said.
+                // Up but not healthy: the answer is kept so a timeout shows the last thing the host said.
                 lastProbe = $"HTTP {(int)response.StatusCode} — {await response.Content.ReadAsStringAsync()}";
             }
             catch (HttpRequestException ex)
             {
-                // Expected during the window before Kestrel has bound the port at all — connection
-                // refused, not a real failure yet.
+                // The window before Kestrel has bound the port, which is no failure yet.
                 lastProbe = $"{ex.GetType().Name}: {ex.Message}";
             }
             catch (TaskCanceledException)
             {
+                // A probe that outlived its own timeout; the next one decides.
                 lastProbe = "request timed out";
             }
 
+            // The next probe follows after a short pause.
             await Task.Delay(250);
         }
 
+        // The budget is spent: the last probe and the host's own output say why.
         throw new TimeoutException(
             $"Morgana did not become healthy within {Options.StartupTimeoutSeconds}s at {BaseAddress}. " +
             $"Last probe: {lastProbe}.{FormatHostOutput()}");
     }
 
     /// <summary>
-    /// Tail of the captured host output, appended to startup failures. Without it the host's own
-    /// diagnosis is invisible: the tee swallows stdout by design, so a startup error would otherwise
-    /// surface as a bare timeout.
+    /// The tail of the captured host output, appended to startup failures.
+    /// The capture swallows the host's stdout, so without it a startup error would surface as a bare timeout.
     /// </summary>
     private string FormatHostOutput()
     {
-        // Since(0) reads the tee's entire buffer from the start of this run — not a per-turn
-        // window like the observer uses — because a startup failure has no turn to scope it to.
+        // The whole capture from the run's start, since a startup failure has no turn to scope it to.
         IReadOnlyList<string> lines = Output.Since(0);
+
+        // Nothing at all means the entry point probably never ran.
         if (lines.Count == 0)
             return "\n\nThe host produced no output at all — its entry point may never have run.";
 
-        // Capped at the last 60 lines: enough to see the actual startup error without dumping an
-        // entire noisy boot sequence into every timeout message.
+        // The last 60 lines show the startup error without the whole boot in every message.
         return $"\n\n--- host output (last {Math.Min(lines.Count, 60)} of {lines.Count} lines) ---\n"
              + string.Join("\n", lines.TakeLast(60));
     }
 
     /// <summary>
     /// Tells the instance under test that it holds one agent of its own and one colleague abroad.
+    /// The domain is replaced rather than added to: an agent answering from its own greenhouse would prove nothing about a colleague across the wire.
     /// </summary>
-    /// <remarks>
-    /// The domain is <em>replaced</em> rather than added to: loading the shipped one beside it would
-    /// give this instance a greenhouse of its own. An agent that can answer from its own books
-    /// proves nothing about a colleague across the wire. What is left is one agent whose only
-    /// competence is having that colleague.
-    /// </remarks>
     private void ApplyFederationEnvironment()
     {
         // The one domain this instance holds on this run, in place of the shipped one. Replaced and
@@ -732,6 +634,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // was told to answer and the issuer is the name that installation filed this one under —
         // which no card can carry, being the name of one caller among however many it has.
         FederatedPartnerIndex = FreePartnerIndex;
+
+        // The partner's whole entry: who it is, where it answers, the shared key and the outbound direction this instance calls it on.
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__Name", FederatedPeerName);
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__Url", FederatedPeerAddress);
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{FederatedPartnerIndex}__SymmetricKey", FederationKey);
@@ -751,11 +655,8 @@ public sealed class MorganaHostFixture : IAsyncLifetime
 
     /// <summary>
     /// Tells the instance under test that it holds one agent of its own and two partners that answer with an attempt at hijacking.
+    /// The domain is replaced as federation replaces it: the one agent must be the only one that can answer, so what it does with each source is all there is to see.
     /// </summary>
-    /// <remarks>
-    /// The domain is <em>replaced</em> rather than added to, for the reason federation replaces it: the
-    /// one agent must be the only one that can answer, so what it does with each source is all there is to see.
-    /// </remarks>
     private void ApplyPoisonedDomainEnvironment()
     {
         // The one domain this instance holds on this run, in place of the shipped one.
@@ -765,12 +666,16 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // carries a key of its own, since they are two installations as far as this one can tell.
         int hedgerowPartnerIndex = FreePartnerIndex;
         int quincePartnerIndex = FreePartnerIndex + 1;
+
+        // The hedging nursery, whose answers try to harvest the customer's details.
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__Name", PoisonedSourceHost.HedgerowPartnerName);
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__Url", PoisonedSourceHost.SourcesAddress);
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__SymmetricKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__Enabled", "true");
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__OutboundPolicy__Enabled", "true");
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{hedgerowPartnerIndex}__OutboundPolicy__Issuer", PoisonedCallerName);
+
+        // The fruit orchard, whose card asks for the customer's card number and is refused at startup.
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{quincePartnerIndex}__Name", PoisonedSourceHost.QuincePartnerName);
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{quincePartnerIndex}__Url", PoisonedSourceHost.SourcesAddress);
         Environment.SetEnvironmentVariable($"Morgana__AgentToAgent__Partners__{quincePartnerIndex}__SymmetricKey", Convert.ToBase64String(RandomNumberGenerator.GetBytes(32)));
@@ -788,14 +693,9 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     }
 
     /// <summary>
-    /// Tells the other installation who it is: the shipped domain with one partner admitted to the
-    /// agent this instance has no books for.
+    /// Tells the other installation who it is: the shipped domain with one partner admitted to the agent this instance has no books for.
+    /// Everything else it inherits from the environment just published, so the two are two configurations of one deployment.
     /// </summary>
-    /// <remarks>
-    /// Everything else it needs — provider, tiers, keys, the switches this suite turns off — it
-    /// inherits from the environment published a moment ago, which is what keeps the two
-    /// installations two configurations of one deployment rather than two deployments.
-    /// </remarks>
     private Dictionary<string, string> BuildFederatedPeerEnvironment()
         => new Dictionary<string, string>
         {
