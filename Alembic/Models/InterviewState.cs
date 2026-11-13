@@ -146,7 +146,7 @@ public sealed class InterviewState
     public string? PendingQuoted { get; set; }
 
     /// <summary>
-    /// Words offered for the agent's voice, picked several at a time, and the ones Alembic is about to offer.
+    /// Words offered for the agent's voice, picked several at a time; the pending list holds the ones Alembic is about to offer.
     /// Nobody has a ready sentence about how their staff should sound, so the client recognises words instead of dictating them.
     /// </summary>
     public IReadOnlyList<string> Traits { get; set; } = [];
@@ -183,7 +183,7 @@ public sealed class InterviewState
                 return true;
         }
 
-        // Only inside longer words, or not at all.
+        // Only inside longer words if at all.
         return false;
     }
 

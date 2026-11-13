@@ -174,8 +174,8 @@
 
     /// <summary>
     /// Whether the client touched the cloud this question.
+    /// Words lit only because the voice carries them must not travel beside a sentence like "less formal".
     /// </summary>
-    // Words lit only because the voice carries them must not travel beside a sentence like "less formal".
     private bool touched;
 
     /// <summary>
@@ -199,18 +199,18 @@
     private string Said => string.Join(" ", new[] { answer.Trim(), Voice(answer.Trim()) }
         .Where(part => part.Length > 0));
 
-    /// <summary>
-    /// What the cloud adds to the answer. Nothing when it is not the client speaking.
-    /// </summary>
+    /// <summary>What the cloud adds to the answer; nothing when it is not the client speaking.</summary>
     private string Voice(string typed)
     {
         // A sentence typed beside an untouched cloud is the client's whole answer.
         if (!touched && typed.Length > 0)
             return string.Empty;
 
+        // Words held lit are the client's choice of voice, said in their first person.
         if (picked.Count > 0)
             return $"The voice I would want here: {string.Join(", ", picked)}.";
 
+        // A cloud the client emptied on purpose says none of the words fits; an untouched empty one says nothing.
         return touched ? "None of those words is the voice I want." : string.Empty;
     }
 
@@ -224,9 +224,11 @@
     /// </summary>
     protected override void OnParametersSet()
     {
+        // A failed turn gives the client their answer back rather than asking them to type it again.
         if (Error is not null && answer.Length == 0 && sent.Length > 0)
             answer = sent;
 
+        // The same question still standing: the box keeps what the client wrote.
         if (Turn == primedOn)
         {
             // A turn can bring an example and leave the question standing: the box takes it unless the client wrote there.
@@ -237,12 +239,14 @@
             return;
         }
 
+        // A new question: the box opens on its example and the cloud on the voice the agent already has.
         primedOn = Turn;
         primedWith = Prompting;
         answer = Prompting;
         touched = false;
         picked.Clear();
 
+        // The words the Personality already carries start lit, so the client is not asked to say them again.
         foreach (string trait in Taken ?? [])
             picked.Add(trait);
     }
@@ -252,6 +256,7 @@
     /// </summary>
     private void RestoreIfEmptied()
     {
+        // An empty box would teach nothing about length or register, which is what the example is there for.
         if (string.IsNullOrEmpty(answer) && !string.IsNullOrEmpty(Prompting))
             answer = Prompting;
     }
@@ -261,8 +266,10 @@
     /// </summary>
     private void Toggle(string trait)
     {
+        // From the first touch the cloud is the client speaking.
         touched = true;
 
+        // A lit word goes dark and a dark one lights.
         if (!picked.Remove(trait))
             picked.Add(trait);
     }
@@ -272,13 +279,16 @@
     /// </summary>
     private async Task SendAsync()
     {
+        // What travels: the typed words and what the cloud says, as one answer.
         string said = Said;
 
+        // Kept for a turn that fails, then the box and the cloud are cleared for the next question.
         sent = said;
         answer = string.Empty;
         touched = false;
         picked.Clear();
 
+        // The shell sends it as the client's turn.
         await OnAnswer.InvokeAsync(said);
     }
 }

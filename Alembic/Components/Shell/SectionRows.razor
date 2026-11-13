@@ -64,7 +64,7 @@
     /// The agent whose sections are shown.
     /// </summary>
     [Parameter, EditorRequired]
-    public AgentDraft Agent { get; set; } = default!;
+    public required AgentDraft Agent { get; set; }
 
     /// <summary>
     /// Which section rails to show, all six by default.

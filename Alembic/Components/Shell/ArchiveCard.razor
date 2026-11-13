@@ -291,7 +291,7 @@
     /// The domain being packaged; the code facts land on it as they are typed.
     /// </summary>
     [Parameter, EditorRequired]
-    public DomainDraft Draft { get; set; } = default!;
+    public required DomainDraft Draft { get; set; }
 
     /// <summary>
     /// Taking the work away.
@@ -418,29 +418,33 @@
 
     /// <summary>
     /// Fills every missing class name from the agent's name and reads back the stated code facts.
+    /// A proposal stands in the box itself, where the client reads it before it can land in their code.
     /// </summary>
-    // Proposed in the box itself, where the client reads it before it can land in their code.
     protected override void OnInitialized()
     {
+        // Every agent of the domain, written or imported, gets its code facts ready to edit.
         foreach (AgentDraft agent in Draft.Agents)
         {
+            // An agent class is always emitted, so a blank one is proposed from the intent.
             if (string.IsNullOrWhiteSpace(agent.Code.AgentClassName))
                 agent.Code.AgentClassName = AgentCodeFacts.ProposeClassName(agent.ID, "Agent");
 
+            // A tool class exists only for an agent with tools of its own.
             if (agent.Tools.Count > 0 && string.IsNullOrWhiteSpace(agent.Code.ToolClassName))
                 agent.Code.ToolClassName = AgentCodeFacts.ProposeClassName(agent.ID, "Tool");
 
+            // Shown in a box the client can change, a proposal becomes their statement once this page has it.
             agent.Code.Inferred = false;
 
+            // One editable row per server the agent already declares.
             mcp[agent] = [.. agent.Code.MCPServers.Select(url => new McpRow { Url = url })];
         }
 
+        // One namespace for the whole archive, taken from the first agent that states one.
         rootNamespace = Draft.Agents.Select(agent => agent.Code.Namespace).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty;
     }
 
-    /// <summary>
-    /// An agent's MCP rows.
-    /// </summary>
+    /// <summary>An agent's MCP rows, created empty for an agent the page has not met yet.</summary>
     private List<McpRow> McpRows(AgentDraft agent) =>
         mcp.TryGetValue(agent, out List<McpRow>? rows) ? rows : mcp[agent] = [];
 
@@ -451,13 +455,16 @@
     {
         get
         {
+            // A blank namespace is an error only once distilling was refused, so an untouched page does not shout.
             if (string.IsNullOrWhiteSpace(rootNamespace))
                 return touched ? "Required" : null;
 
+            // Every dotted segment becomes part of the generated code's namespace declaration.
             foreach (string part in rootNamespace.Trim().Split('.'))
                 if (!IsIdentifier(part))
                     return $"\"{part}\" cannot be a segment of a C# namespace.";
 
+            // Every segment compiles.
             return null;
         }
     }
@@ -493,12 +500,13 @@
                                || agent.Code.Tier is null
                                || McpRows(agent).Any(row => !IsAbsoluteHttpUri(row.Url)));
 
-    /// <summary>
-    /// Discards an archive built against facts that have just changed.
-    /// </summary>
+    /// <summary>Discards an archive built against facts that have just changed.</summary>
     private async Task InvalidateAsync()
     {
+        // An archive whose code facts changed would download code the screen no longer shows.
         package = null;
+
+        // The shell saves the changed facts with the rest of the domain.
         await OnChanged.InvokeAsync();
     }
 
@@ -512,6 +520,7 @@
     /// </summary>
     private async Task RemoveMcpAsync(AgentDraft agent, McpRow row)
     {
+        // The row goes from the screen and the agent's declaration follows it.
         McpRows(agent).Remove(row);
         await SyncMcpAsync(agent);
     }
@@ -521,18 +530,22 @@
     /// </summary>
     private async Task TryMcpAsync(McpRow row)
     {
+        // The row shows a try in flight against this address, with the previous outcome cleared.
         row.Trying = true;
         row.TriedUrl = row.Url;
         row.ToolCount = null;
         row.Failure = null;
 
+        // A server that does not answer within ten seconds is reported as such rather than left spinning.
         using CancellationTokenSource timeout = new(TimeSpan.FromSeconds(10));
 
         try
         {
+            // The handshake and the listing Morgana itself would perform, so a success here is one the deployment will repeat.
             await using Morgana.AI.Services.MCPClient client = await Morgana.AI.Services.MCPClient.ConnectAsync(
                 new Morgana.AI.Attributes.UsesMCPServerAttribute(row.Url.Trim()), Logger, timeout.Token);
 
+            // The count is all the row shows: what the agent would be handed by this server today.
             row.ToolCount = (await client.DiscoverToolsAsync(timeout.Token)).Count;
         }
         catch (Exception failure)
@@ -540,13 +553,16 @@
             // An unreachable server is an outcome to show: a server down today may be up tomorrow and nothing is blocked.
             Exception innermost = failure;
 
+            // The innermost exception names the actual cause, a refused connection or an unknown host, where the outer ones wrap it.
             while (innermost.InnerException is { } inner)
                 innermost = inner;
 
+            // A timeout is said in words the client can act on rather than as a cancellation.
             row.Failure = timeout.IsCancellationRequested ? "no answer within 10 seconds" : innermost.Message;
         }
         finally
         {
+            // The row stops spinning whatever the outcome.
             row.Trying = false;
         }
     }
@@ -556,6 +572,7 @@
     /// </summary>
     private async Task SyncMcpAsync(AgentDraft agent)
     {
+        // The declaration is what the generated agent class emits, one attribute per address.
         agent.Code.MCPServers = [.. McpRows(agent).Select(row => row.Url.Trim())];
         await InvalidateAsync();
     }
@@ -565,22 +582,27 @@
     /// </summary>
     private async Task FinalizeAsync()
     {
+        // From here on a blank fact shows as an error, since the client has asked for the archive.
         touched = true;
 
+        // Code the client cannot compile is never distilled.
         if (HasHoles)
         {
             await OnNotify.InvokeAsync(new Notice("Namespace, tier, class names and MCP servers must be completed before distilling.", NoticeKind.Warning));
             return;
         }
 
+        // The errors Morgana would refuse the domain for at startup.
         int errors = DraftValidationService.Validate(Draft).Count(finding => finding.Severity == FindingSeverity.Error);
 
+        // A domain that would not start is never packaged: the client is sent to Validation.
         if (errors > 0)
         {
             await OnNotify.InvokeAsync(new Notice($"{errors} {(errors == 1 ? "error stops" : "errors stop")} this domain from starting: see Validation.", NoticeKind.Failure));
             return;
         }
 
+        // Every fact present and the domain sound: the archive is built.
         await BuildAsync();
     }
 
@@ -589,6 +611,7 @@
     /// </summary>
     private async Task AgainAsync()
     {
+        // The previous archive is dropped first, so a failed rebuild cannot leave it downloadable.
         package = null;
         await BuildAsync();
     }
@@ -598,6 +621,7 @@
     /// </summary>
     private async Task BuildAsync()
     {
+        // The distillation starts from an empty log over a fresh plan, cancellable from Stop and redrawn by its heartbeat.
         running = true;
         written.Clear();
         plan.Clear();
@@ -608,22 +632,27 @@
 
         try
         {
+            // The namespace typed once is every agent's, which the emitter reads per agent.
             foreach (AgentDraft agent in Draft.Agents)
                 agent.Code.Namespace = rootNamespace.Trim();
 
+            // The shell saves the namespace with the rest of the domain.
             await OnChanged.InvokeAsync();
 
             // State only: drawing is the heartbeat's, so no interop outlives the circuit from here.
             Progress<string> progress = new Progress<string>(path =>
             {
+                // Every path joins the log, whether or not it closes a step.
                 written.Add(path);
 
+                // A file that belongs to no step, such as a second file of the same class, moves nothing.
                 if (MatchStep(path) is not { } step)
                     return;
 
                 Step? before = InProgress;
                 step.Done = true;
 
+                // The clock restarts only when the step in hand changed, so the elapsed time is the new step's.
                 if (!ReferenceEquals(InProgress, before))
                     stepEnteredAt = DateTime.UtcNow;
             });
@@ -633,11 +662,13 @@
             CancellationToken token = buildCancellation.Token;
             package = await Task.Run(() => AssetPackageService.BuildAsync(draft, progress, token));
 
+            // A step whose files matched no path is closed too, since the archive is whole.
             foreach (Step step in plan)
                 step.Done = true;
         }
         catch (OperationCanceledException)
         {
+            // Stopped: nothing partial is kept, so the client never downloads half an archive.
             package = null;
             written.Clear();
             plan.Clear();
@@ -645,11 +676,13 @@
         }
         catch (Exception failure)
         {
+            // A failed build is told to the client with its reason; the facts on screen stay as typed.
             Logger.LogError(failure, "The archive could not be built");
             await OnNotify.InvokeAsync(new Notice($"The archive could not be built: {failure.Message}", NoticeKind.Failure));
         }
         finally
         {
+            // However it ended, the vessel stops and Stop has nothing left to cancel.
             StopHeartbeat();
             running = false;
             isStopping = false;
@@ -663,17 +696,21 @@
     /// </summary>
     private void Stop()
     {
+        // Nothing runs or Stop was already pressed: a second press would cancel twice.
         if (buildCancellation is null || isStopping)
             return;
 
+        // The button shows the build is unwinding until its handler finishes.
         isStopping = true;
 
         try
         {
+            // The build's own handler discards what it wrote.
             buildCancellation.Cancel();
         }
         catch (Exception unwinding)
         {
+            // A cancellation that throws while the build unwinds changes nothing the client sees.
             Logger.LogDebug(unwinding, "Cancelling the build threw while stopping");
         }
     }
@@ -683,6 +720,7 @@
     /// </summary>
     private async Task DownloadAsync()
     {
+        // Only a finished archive is offered; the bytes go to the browser, which saves them where the client chooses.
         if (package is { } archive)
             await JS.InvokeVoidAsync("alembicSave", ArchiveName, Convert.ToBase64String(archive), "application/zip");
     }
@@ -692,22 +730,23 @@
     /// </summary>
     private const string ArchiveName = "alembic.zip";
 
-    /// <summary>
-    /// The steps in the order the package service writes them: the configuration, then every agent's
-    /// class and mock.
-    /// </summary>
+    /// <summary>The steps in the order the package service writes them: the configuration, then every agent's class and mock.</summary>
     private List<Step> BuildPlan()
     {
+        // The configuration and the reports come first, shared by every agent.
         List<Step> steps = [new Step { AgentId = string.Empty, Kind = "structure", Label = "the configuration" }];
 
+        // Every agent gets its class; one with tools also gets the mock the model writes.
         foreach (AgentDraft agent in Agents)
         {
             steps.Add(new Step { AgentId = agent.ID!, Kind = "code", Label = Named(agent) });
 
+            // An agent without tools has no tool class to mock.
             if (agent.Tools.Count > 0)
                 steps.Add(new Step { AgentId = agent.ID!, Kind = "mock", Label = Named(agent) });
         }
 
+        // The plan the log and the vessel walk.
         return steps;
     }
 
@@ -716,15 +755,18 @@
     /// </summary>
     private Step? MatchStep(string path)
     {
+        // The files every agent shares close the configuration step.
         if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md" or Alembic.Services.AssetPackageService.MarkerFileName)
             return plan.FirstOrDefault(step => step.Kind == "structure");
 
+        // Each agent's emitted files, as the emitter itself names them.
         foreach (AgentDraft agent in Agents)
         {
             string id = agent.ID!;
 
             foreach (EmittedFile file in CodeEmitService.Emit(agent, id))
             {
+                // A templated file of the agent closes its class step.
                 if (path == file.Path)
                     return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "code");
 
@@ -733,12 +775,14 @@
                 {
                     string mockPath = file.Path[..^".g.cs".Length] + ".cs";
 
+                    // The mock closes the mock step, as does the note left where the model failed to write one.
                     if (path == mockPath || path == mockPath + ".FAILED.txt")
                         return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "mock");
                 }
             }
         }
 
+        // A path the plan does not know moves no step.
         return null;
     }
 
@@ -765,15 +809,15 @@
 
     /// <summary>
     /// The agent the model turns to after the one it is writing for, while there is one.
+    /// Only the steps that wait on the model count: a class is templated at once, so an agent without tools would be announced and passed in one instant.
     /// </summary>
-    // Only the steps that wait on the model count: a class is templated in no time, so an agent without
-    // tools would be announced and passed in the same instant and the line would jump past it.
     private string? NextAgent
     {
         get
         {
             List<Step> awaitingModel = [.. plan.Where(step => !step.Done && step.Kind == "mock")];
 
+            // The first mock still waiting belongs to the agent in hand; the next agent is the first waiting one of another.
             return awaitingModel.Count == 0
                 ? null
                 : awaitingModel.FirstOrDefault(step => step.AgentId != awaitingModel[0].AgentId)?.Label;
@@ -785,6 +829,7 @@
     /// </summary>
     private static string StepKindLabel(string kind) => kind switch
     {
+        // A step named for what the client receives; the configuration keeps its own word.
         "code" => "class",
         "mock" => "tools",
         _ => kind
@@ -807,6 +852,7 @@
         ? "Sealing the archive…"
         : step.Kind switch
         {
+            // One sentence per kind of step, the configuration first, then each agent's class and tools.
             "structure" => "Writing the domain's configuration and reports…",
             "code" => $"Distilling {step.Label}: writing its agent class…",
             "mock" => $"Distilling {step.Label}: writing its tools…",
@@ -820,6 +866,7 @@
         ? "the last of it"
         : step.Kind switch
         {
+            // The object of "Writing", one per kind of step.
             "structure" => "the configuration",
             "code" => $"{step.Label}'s agent class",
             "mock" => $"{step.Label}'s tool class",
@@ -834,6 +881,8 @@
         get
         {
             int seconds = (int)(DateTime.UtcNow - stepEnteredAt).TotalSeconds;
+
+            // Nothing under three seconds, which would only flicker; minutes once a model call runs long.
             return !running || seconds < 3 ? null : seconds < 60 ? $"{seconds}s" : $"{seconds / 60}m {seconds % 60:00}s";
         }
     }
@@ -843,7 +892,10 @@
     /// </summary>
     private void StartHeartbeat()
     {
+        // A heartbeat left from an earlier build is stopped, so two never redraw at once.
         StopHeartbeat();
+
+        // Four redraws a second carry the vessel and the elapsed time through the silences of model calls.
         heartbeat = new System.Threading.Timer(_ => _ = BeatAsync(), null, TimeSpan.FromMilliseconds(250), TimeSpan.FromMilliseconds(250));
     }
 
@@ -854,6 +906,7 @@
     {
         try
         {
+            // The timer fires off the renderer's context, so the redraw is marshalled onto it.
             await InvokeAsync(StateHasChanged);
         }
         catch (OperationCanceledException)
@@ -862,6 +915,7 @@
         }
         catch (Exception gone) when (gone is ObjectDisposedException or InvalidOperationException)
         {
+            // The circuit is gone: the heartbeat stops rather than throwing four times a second.
             StopHeartbeat();
         }
     }
@@ -871,6 +925,7 @@
     /// </summary>
     private void StopHeartbeat()
     {
+        // The timer released and forgotten, so a later start makes a fresh one.
         heartbeat?.Dispose();
         heartbeat = null;
     }
@@ -880,17 +935,21 @@
     /// </summary>
     public void Dispose()
     {
+        // No redraw may reach a component that has left the page.
         StopHeartbeat();
 
         try
         {
+            // A build nobody is left to collect stops spending model calls.
             buildCancellation?.Cancel();
         }
         catch (Exception unwinding)
         {
+            // A cancellation that throws while the page closes changes nothing anyone sees.
             Logger.LogDebug(unwinding, "Cancelling the build on dispose threw");
         }
 
+        // The cancellation source is released with the component.
         buildCancellation?.Dispose();
         buildCancellation = null;
     }

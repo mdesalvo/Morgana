@@ -48,19 +48,18 @@
 @code {
     /// <summary>
     /// Enters the shell for a new domain, leaving behind an imported one still held in this circuit.
+    /// A greenfield interview already under way is resumed rather than thrown away, since it has nothing behind it to leave.
     /// </summary>
-    /// <remarks>
-    /// Only an imported domain is dropped: a greenfield interview already under way is resumed rather
-    /// than thrown away, since it has nothing behind it to leave.
-    /// </remarks>
     private void StartFresh()
     {
+        // Only an imported domain carries a baseline: that one alone is dropped.
         if (DraftStateService.Current?.Baseline is not null)
         {
             InterviewService.Abandon();
             DraftStateService.Set(null);
         }
 
+        // The shell opens on the map; a greenfield interview opens on its own step.
         NavigationManager.NavigateTo("shell");
     }
 }

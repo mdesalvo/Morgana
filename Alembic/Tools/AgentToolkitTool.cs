@@ -55,7 +55,7 @@ public sealed class AgentToolkitTool : InterviewTool
         if (cleanName.Length == 0)
             return "No tool recorded: a tool must have a name, because the name is what pairs it with its C# method.";
 
-        // The tool already open under that name, or a new one Alembic authors.
+        // The tool already open under that name; otherwise a new one Alembic authors.
         ToolDraft? existing = Find(cleanName);
         bool revision = existing is not null;
 
@@ -130,7 +130,7 @@ public sealed class AgentToolkitTool : InterviewTool
         ToolParameterDraft? existing = tool.Parameters.FirstOrDefault(p =>
             string.Equals(p.Name, cleanName, StringComparison.Ordinal));
 
-        // Revised in place, so its position in the signature survives, or added at the end.
+        // Revised in place, so its position in the signature survives; a new one is added at the end.
         bool revision = existing is not null;
         ToolParameterDraft parameter = existing ?? new ToolParameterDraft { Name = cleanName };
 

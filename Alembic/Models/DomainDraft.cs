@@ -11,7 +11,7 @@ public sealed class DomainDraft
 {
     /// <summary>
     /// What is known about the client's business as a whole: what they sell or do, how the place works, what is true of every counter in it.
-    /// It is kept with the domain, since it outlives any sitting, and never written into an agent: it is what the questions are made of.
+    /// It is kept with the domain, since it outlives any sitting; it is never written into an agent: it is what the questions are made of.
     /// </summary>
     public List<KnownFact> Learned { get; set; } = [];
 
@@ -101,7 +101,7 @@ public sealed class InterviewSitting
 
 /// <summary>
 /// An agent taken out of the domain to be worked on and what it needs to go back the way it came: its place in both lists and its provenance.
-/// An agent being edited is out of the configuration, or letting it back in would write it twice; its place keeps the client's order and its provenance
+/// An agent being edited is out of the configuration, since letting it back in would otherwise write it twice; its place keeps the client's order and its provenance
 /// brings an imported agent back as revised. Reading an agent on the way past creates none.
 /// </summary>
 public sealed class AgentRevision
@@ -117,7 +117,7 @@ public sealed class AgentRevision
 
     /// <summary>
     /// What the agent read when it left the domain, so leaving the edit can tell a rewrite from a look.
-    /// An agent that goes back exactly as it came stays imported, or the migration report would list everything the client opened.
+    /// An agent that goes back exactly as it came stays imported: otherwise the migration report would list everything the client opened.
     /// </summary>
     public string? Was { get; set; }
 }

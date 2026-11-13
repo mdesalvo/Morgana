@@ -90,7 +90,7 @@ public sealed class DomainMapperTool : InterviewTool
             return $"Nothing recorded: '{cleanName}' is already an intent of this domain, written before today. "
                    + "Two agents answering the same intent is a startup failure. Name what is different about this one.";
 
-        // The entry already on the map under that name, revised in its place, or a new one Alembic authors.
+        // The entry already on the map under that name is revised in its place; otherwise a new one Alembic authors.
         IntentDraft? existing = interviewState.Map.FirstOrDefault(i =>
             string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase));
 

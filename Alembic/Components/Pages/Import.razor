@@ -266,17 +266,24 @@
     /// </summary>
     private static string? Named(InterviewSitting sitting)
     {
+        // Standing on an entry, the sitting was writing that agent.
         if (sitting.At >= 0 && sitting.At < sitting.Map.Count)
         {
             IntentDraft entry = sitting.Map[sitting.At];
             return $"You were in the middle of {entry.Name}";
         }
 
+        // Otherwise it was drawing the map, said by how far it had got.
         return sitting.Map.Count switch
         {
+            // A map with no entry is nothing worth announcing.
             0 => null,
+
+            // One entry, in the singular.
             1 => "You were drawing the map, one entry declared so far",
-            var count => $"You were drawing the map, {count} entries declared so far"
+
+            // Several, counted.
+            int entryCount => $"You were drawing the map, {entryCount} entries declared so far"
         };
     }
 
@@ -285,11 +292,13 @@
     /// </summary>
     private static string Humanise(string? name)
     {
+        // A tool still unnamed reads as a dash rather than as an empty cell.
         if (string.IsNullOrWhiteSpace(name))
             return "—";
 
         StringBuilder spaced = new StringBuilder();
 
+        // Every capital past the first starts a word, so GetInvoiceDetails reads as get invoice details.
         foreach (char letter in name)
         {
             if (char.IsUpper(letter) && spaced.Length > 0)
@@ -312,6 +321,7 @@
     /// </summary>
     private async Task OnFileSelectedAsync(InputFileChangeEventArgs selection)
     {
+        // A new upload clears what the previous one reported and hides the domain until this one arrives whole.
         isReading = true;
         error = null;
         notices = [];
@@ -319,6 +329,7 @@
 
         try
         {
+            // The control accepts one file at a time.
             IBrowserFile file = selection.File;
 
             // Read twice, once to tell the shape and once to parse it.
@@ -328,18 +339,22 @@
 
             buffer.Position = 0;
 
+            // An archive is told apart by its bytes, never by its name.
             if (IsZip(buffer))
             {
+                // Only an archive Alembic built carries the marker, which decides the question the page asks next.
                 arrivedAsArchive = HasMarker(buffer);
 
                 await using MemoryStream? inner = await ExtractFromZipAsync(buffer);
 
+                // An archive carrying neither file holds no domain to open.
                 if (inner is null)
                 {
                     error = $"{file.Name} is a zip archive, but I could not find an alembic-draft.json or an agents.json inside it.";
                     return;
                 }
 
+                // A save file inside resumes the sitting with its baseline and its interview.
                 if (IsSaveFile(inner))
                 {
                     inner.Position = 0;
@@ -347,11 +362,13 @@
                     return;
                 }
 
+                // A bare configuration inside is imported like an uploaded one.
                 inner.Position = 0;
                 await ImportAsync(inner, file.Name);
                 return;
             }
 
+            // A save file uploaded on its own, told apart by reading it.
             if (IsSaveFile(buffer))
             {
                 buffer.Position = 0;
@@ -359,6 +376,7 @@
                 return;
             }
 
+            // Anything else is read as an agents.json, whose importer reports what it cannot read.
             buffer.Position = 0;
             await ImportAsync(buffer, file.Name);
         }
@@ -369,6 +387,7 @@
         }
         finally
         {
+            // Whatever happened, the domain or the error now shows.
             isReading = false;
         }
     }
@@ -378,37 +397,41 @@
     /// </summary>
     private async Task ImportAsync(Stream configuration, string fileName)
     {
+        // The configuration parsed into a Draft, with whatever the importer had to tell the client.
         DraftImportResult result = await DraftImportService.ImportAsync(configuration, fileName);
 
         notices = result.Notices;
         error = result.Error;
         SetDraft(result.Draft);
+
+        // The finished prose is read once for what it says about the business, so the interview does not ask it again.
         await LearnTheTradeAsync(result.Draft);
     }
 
     /// <summary>
-    /// Works out what the business does from the configuration just uploaded.
+    /// Works out what the business does from the configuration just uploaded, which carries finished prose and no memory of the conversation behind it.
+    /// A failure costs the head start and nothing else.
     /// </summary>
-    /// <remarks>
-    /// A configuration carries finished prose and no memory of the conversation behind it. Skipped where
-    /// the domain already remembers; a failure costs the head start and nothing else.
-    /// </remarks>
     private async Task LearnTheTradeAsync(DomainDraft? draft)
     {
+        // Nothing to read, as in a domain whose every agent already remembers: the reading would only spend a model call.
         if (draft is null || draft.Agents.Count == 0 || draft.Agents.All(agent => agent.Known.Count > 0))
             return;
 
+        // The page says it is reading the trade, since the call takes a few seconds.
         isLearning = true;
         StateHasChanged();
 
         try
         {
+            // What the model read off the prose, written onto the Draft as facts it inferred.
             DomainReading reading = await DomainReadingService.ReadAsync(draft);
 
             // Only a failed reading is worth the client's attention: it changes what the interview will ask them.
             if (reading.Error is { } failure)
                 notices = [.. notices, $"I could not work out what your business does from this file, so I will ask instead: {failure}"];
 
+            // The Draft is set again so the facts just written reach every reader of the circuit.
             DraftStateService.Set(draft);
         }
         finally
@@ -422,12 +445,14 @@
     /// </summary>
     private async Task ResumeAsync(Stream saveFile, string fileName)
     {
+        // A file shaped like a save file that still does not parse is told as such, not as a bad configuration.
         if (await DraftSerializationService.DeserializeAsync(saveFile) is not { } draft)
         {
             error = $"{fileName} looks like a sitting of ours, but I could not read it.";
             return;
         }
 
+        // The sitting is back, its baseline and its interrupted interview with it.
         SetDraft(draft);
     }
 
@@ -436,6 +461,7 @@
     /// </summary>
     private void SetDraft(DomainDraft? draft)
     {
+        // An interview running against the Draft being replaced would write into a domain nobody sees any more.
         InterviewService.Abandon();
         DraftStateService.Set(draft);
     }
@@ -451,9 +477,11 @@
     /// </summary>
     private static bool HasMarker(MemoryStream buffer)
     {
+        // The buffer stays open: the domain is extracted from it next.
         buffer.Position = 0;
         using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
 
+        // The marker sits by name anywhere in the archive.
         return archive.Entries.Any(entry => string.Equals(
             entry.Name, Alembic.Services.AssetPackageService.MarkerFileName, StringComparison.OrdinalIgnoreCase));
     }
@@ -466,13 +494,16 @@
         buffer.Position = 0;
         await using ZipArchive archive = new ZipArchive(buffer, ZipArchiveMode.Read, leaveOpen: true);
 
+        // The save file carries the baseline and the interview, so it wins over the bare configuration beside it.
         ZipArchiveEntry? entry =
             archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "alembic-draft.json", StringComparison.OrdinalIgnoreCase))
             ?? archive.Entries.FirstOrDefault(e => string.Equals(e.Name, "agents.json", StringComparison.OrdinalIgnoreCase));
 
+        // An archive with neither holds no domain.
         if (entry is null)
             return null;
 
+        // Copied out, since the entry's stream dies with the archive and the caller reads it twice.
         MemoryStream copy = new MemoryStream();
         await using (Stream entryStream = await entry.OpenAsync())
             await entryStream.CopyToAsync(copy);
@@ -490,6 +521,7 @@
         {
             using JsonDocument document = JsonDocument.Parse(json);
 
+            // A save file is a JSON object carrying the root property only a save file has.
             return document.RootElement.ValueKind == JsonValueKind.Object
                    && document.RootElement.EnumerateObject().Any(property =>
                        string.Equals(property.Name, SaveFileMarker, StringComparison.OrdinalIgnoreCase));

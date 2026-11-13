@@ -32,13 +32,17 @@
     /// </summary>
     private async Task HandOverAsync()
     {
+        // This moment serialized; the newest autosave when this moment cannot be, a floor under the button.
         if ((DraftStateService.Snapshot() ?? DraftStateService.Latest()) is not { } work)
         {
             await OnReceipt.InvokeAsync(new Notice("Nothing to save: there is no work in hand yet.", NoticeKind.Warning));
             return;
         }
 
+        // The browser saves the bytes where the client chooses.
         await JS.InvokeVoidAsync("alembicSave", FileName, Convert.ToBase64String(work));
+
+        // The receipt says what is in the bytes, read back out of them rather than reported from the interview's state.
         await OnReceipt.InvokeAsync(await ReadBackAsync(work));
     }
 
@@ -49,17 +53,21 @@
     {
         using MemoryStream stream = new MemoryStream(work);
 
-        if (await DraftSerializationService.DeserializeAsync(stream) is not { } saved)
+        // Bytes that do not parse back are a save that failed, whatever the interview on screen looks like.
+        if (await DraftSerializationService.DeserializeAsync(stream) is not { } savedDraft)
             return new Notice($"{FileName} could not be read back.", NoticeKind.Failure);
 
-        InterviewSitting? sitting = saved.Sitting;
-        int mapped = sitting?.Map.Count ?? 0;
+        // The interview the file carries, counted by its map.
+        InterviewSitting? sitting = savedDraft.Sitting;
+        int mappedCount = sitting?.Map.Count ?? 0;
 
-        string where = sitting is { At: >= 0 } && sitting.At < sitting.Map.Count
+        // The entry the sitting stood on; the map while it was still being drawn.
+        string standingText = sitting is { At: >= 0 } && sitting.At < sitting.Map.Count
             ? $"in hand: {sitting.Map[sitting.At].Name}"
             : "in hand: the map";
 
-        return new Notice($"{FileName} · read back: {mapped} on the map · {saved.Agents.Count} agents in the domain · {where} · {Sized(work.Length)}", NoticeKind.Success);
+        // The receipt in the client's own nouns, so they can tell at a glance the file holds their work.
+        return new Notice($"{FileName} · read back: {mappedCount} on the map · {savedDraft.Agents.Count} agents in the domain · {standingText} · {Sized(work.Length)}", NoticeKind.Success);
     }
 
     /// <summary>

@@ -322,7 +322,7 @@ public abstract class InterviewTool
     /// </summary>
     public virtual string SetChoice(string label, string value)
     {
-        // A button needs words to read and an answer to send, or pressing it says nothing.
+        // A button needs words to read and an answer to send: without either, pressing it says nothing.
         if (string.IsNullOrWhiteSpace(label) || string.IsNullOrWhiteSpace(value))
             return "No button attached: it needs both a label to read and the answer it sends.";
 

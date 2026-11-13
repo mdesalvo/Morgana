@@ -104,7 +104,7 @@
     /// The domain whose agents are related here; edges land on it as they are ticked.
     /// </summary>
     [Parameter, EditorRequired]
-    public DomainDraft Draft { get; set; } = default!;
+    public required DomainDraft Draft { get; set; }
 
     /// <summary>
     /// Taking the work away.
@@ -141,7 +141,7 @@
         /// <summary>The intent the colleague answers for.</summary>
         public required string Intent { get; init; }
 
-        /// <summary>The Morgana publishing the colleague; <c>null</c> for this one.</summary>
+        /// <summary>The partner publishing the colleague; <c>null</c> for an agent of this domain.</summary>
         public string? Instance { get; init; }
 
         /// <summary>What the box reads.</summary>
@@ -202,11 +202,13 @@
     /// </summary>
     protected override void OnInitialized()
     {
+        // Every partner's colleague any agent already declares becomes one row, however many agents consult it.
         foreach (Morgana.AI.Records.PeerReference remote in Draft.Agents
                      .SelectMany(agent => agent.Code.Consults)
                      .Where(colleague => colleague.Instance is not null)
                      .DistinctBy(colleague => (colleague.Intent.ToLowerInvariant(), colleague.Instance!.ToLowerInvariant())))
         {
+            // Typed and applied alike, since it already stands on the domain under these names.
             remotes.Add(new RemoteRow
             {
                 Intent = remote.Intent,
@@ -216,6 +218,7 @@
             });
         }
 
+        // The grid of boxes, ticked where the domain already declares the edge.
         Rebuild();
     }
 
@@ -226,8 +229,10 @@
     {
         cells = [];
 
+        // One line of boxes per agent that could ask.
         foreach (AgentDraft asking in Agents)
         {
+            // Every other agent of the domain, since an agent never consults itself.
             foreach (AgentDraft other in Agents.Where(other => other != asking))
                 cells.Add(new ConsultCell
                 {
@@ -237,6 +242,7 @@
                     On = Consults(asking, other.ID!, null)
                 });
 
+            // Every partner's colleague named in full; a half-named one cannot be reached and gets no box.
             foreach (RemoteRow row in remotes.Where(row => row.Complete))
                 cells.Add(new ConsultCell
                 {
@@ -255,41 +261,46 @@
     private static bool Consults(AgentDraft agent, string intent, string? instance) =>
         agent.Code.Consults.Any(colleague => Same(colleague, intent, instance));
 
-    /// <summary>
-    /// Whether a declared colleague is this intent at this Morgana.
-    /// </summary>
+    /// <summary>Whether a declared colleague is this intent at this partner, by the one rule <see cref="PeerNaming.Same"/> holds.</summary>
     private static bool Same(Morgana.AI.Records.PeerReference colleague, string intent, string? instance) =>
-        string.Equals(colleague.Intent, intent, StringComparison.OrdinalIgnoreCase)
-        && string.Equals(colleague.Instance, instance, StringComparison.OrdinalIgnoreCase);
+        PeerNaming.Same(colleague, new Morgana.AI.Records.PeerReference(intent, instance));
 
     /// <summary>
     /// Declares or withdraws one edge on the domain.
     /// </summary>
     private async Task ApplyAsync(ConsultCell cell)
     {
+        // A ticked box declares the edge once: the framework refuses two declarations folding to one function.
         if (cell.On && !Consults(cell.Asking, cell.Intent, cell.Instance))
             cell.Asking.Code.Consults.Add(new Morgana.AI.Records.PeerReference(cell.Intent, cell.Instance));
+
+        // An unticked box withdraws it.
         else if (!cell.On)
             cell.Asking.Code.Consults.RemoveAll(colleague => Same(colleague, cell.Intent, cell.Instance));
 
+        // The shell saves the edge with the rest of the domain.
         await OnChanged.InvokeAsync();
     }
 
     /// <summary>
     /// Carries a renamed remote colleague onto every edge that names it.
+    /// A colleague left half-named names nothing, so its edges leave the domain until both halves are back.
     /// </summary>
-    // A colleague left half-named names nothing, so its edges leave the domain until both halves are back.
     private async Task RenameAsync(RemoteRow row)
     {
+        // A row that never landed on the domain has no edge to carry.
         bool wasApplied = !string.IsNullOrWhiteSpace(row.AppliedIntent);
 
+        // Every agent's declarations, rewritten in place so their order is kept.
         foreach (AgentDraft agent in Draft.Agents)
         {
             for (int index = 0; index < agent.Code.Consults.Count; index++)
             {
+                // Only an edge naming this colleague as it last landed is touched.
                 if (!wasApplied || !Same(agent.Code.Consults[index], row.AppliedIntent, row.AppliedInstance))
                     continue;
 
+                // Named in full, the edge takes the new names; half-named, it leaves the domain.
                 if (row.Complete)
                     agent.Code.Consults[index] = agent.Code.Consults[index] with { Intent = row.Intent.Trim(), Instance = row.Instance.Trim() };
                 else
@@ -297,9 +308,11 @@
             }
         }
 
+        // What the domain now carries, which the next rename starts from.
         row.AppliedIntent = row.Complete ? row.Intent.Trim() : string.Empty;
         row.AppliedInstance = row.Complete ? row.Instance.Trim() : string.Empty;
 
+        // The grid follows the new names and the shell saves the domain.
         Rebuild();
         await OnChanged.InvokeAsync();
     }
@@ -309,9 +322,11 @@
     /// </summary>
     private async Task RemoveAsync(RemoteRow row)
     {
+        // No agent may keep consulting a colleague the client has taken away.
         foreach (AgentDraft agent in Draft.Agents)
             agent.Code.Consults.RemoveAll(colleague => Same(colleague, row.AppliedIntent, row.AppliedInstance));
 
+        // The row and its boxes go; the shell saves the domain.
         remotes.Remove(row);
         Rebuild();
         await OnChanged.InvokeAsync();
@@ -327,13 +342,16 @@
     /// </summary>
     private async Task NextAsync()
     {
+        // A half-named colleague is one nobody can reach, so Validation would find it before the client does.
         if (remotes.Any(row => !row.Complete))
         {
+            // The blank halves now show as errors.
             touched = true;
             await OnRefuse.InvokeAsync("Name and partner are both needed: without them the colleague cannot be reached.");
             return;
         }
 
+        // Every colleague named in full: the shell moves to Validation.
         await OnNext.InvokeAsync();
     }
 

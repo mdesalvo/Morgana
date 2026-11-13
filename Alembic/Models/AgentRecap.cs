@@ -27,7 +27,7 @@ public sealed record ToolRecap(
 /// <param name="Name">Parameter name.</param>
 /// <param name="Description">Exactly what the author wrote.</param>
 /// <param name="Required">Whether the model must supply it.</param>
-/// <param name="Scope">Its scope, or <c>null</c> where it declares none.</param>
+/// <param name="Scope">Its scope; <c>null</c> where it declares none.</param>
 public sealed record ParameterRecap(
     string Name,
     string Description,

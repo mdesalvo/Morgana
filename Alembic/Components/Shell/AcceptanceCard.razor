@@ -25,7 +25,7 @@
     /// The agent waiting to be let into the domain.
     /// </summary>
     [Parameter, EditorRequired]
-    public AgentDraft Agent { get; set; } = default!;
+    public required AgentDraft Agent { get; set; }
 
     /// <summary>
     /// Whether the commit is already under way.

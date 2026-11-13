@@ -33,7 +33,7 @@ public sealed class AgentTargetTool : InterviewTool
     public override string GetExistingIntents() => base.GetExistingIntents();
 
     /// <summary>
-    /// Records the agent's Target section, overwriting it, and tells the model whether it fits the section's shape.
+    /// Records the agent's Target section, overwriting it; the reply tells the model whether it fits the section's shape.
     /// A pass may call it as the answer sharpens, the last call standing; the label is the composer's to add, so the prose is stored as written.
     /// </summary>
     [Description("Records the agent's TARGET section: what it does well and existentially, then what it is significant to say it does NOT do. Only edges that will actually be walked into — a limit nobody would test is noise. This section opens the composed prompt, so a capability claimed here and not backed by a tool is the most expensive mistake available to you.")]

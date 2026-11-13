@@ -8,7 +8,7 @@ public static class AgentRows
 {
     /// <summary>One row of the panel.</summary>
     /// <param name="What">What it is, as a noun — the rail's own for the four sections it names.</param>
-    /// <param name="Value">What has been written, or <c>null</c> while it is still unasked.</param>
+    /// <param name="Value">What has been written; <c>null</c> while it is still unasked.</param>
     /// <param name="Moved">Whether the last exchange is what put it there.</param>
     public sealed record Row(string What, string? Value, bool Moved);
 

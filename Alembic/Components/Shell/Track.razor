@@ -55,7 +55,7 @@
         }
         else
         {
-            @* Folded: the way onto the agent in hand, or onto the first once every agent is in the domain. *@
+            @* Folded: the way onto the agent in hand; onto the first once every agent is in the domain. *@
             <FluentCard Class="seg" data-state="done" Shadow="CardShadow.None" Role="button" title="Open the agents"
                         OnClick="() => OnLook.InvokeAsync(Frontier.OnAgent ? Frontier : new ShellPoint(0, 1))">
                 <FluentStack Orientation="Orientation.Vertical" VerticalAlignment="VerticalAlignment.SpaceBetween" Height="100%">
@@ -192,8 +192,8 @@
 
     /// <summary>
     /// Whether this is where the interview stands while the client looks elsewhere.
+    /// In the domain nothing is still being settled, so no mark is owed.
     /// </summary>
-    // In the domain nothing is still being settled, so no mark is owed.
     private bool IsFrontierMark(ShellPoint moment) => moment == Frontier && Pointer != Frontier && !Frontier.OnDomain;
 
     /// <summary>
@@ -242,16 +242,19 @@
 
     /// <summary>
     /// An arrow to a neighbouring agent, absent at either end of the row.
+    /// It lands on the work in hand for the agent at the frontier and on the Target for one behind it.
     /// </summary>
-    // It lands on the work in hand for the agent at the frontier and on the Target for one behind it.
     private RenderFragment Arrow(int entry, string glyph, string label)
     {
+        // No neighbour on that side: nothing is drawn.
         if (entry < 0 || entry >= Entries.Count)
             return _ => { };
 
+        // Where the arrow lands and the position it shows, counted from one as the client counts agents.
         ShellPoint landing = Frontier.OnAgent && entry == Frontier.Entry ? Frontier : new ShellPoint(entry, 1);
         string position = $"{entry + 1}/{Entries.Count}";
 
+        // Disabled past the frontier, the badge on the side the arrow points away from.
         return @<FluentButton Appearance="ButtonAppearance.Outline" Class="arrow" Disabled="@(landing > Frontier)"
                               Title="@label" OnClick="() => OnLook.InvokeAsync(landing)">
                     @if (glyph == "‹")

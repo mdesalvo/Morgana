@@ -35,15 +35,18 @@
 
     /// <summary>
     /// Grows Fluent's colour ramp from the seed, then stands its grounds, text and lines in the palette's room.
+    /// Every value is a palette token rather than a hex, so palette.css stays the one place a colour is written.
     /// </summary>
-    // Every value is a palette token rather than a hex, so palette.css stays the one place a colour is written.
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        // The theme is set once per circuit; later renders find it in place.
         if (!firstRender)
             return;
 
+        // The dark ramp every Fluent component reads, grown from the vessel's violet.
         Theme theme = await ThemeService.CreateCustomThemeAsync(new ThemeSettings(Seed, 0, 0, ThemeMode.Dark, true));
 
+        // Alembic's own faces for prose, figures and code.
         theme.Fonts.Family.Base = BaseFace;
         theme.Fonts.Family.Numeric = BaseFace;
         theme.Fonts.Family.Monospace = MonospaceFace;
@@ -60,11 +63,13 @@
         theme.Colors.Neutral.Background4 = "var(--alembic-bg-deep)";
         theme.Colors.Neutral.CardBackground = "var(--alembic-panel)";
 
+        // Text in the palette's two strengths: full for what is read, muted for what only labels.
         theme.Colors.Neutral.Foreground1 = "var(--alembic-text)";
         theme.Colors.Neutral.Foreground2 = "var(--alembic-text)";
         theme.Colors.Neutral.Foreground3 = "var(--alembic-muted)";
         theme.Colors.Neutral.Foreground4 = "var(--alembic-muted)";
 
+        // Lines in the palette's borders, the lit one where Fluent draws its strongest stroke.
         theme.Colors.Neutral.Stroke1 = "var(--alembic-border-lit)";
         theme.Colors.Neutral.Stroke2 = "var(--alembic-border)";
         theme.Colors.Neutral.StrokeSubtle = "var(--alembic-border)";
@@ -82,6 +87,7 @@
         theme.Colors.Status.WarningForeground3 = "var(--alembic-gold)";
         theme.Colors.Status.WarningForegroundInverted = "var(--alembic-bg-deep)";
 
+        // Red refuses.
         theme.Colors.Status.DangerBackground1 = "color-mix(in srgb, var(--alembic-error) 12%, transparent)";
         theme.Colors.Status.DangerBackground2 = "color-mix(in srgb, var(--alembic-error) 20%, transparent)";
         theme.Colors.Status.DangerBackground3 = "var(--alembic-error)";
@@ -95,6 +101,7 @@
         theme.Colors.Status.DangerForeground3 = "var(--alembic-error)";
         theme.Colors.Status.DangerForegroundInverted = "var(--alembic-bg-deep)";
 
+        // Green is verified.
         theme.Colors.Status.SuccessBackground1 = "color-mix(in srgb, var(--alembic-success) 12%, transparent)";
         theme.Colors.Status.SuccessBackground2 = "color-mix(in srgb, var(--alembic-success) 20%, transparent)";
         theme.Colors.Status.SuccessBackground3 = "var(--alembic-success)";
@@ -113,18 +120,22 @@
         theme.Colors.Palette.DarkOrangeForeground1 = "var(--alembic-gold)";
         theme.Colors.Palette.DarkOrangeForeground3 = "var(--alembic-gold)";
 
+        // Red, as the message bar reads a refusal.
         theme.Colors.Palette.RedBackground1 = "color-mix(in srgb, var(--alembic-error) 12%, transparent)";
         theme.Colors.Palette.RedBorder1 = "var(--alembic-error)";
         theme.Colors.Palette.RedForeground1 = "var(--alembic-error)";
         theme.Colors.Palette.RedForeground3 = "var(--alembic-error)";
 
+        // Green, as the message bar reads a verification.
         theme.Colors.Palette.GreenBackground1 = "color-mix(in srgb, var(--alembic-success) 12%, transparent)";
         theme.Colors.Palette.GreenBorder1 = "var(--alembic-success)";
         theme.Colors.Palette.GreenForeground1 = "var(--alembic-success)";
         theme.Colors.Palette.GreenForeground3 = "var(--alembic-success)";
 
+        // The theme reaches every component of the page.
         await ThemeService.SetThemeAsync(theme);
 
+        // Only now is the page shown, so it never flashes in Fluent's defaults.
         themed = true;
         StateHasChanged();
     }

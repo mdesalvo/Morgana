@@ -11,7 +11,7 @@ public static class PeerNaming
     public static string Describe(Morgana.AI.Records.PeerReference peer)
         => peer.Instance is null ? peer.Intent : $"{peer.Intent} at {peer.Instance}";
 
-    /// <summary>Names a set of colleagues, or says there are none.</summary>
+    /// <summary>Names a set of colleagues; <c>none</c> when there are none.</summary>
     /// <param name="peers">The declared colleagues.</param>
     public static string Describe(IEnumerable<Morgana.AI.Records.PeerReference> peers)
     {
