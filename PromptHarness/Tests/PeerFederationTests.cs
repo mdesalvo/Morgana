@@ -176,7 +176,7 @@ public sealed class PeerFederationTests
             [
                 new AgentInterface
                 {
-                    Url = $"{interfaceAddress}{Constants.AgentToAgent.AgentPathPrefix}/{PeerIntent}",
+                    Url = $"{interfaceAddress}/a2a/{PeerIntent}",
                     ProtocolBinding = ProtocolBindingNames.JsonRpc
                 }
             ]
@@ -196,7 +196,7 @@ public sealed class PeerFederationTests
         }
 
         // Served at the well-known path, where a caller that knows only the partner's address looks first.
-        peer.Given(Request.Create().WithPath($"{Constants.AgentToAgent.AgentPathPrefix}/{PeerIntent}/.well-known/agent-card.json").UsingGet())
+        peer.Given(Request.Create().WithPath($"/a2a/{PeerIntent}/.well-known/agent-card.json").UsingGet())
             .RespondWith(Response.Create()
                 .WithStatusCode(200)
                 .WithHeader("Content-Type", "application/json")
@@ -209,7 +209,7 @@ public sealed class PeerFederationTests
     /// </summary>
     /// <param name="peer">The peer being consulted.</param>
     private static void StubConsultationEndpoint(WireMockServer peer)
-        => peer.Given(Request.Create().WithPath($"{Constants.AgentToAgent.AgentPathPrefix}/{PeerIntent}").UsingPost())
+        => peer.Given(Request.Create().WithPath($"/a2a/{PeerIntent}").UsingPost())
                .RespondWith(Response.Create().WithStatusCode(200).WithHeader("Content-Type", "application/json").WithBody("{}"));
 
     /// <summary>The bearer requirement a Morgana publishes, in the standard form a consumer reads.</summary>

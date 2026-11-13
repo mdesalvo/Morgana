@@ -113,7 +113,7 @@ public class MigrationReportService : IMigrationReportService
             // spelled name) is a startup failure wearing a plausible configuration.
             entries.AddRange(
                 agent.Code.Consults.Where(colleague => colleague.Instance is not null)
-                                   .Select(colleague => new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised, $"Consults '{colleague.Intent}' at system '{colleague.Instance}'. Declare that system under " + $"Morgana:AgentToAgent:Partners with its Url, the key you share with it and \"OutboundPolicy\": {{ \"Enabled\": true }}, under exactly the name " + $"'{colleague.Instance}' — spelling and spacing included, or startup refuses the agent. Neither the " + "address nor the key is in this archive. That the system really publishes an agent for " + $"'{colleague.Intent}' is its own card's word, read on the first consultation: a mistake there is a " + "warning at run time and the colleague quietly missing, not a startup error.")));
+                                   .Select(colleague => new MigrationEntry(MigrationKind.Agent, agent.ID!, MigrationChange.Revised, $"Consults '{colleague.Intent}' at system '{colleague.Instance}'. Declare that system under " + $"Morgana:AgentToAgent:Partners with its Url, the key you share with it and \"OutboundPolicy\": {{ \"Enabled\": true }}, under exactly the name " + $"'{colleague.Instance}', spelling and spacing included: otherwise startup refuses the agent. Neither the " + "address nor the key is in this archive. That the system really publishes an agent for " + $"'{colleague.Intent}' is its own card's word, read on the first consultation: a mistake there is a " + "warning at run time and the colleague quietly missing, not a startup error.")));
 
             // The toolkit, whose signatures are what the client's own half compiles against.
             CompareTools(agent, was, entries);
@@ -213,7 +213,7 @@ public class MigrationReportService : IMigrationReportService
         // An unchanged domain says so, which is itself the answer the client came for.
         if (entries.Count == 0)
         {
-            sb.AppendLine("Nothing changed. The `agents.json` in this archive is equivalent to the one you uploaded,");
+            sb.AppendLine("Nothing changed. The `agents.json` in this archive is equivalent to the one you uploaded");
             sb.AppendLine("and the generated sources match the code you already have.");
             return sb.ToString();
         }
@@ -263,9 +263,12 @@ public class MigrationReportService : IMigrationReportService
             .Where(parameter => !string.IsNullOrWhiteSpace(parameter.Name))
             .Select(parameter => parameter.Required ? $"string {parameter.Name}" : $"string? {parameter.Name} = null"));
 
-    /// <summary>An agent's four sections joined, for a single comparison.</summary>
+    /// <summary>
+    /// An agent's five authored sections joined, for a single comparison.
+    /// A separator no section contains keeps text moved from one section to the next from reading as unchanged.
+    /// </summary>
     private static string Prose(AgentDraft agent) =>
-        string.Join("", agent.Target, agent.Instructions, agent.Personality, agent.Formatting);
+        string.Join("\u001F", agent.Target, agent.Instructions, agent.Personality, agent.Formatting, agent.Territory);
 
     /// <summary>Finds an intent by name case-insensitively, as the classifier is indifferent to casing.</summary>
     private static IntentDraft? Find(List<IntentDraft> intents, string? name) =>

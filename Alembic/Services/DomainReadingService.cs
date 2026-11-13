@@ -51,7 +51,7 @@ public class DomainReadingService : IDomainReadingService
     {
         // A configuration with no agent has no prose to read a business out of.
         if (draft.Agents.Count == 0)
-            return new DomainReading(0, "There is nothing to read: the upload carried no agent.");
+            return new DomainReading("There is nothing to read: the upload carried no agent.");
 
         // The reader's own prose, which defines the JSON it answers.
         Records.Prompt reader = alembicPromptService.Resolve(ReaderPromptId);
@@ -79,47 +79,46 @@ public class DomainReadingService : IDomainReadingService
 
             // An empty answer teaches nothing and the client is told so.
             if (answer.Length == 0)
-                return new DomainReading(0, "The model returned nothing.");
+                return new DomainReading("The model returned nothing.");
 
             // The answer in the shape the reader's Formatting asks for.
             Reading? reading = JsonSerializer.Deserialize<Reading>(
                 answer, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
-            // A JSON null is no reading; anything else is filed onto the Draft and counted.
-            return reading is null
-                ? new DomainReading(0, "The reading did not come back in the agreed shape.")
-                : new DomainReading(Keep(draft, reading));
+            // A JSON null is no reading.
+            if (reading is null)
+                return new DomainReading("The reading did not come back in the agreed shape.");
+
+            // Anything else is filed onto the Draft, where the interview's passes read it.
+            Keep(draft, reading);
+            return new DomainReading();
         }
         catch (JsonException ex)
         {
             // An answer that is not JSON costs the head start and nothing else.
             logger.LogWarning(ex, "The domain reading did not answer as JSON");
-            return new DomainReading(0, $"The reading did not answer in the agreed shape: {ex.Message}");
+            return new DomainReading($"The reading did not answer in the agreed shape: {ex.Message}");
         }
         catch (Exception ex)
         {
             // A provider failure costs the head start too: the interview still works without it.
             logger.LogError(ex, "The domain reading failed");
-            return new DomainReading(0, $"The upload could not be read: {ex.Message}");
+            return new DomainReading($"The upload could not be read: {ex.Message}");
         }
     }
 
     /// <summary>
-    /// Writes what was read onto the Draft, every fact marked as read rather than said, counting what it wrote.
+    /// Writes what was read onto the Draft, every fact marked as read rather than said.
     /// Only where nothing is known yet: a reading never comes in over what the client said in an earlier sitting of the same file.
     /// </summary>
-    private static int Keep(DomainDraft draft, Reading reading)
+    private static void Keep(DomainDraft draft, Reading reading)
     {
-        // How many facts were filed, which the result reports beside any error.
-        int written = 0;
-
         // The business as a whole, unless the client already told Alembic about it.
         if (draft.Learned.Count == 0)
             foreach (ReadFact fact in Sentences(reading.Business))
             {
                 // Inferred: the client never said it and every pass shows it as Alembic's own reading.
                 draft.Learned.Add(new KnownFact(fact.Subject.Trim(), fact.Fact.Trim(), Inferred: true));
-                written++;
             }
 
         // Each agent the reader wrote about, matched by the intent it answers to.
@@ -136,12 +135,8 @@ public class DomainReadingService : IDomainReadingService
             {
                 // Inferred, as for the business.
                 agent.Known.Add(new KnownFact(fact.Subject.Trim(), fact.Fact.Trim(), Inferred: true));
-                written++;
             }
         }
-
-        // The number of facts that now stand on the Draft as read.
-        return written;
     }
 
     /// <summary>Whatever came back carrying both a subject and a sentence, without repeats.</summary>
@@ -151,8 +146,8 @@ public class DomainReadingService : IDomainReadingService
             .DistinctBy(fact => fact.Fact.Trim(), StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// The uploaded domain as the reader meets it: every intent and every agent's prose, with its toolkit where it holds one.
-    /// A parameter such as 'which branch' tells there is more than one shop where no prose says so; an agent just imported holds no toolkit yet.
+    /// The uploaded domain as the reader meets it: every intent and every agent's prose.
+    /// An agent just imported holds no toolkit yet, since its tools live in the client's C#, so the prose is all there is to read.
     /// </summary>
     private static string Describe(DomainDraft draft)
     {
@@ -184,14 +179,6 @@ public class DomainReadingService : IDomainReadingService
 
             if (AgentRows.Plain(agent.Instructions) is { Length: > 0 } instructions)
                 described.AppendLine(CultureInfo.InvariantCulture, $"- how it goes about it: {instructions}");
-
-            // Every tool with the values it is told, which name the things the business handles.
-            foreach (ToolDraft tool in agent.Tools)
-                described.AppendLine(
-                    $"- it can {tool.Name}: {tool.Description}"
-                    + (tool.Parameters.Count == 0
-                        ? string.Empty
-                        : $" (told: {string.Join(", ", tool.Parameters.Select(parameter => parameter.Name))})"));
 
             described.AppendLine();
         }

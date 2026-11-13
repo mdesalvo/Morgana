@@ -107,8 +107,10 @@ public static class FailureLog
         return report.ToString();
     }
 
-    /// <summary>Writes one model call under its heading: its usage, its instructions and tools by number once seen, then what it read and answered.</summary>
-    /// <param name="toolTexts">The run's tool lists already written; <c>null</c> for a caller that offers none, such as the judge.</param>
+    /// <summary>
+    /// Writes one model call under its heading: its usage, its instructions and tools by number once seen, then what it read and answered.
+    /// The tool lists are skipped for a caller that offers none, such as the judge, which is handed no list to number them against.
+    /// </summary>
     private static void AppendCall(StringBuilder report, string heading, ModelCall call, List<string> instructionTexts, List<string>? toolTexts)
     {
         // The heading carries the call's token usage, the first thing a cost question asks.

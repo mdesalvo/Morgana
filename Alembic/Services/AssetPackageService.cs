@@ -194,7 +194,7 @@ public class AssetPackageService : IAssetPackageService
 
         ## Running it
 
-        Unzip and open the `.slnx`, or `dotnet build` from this folder — the project is already
+        Unzip and open the `.slnx` or run `dotnet build` from this folder: the project is already
         wired to `Morgana.AI` (pinned to the version this archive was built against) and already
         embeds `agents.json`. This assumes your machine can resolve that package from whatever NuGet
         feed you deploy Morgana from; if it can't yet, the archive travels intact to one that can.

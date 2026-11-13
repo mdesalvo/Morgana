@@ -188,6 +188,11 @@ public sealed class LLMJudge
 
         foreach (TimeSpan wait in JudgeRetryWaits)
         {
+            // Each attempt waits its own entry first: none before the first, then longer before each retry, so a provider
+            // refusing under load is given time to recover before it is asked again.
+            if (wait > TimeSpan.Zero)
+                await Task.Delay(wait);
+
             try
             {
                 // Each proposition is judged on its own session: no verdict may lean on another.
@@ -207,10 +212,6 @@ public sealed class LLMJudge
                 lastFailure = $"{ex.GetType().Name}: {ex.Message.Split('\n')[0]}";
             }
 
-            // A failed attempt waits its own entry before the next one: none after the first, so the first two attempts are back to back.
-            // The longest wait comes after the last attempt, with none left to follow it.
-            if (wait > TimeSpan.Zero)
-                await Task.Delay(wait);
         }
 
         // A judge that cannot answer gives no verdict at all, never a false one: a made-up "does not

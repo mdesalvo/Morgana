@@ -29,7 +29,7 @@ public class AnthropicLanguageModel(ILoggerFactory? loggerFactory = null) : Morg
     {
         // Without MaxOutputTokens the SDK adapter sends 1024 tokens and the reasoning tokens count against them, so a thinking model is cut short.
         if (options.MaxOutputTokens is null)
-            throw new InvalidOperationException("MaxOutputTokens is missing: Anthropic needs an output ceiling on every call and neither the tier nor the provider's models.json declares one for this model.");
+            throw new InvalidOperationException("MaxOutputTokens is missing: Anthropic needs MaxOutputTokens on every call and neither the tier nor the provider's models.json declares it for this model.");
     }
 
     /// <summary>

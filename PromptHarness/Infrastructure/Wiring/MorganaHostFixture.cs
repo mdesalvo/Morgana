@@ -19,16 +19,16 @@ namespace PromptHarness.Infrastructure.Wiring;
 public sealed class MorganaHostFixture : IAsyncLifetime
 {
     /// <summary>Configuration resolved by the harness: the host's own appsettings plus the shared secrets store.</summary>
-    public IConfiguration Configuration { get; private set; } = null!;
+    public IConfiguration Configuration { get; }
 
     /// <summary>Harness knobs from <c>appsettings.Harness.json</c>.</summary>
-    public HarnessOptions Options { get; private set; } = null!;
+    public HarnessOptions Options { get; }
 
     /// <summary>Base address of the host under test, such as <c>http://127.0.0.1:43117</c>.</summary>
-    public string BaseAddress { get; private set; } = string.Empty;
+    public string BaseAddress { get; }
 
     /// <summary>Symmetric key minted for this run and shared with the host as the <c>harness</c> issuer key.</summary>
-    public string IssuerKey { get; private set; } = string.Empty;
+    public string IssuerKey { get; }
 
     /// <summary>
     /// The partner this run declares, admitted to <see cref="ScopedPartnerAgent"/> and to no other agent, so the scope half of the A2A gate has something to refuse.
@@ -40,7 +40,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public const string ScopedPartnerAgent = "inventory";
 
     /// <summary>Symmetric key minted for this run under <see cref="ScopedPartnerName"/>.</summary>
-    public string ScopedPartnerKey { get; private set; } = string.Empty;
+    public string ScopedPartnerKey { get; }
 
     /// <summary>
     /// The conversations <see cref="ScopedPartnerName"/> may open in an hour, high enough never to be reached.
@@ -70,7 +70,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public const string MeteredPartnerRefusal = "The nursery cannot take on further exchanges with you this hour.";
 
     /// <summary>Symmetric key minted for this run under <see cref="MeteredPartnerName"/>.</summary>
-    public string MeteredPartnerKey { get; private set; } = string.Empty;
+    public string MeteredPartnerKey { get; }
 
     /// <summary>Position <see cref="MeteredPartnerName"/> takes in <c>Morgana:AgentToAgent:Partners</c>.</summary>
     public int MeteredPartnerIndex { get; private set; }
@@ -91,10 +91,10 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public FederatedPeerHost? Peer { get; private set; }
 
     /// <summary>Where the other installation answers, claimed before either host starts.</summary>
-    public string FederatedPeerAddress { get; private set; } = string.Empty;
+    public string FederatedPeerAddress { get; } = string.Empty;
 
     /// <summary>The one secret the two installations of a federation run share.</summary>
-    public string FederationKey { get; private set; } = string.Empty;
+    public string FederationKey { get; } = string.Empty;
 
     /// <summary>The name the poisoned partners file this installation under, which their gate would expect in the token.</summary>
     public const string PoisonedCallerName = "greenhouse";
@@ -112,7 +112,7 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public GardeningServerHost? GardeningServer { get; private set; }
 
     /// <summary>Port the other installation binds, reserved beside this instance's own.</summary>
-    private int federatedPeerPort;
+    private readonly int federatedPeerPort;
 
     /// <summary>Slot the federated relationship occupies, read from both ends of it.</summary>
     private int FederatedPartnerIndex { get; set; }
@@ -121,34 +121,37 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     public string StoragePath => storagePath;
 
     /// <summary>Tee on the host's stdout; the turn observer reads tool log lines from it.</summary>
-    public HostOutputCapture Output { get; private set; } = null!;
+    public HostOutputCapture Output { get; }
 
     /// <summary>The harness's own channel, already handshaken and listening for callbacks.</summary>
-    public HarnessChannel Channel { get; private set; } = null!;
+    public HarnessChannel Channel { get; }
 
     /// <summary>Reader of the per-turn structural signals.</summary>
-    public TurnObserver Observer { get; private set; } = null!;
+    public TurnObserver Observer { get; }
 
     /// <summary>The provider and model bound to each tier, recorded in every journey row.</summary>
-    public string LLMDescriptor { get; private set; } = string.Empty;
+    public string LLMDescriptor { get; }
 
     /// <summary>Scenario engine bound to this host.</summary>
-    public ScenarioRunner Runner { get; private set; } = null!;
+    public ScenarioRunner Runner { get; }
 
     /// <summary>The judge <see cref="Runner"/> was built over, for the group that judges Morgana's presentation outside any scripted turn.</summary>
-    public LLMJudge Judge { get; private set; } = null!;
+    public LLMJudge Judge { get; }
 
     /// <summary>Logger factory handed to the judge's LLM client; deliberately silent.</summary>
-    private ILoggerFactory? judgeLoggerFactory;
+    private readonly ILoggerFactory judgeLoggerFactory;
 
     /// <summary>Directory holding the per-conversation SQLite databases created during the run.</summary>
-    private string storagePath = string.Empty;
+    private readonly string storagePath;
 
     /// <summary>Fatal exception thrown by the host's entry point, republished to the first test that observes it.</summary>
     private Exception? hostFailure;
 
-    /// <inheritdoc />
-    public async ValueTask InitializeAsync()
+    /// <summary>
+    /// Settles everything the run needs that takes no waiting: configuration, knobs, keys, ports, the console tee, the listeners, the judge and the channel.
+    /// Only starting processes and servers is left to <see cref="InitializeAsync"/>, so every member a test reads exists from construction.
+    /// </summary>
+    public MorganaHostFixture()
     {
         // Step 1: resolve configuration and harness knobs before anything else needs them.
         Configuration = BuildHarnessConfiguration();
@@ -184,6 +187,42 @@ public sealed class MorganaHostFixture : IAsyncLifetime
             FederationKey = Convert.ToBase64String(RandomNumberGenerator.GetBytes(32));
         }
 
+        // The tee must be in place before the host constructs its logging stack, because the console logger latches
+        // Console.Out once, when its provider is created. The other hosts of a run are child processes or log nowhere,
+        // so the capture holds the instance under test alone.
+        Output = HostOutputCapture.Install(Options.EchoHostOutput);
+
+        // The observer listens before the host boots: a refusal of an MCP server's offer is counted once, at startup,
+        // so a listener started later would never see it.
+        Observer = new TurnObserver(Output, Options.LogDrainMilliseconds);
+
+        // The harness's own channel against the host's address; its webhook receiver starts listening in InitializeAsync.
+        Channel = new HarnessChannel(
+            BaseAddress,
+            IssuerKey,
+            Configuration["Morgana:Authentication:Audience"] ?? "morgana.ai",
+            drainTrailingSideMessages: Options.DustBudgetPerConversation is not null);
+
+        // The judge runs on the instance's own tiers and its logging stays silent.
+        judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
+
+        // The judge's own calls are evidence of a failing run too, so its configuration records their content.
+        IConfiguration judgeConfiguration = new ConfigurationBuilder()
+            .AddConfiguration(Configuration)
+            .AddInMemoryCollection([new KeyValuePair<string, string?>("Morgana:OpenTelemetry:EnableSensitiveData", "true")])
+            .Build();
+        Judge = LLMJudge.Create(judgeConfiguration, judgeLoggerFactory);
+
+        // The descriptor is read once so the scenario runner and the groups that write their own journey rows record the same models.
+        LLMDescriptor = DescribeLlm();
+
+        // The engine every scenario group runs through.
+        Runner = new ScenarioRunner(Channel, Observer, Judge, Options, LLMDescriptor);
+    }
+
+    /// <inheritdoc />
+    public async ValueTask InitializeAsync()
+    {
         // The fake model must answer before the host boots, because the tiers are pointed at its address and the startup inspection of the gardening server's offer is a model call.
         if (Options.CancellableModel)
         {
@@ -212,52 +251,21 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         if (!Options.FederatedPeer && !Options.PoisonedDomain)
             GardeningServer = await GardeningServerHost.StartAsync(Options.StartupTimeoutSeconds);
 
-        // The tee must be in place before the host constructs its logging stack, because the
-        // console logger latches Console.Out once, when its provider is created.
-        Output = HostOutputCapture.Install(Options.EchoHostOutput);
-
-        // The observer listens before the host boots: a refusal of an MCP server's offer is counted once, at startup,
-        // so a listener started later would never see it.
-        Observer = new TurnObserver(Output, Options.LogDrainMilliseconds);
-
         // Step 5: the real Morgana.Web entry point on a background thread, waited for until it answers its health endpoint or fails.
         StartHost();
         await WaitForHealthyAsync();
 
-        // Step 6: the harness's own channel against the running host, its webhook receiver listening before any conversation starts.
-        Channel = new HarnessChannel(
-            BaseAddress,
-            IssuerKey,
-            Configuration["Morgana:Authentication:Audience"] ?? "morgana.ai",
-            drainTrailingSideMessages: Options.DustBudgetPerConversation is not null);
+        // Step 6: the channel's webhook receiver listens before any conversation starts.
         await Channel.StartAsync();
-
-        // Step 7: the scenario engine last, over the channel, the observer and a judge on the instance's own tiers, whose logging stays silent.
-        judgeLoggerFactory = LoggerFactory.Create(logging => logging.ClearProviders());
-
-        // The judge's own calls are evidence of a failing run too, so its configuration records their content.
-        IConfiguration judgeConfiguration = new ConfigurationBuilder()
-            .AddConfiguration(Configuration)
-            .AddInMemoryCollection([new KeyValuePair<string, string?>("Morgana:OpenTelemetry:EnableSensitiveData", "true")])
-            .Build();
-        Judge = LLMJudge.Create(judgeConfiguration, judgeLoggerFactory);
-
-        // The descriptor is read once so the scenario runner and the groups that write their own journey rows record the same models.
-        LLMDescriptor = DescribeLlm();
-
-        // The engine every scenario group runs through.
-        Runner = new ScenarioRunner(Channel, Observer, Judge, Options, LLMDescriptor);
     }
 
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
         // Torn down in reverse order of acquisition: the webhook receiver first, then the listeners and the judge's logging.
-        if (Channel is not null)
-            await Channel.DisposeAsync();
-
-        Observer?.Dispose();
-        judgeLoggerFactory?.Dispose();
+        await Channel.DisposeAsync();
+        Observer.Dispose();
+        judgeLoggerFactory.Dispose();
 
         // The other installation is a process of its own, so unlike the host under test it really can
         // be stopped from here. It has to be, along with the conversations it was asked to open.
