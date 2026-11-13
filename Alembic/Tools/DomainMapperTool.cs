@@ -8,16 +8,13 @@ namespace Alembic.Tools;
 /// <summary>The tools of the pass that maps the domain into its kinds of request.</summary>
 public sealed class DomainMapperTool : InterviewTool
 {
-    /// <summary>
-    /// The intent name the framework reserves for the classifier's fallback. No authored agent may
-    /// take it.
-    /// </summary>
+    /// <summary>The intent name the framework reserves for the classifier's fallback, which no authored agent may take.</summary>
     private const string ReservedFallbackIntent = Constants.Intents.Other;
 
     /// <summary>Binds the toolset to one interview.</summary>
     /// <param name="interviewState">The interview these tools write into.</param>
     /// <param name="draftStateService">The domain being built or evolved.</param>
-    /// <param name="draftValidationService">The deterministic checks.</param>
+    /// <param name="draftValidationService">The checks decidable by reading the Draft.</param>
     /// <param name="recapService">Composes the prompt the authored agent will really read.</param>
     public DomainMapperTool(
         InterviewState interviewState,
@@ -32,19 +29,17 @@ public sealed class DomainMapperTool : InterviewTool
     protected override string NextStep => $"the first of the {interviewState.Map.Count} kinds of request you mapped, taken one at a time until every one has its agent.";
 
     /// <summary>
-    /// Returns the domain map as it currently stands.
+    /// Returns the domain map as it currently stands, read back whole.
+    /// Two descriptions overlap only visibly side by side; an overlap is the one defect no prose downstream repairs.
     /// </summary>
-    /// <remarks>
-    /// Read back whole for the same reason the toolkit is: two descriptions overlap or they do not;
-    /// that is only visible side by side. It is the one defect no prose downstream repairs — the
-    /// user meets it as the wrong agent answering.
-    /// </remarks>
     [Description("Returns the map as it stands, in order. Read it before settling: whether two descriptions could claim the same message is only visible with both in front of you.")]
     public string GetDomainMap()
     {
+        // Before any entry the model is told plainly there is nothing to compare.
         if (interviewState.Map.Count == 0)
             return "The map is empty: no kind of request has been named yet.";
 
+        // Each entry numbered in the order the interview will walk it, with the button a user reads beside every other.
         return "The domain map as it stands. The descriptions are weighed against each other by the classifier, "
                + "and the buttons are read side by side by a user:\n"
                + string.Join("\n", interviewState.Map.Select((i, n) =>
@@ -57,23 +52,10 @@ public sealed class DomainMapperTool : InterviewTool
     public override string GetExistingIntents() => base.GetExistingIntents();
 
     /// <summary>
-    /// Puts one kind of request on the domain map or revises one already there.
+    /// Puts one kind of request on the domain map or revises one already there, keeping its place.
+    /// One entry becomes one intent and one agent, which the agent passes then walk in the client's own order;
+    /// all four fields are written here, since a button is read beside every other button as a description beside every other description.
     /// </summary>
-    /// <remarks>
-    /// <para>
-    /// The map is the interview's spine: one entry becomes one intent and one agent and the three
-    /// later passes run once down the list. Revising keeps the entry's place, because the order is
-    /// the order the client thought of their own business in and the interview walks it in that
-    /// order.
-    /// </para>
-    /// <para>
-    /// All four fields of an intent and the two that arrive later arrive here too. The button and
-    /// the sentence it sends are read by a user <em>beside every other intent's button</em>, exactly
-    /// as the descriptions are weighed beside every other description — so they are written where
-    /// the whole set is visible and not one at a time in an agent's own pass where nothing can be
-    /// compared to anything.
-    /// </para>
-    /// </remarks>
     /// <param name="name">Bare lowercase word — becomes a C# attribute argument and a prompt ID.</param>
     /// <param name="description">What routes here, weighed by the classifier against every other intent's.</param>
     /// <param name="label">The quick-reply button text a user reads, if this call is also settling it.</param>
@@ -85,11 +67,14 @@ public sealed class DomainMapperTool : InterviewTool
         [Description("A leading emoji then one to three words (e.g. '📄 Billing'). It is read on a button beside every other intent's button, so it names what is got, not what the system does. Omit it on a first pass and add it when the set is written together.")] string? label = null,
         [Description("The sentence that button sends. First person, phrased the way it would actually be typed (e.g. 'I need to book an appointment for my dog'). Omit it on a first pass and add it with the label.")] string? defaultValue = null)
     {
+        // The name as the model wrote it, without the spaces a payload carries at its ends.
         string cleanName = (name ?? string.Empty).Trim();
 
+        // The name becomes a C# attribute argument and a prompt ID, neither of which can be empty.
         if (cleanName.Length == 0)
             return "Nothing recorded: an intent must have a name — it becomes a C# attribute argument and a prompt ID.";
 
+        // The complement belongs to the classifier: a plugin declaring it is refused at startup.
         if (string.Equals(cleanName, ReservedFallbackIntent, StringComparison.OrdinalIgnoreCase))
             return $"Nothing recorded: '{ReservedFallbackIntent}' is reserved. It is the intent the classifier "
                    + "falls back to when it cannot place a message and no agent may claim it. Call this again with a name from the domain.";
@@ -99,17 +84,20 @@ public sealed class DomainMapperTool : InterviewTool
             return $"Nothing recorded: '{cleanName}' is the name of one of Morgana's own prompts and an agent's prompt is found "
                    + "by its intent's name, so Morgana would refuse to start. Call this again with a name from the domain.";
 
+        // An intent the domain already holds would be answered by two agents, which Morgana refuses at startup.
         if (draftStateService.Current?.Intents.Any(i =>
                 string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase)) == true)
             return $"Nothing recorded: '{cleanName}' is already an intent of this domain, written before today. "
                    + "Two agents answering the same intent is a startup failure. Name what is different about this one.";
 
+        // The entry already on the map under that name, revised in its place, or a new one Alembic authors.
         IntentDraft? existing = interviewState.Map.FirstOrDefault(i =>
             string.Equals(i.Name, cleanName, StringComparison.OrdinalIgnoreCase));
 
         bool revision = existing is not null;
         IntentDraft intent = existing ?? new IntentDraft { Origin = Provenance.Authored };
 
+        // The name and the routing sentence are set on every call.
         intent.Name = cleanName;
         intent.Description = description?.Trim();
 
@@ -118,37 +106,44 @@ public sealed class DomainMapperTool : InterviewTool
         if (!string.IsNullOrWhiteSpace(label))
             intent.Label = label.Trim();
 
+        // The sentence pressing the button sends, kept the same way.
         if (!string.IsNullOrWhiteSpace(defaultValue))
             intent.DefaultValue = defaultValue.Trim();
 
+        // A new entry goes to the end of the map, the order the client named their work in.
         if (!revision)
             interviewState.Map.Add(intent);
 
+        // Every problem the entry still has, reported together so the model fixes them in one call.
         List<string> complaints = [];
 
+        // An intent is a bare lowercase word, since it becomes an attribute argument and a prompt ID.
         if (!cleanName.All(c => char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c)))
             complaints.Add("But that is not a bare lowercase word and it becomes a C# attribute argument and a prompt ID. Call this again with one that is.");
 
+        // Without a description the classifier has nothing to route on.
         if (string.IsNullOrWhiteSpace(description))
             complaints.Add("It says nothing about what routes here, which is the sentence the classifier weighs against every other intent.");
 
+        // The map is not settled until every entry carries its button.
         if (string.IsNullOrWhiteSpace(intent.Label) || string.IsNullOrWhiteSpace(intent.DefaultValue))
             complaints.Add("It has no button yet: the map is not settled until every entry carries the words a user reads and the sentence pressing them sends.");
 
+        // Recorded either way, with the entry's position, so the model knows where it stands in the walk.
         return (revision ? $"'{cleanName}' revised on the map." : $"'{cleanName}' is on the map, in position {interviewState.Map.Count}.")
                + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
     }
 
-    /// <summary>
-    /// Takes a kind of request off the map.
-    /// </summary>
+    /// <summary>Takes a kind of request off the map, so no agent is written for it.</summary>
     [Description("Takes an entry off the map, for when two turn out to be one or the client says it is not their business.")]
     public string DropIntent(
         [Description("The name of the entry to remove.")] string name)
     {
+        // Matched ignoring case, as the map names intents.
         int removed = interviewState.Map.RemoveAll(i =>
             string.Equals(i.Name, name?.Trim(), StringComparison.OrdinalIgnoreCase));
 
+        // A drop that found nothing is said plainly, so the model does not believe the map changed.
         return removed > 0
             ? $"'{name}' is off the map."
             : $"Nothing dropped: '{name}' is not on the map.";

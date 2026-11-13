@@ -10,7 +10,7 @@ public sealed class AgentTargetTool : InterviewTool
     /// <summary>Binds the toolset to one interview.</summary>
     /// <param name="interviewState">The interview these tools write into.</param>
     /// <param name="draftStateService">The domain being built or evolved.</param>
-    /// <param name="draftValidationService">The deterministic checks.</param>
+    /// <param name="draftValidationService">The checks decidable by reading the Draft.</param>
     /// <param name="recapService">Composes the prompt the authored agent will really read.</param>
     public AgentTargetTool(
         InterviewState interviewState,
@@ -33,19 +33,14 @@ public sealed class AgentTargetTool : InterviewTool
     public override string GetExistingIntents() => base.GetExistingIntents();
 
     /// <summary>
-    /// Records the agent's Target section.
+    /// Records the agent's Target section, overwriting it, and tells the model whether it fits the section's shape.
+    /// A pass may call it as the answer sharpens, the last call standing; the label is the composer's to add, so the prose is stored as written.
     /// </summary>
-    /// <remarks>
-    /// Overwrites whatever was there — a pass may call this more than once as the client's answer
-    /// sharpens and the last call is the one that stands. The section is stored as written: its label
-    /// is the framework's to add when the prompt is composed. The returned sentence tells the model
-    /// whether the prose it just wrote fits this section's shape — never blocking, only informing, so
-    /// the model can tighten a Target that ran long before moving on.
-    /// </remarks>
     [Description("Records the agent's TARGET section: what it does well and existentially, then what it is significant to say it does NOT do. Only edges that will actually be walked into — a limit nobody would test is noise. This section opens the composed prompt, so a capability claimed here and not backed by a tool is the most expensive mistake available to you.")]
     public string SetAgentTarget(
         [Description("Two to four sentences, addressed to the agent as 'you'. Purpose first, then edges. No section label; that is added for you.")] string target)
     {
+        // The last call stands; a Target is two to four sentences.
         interviewState.Agent.Target = target?.Trim();
         return Shaped("Target", target, 2, 4);
     }

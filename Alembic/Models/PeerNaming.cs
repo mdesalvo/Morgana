@@ -1,17 +1,12 @@
 namespace Alembic.Models;
 
 /// <summary>
-/// How a declared colleague is named to a reader — the client, the model conducting the interview
-/// or the migration report.
+/// How a declared colleague is named to a reader: the client, the model conducting the interview or the migration report.
+/// One place, since a colleague described four ways by four screens is four colleagues to whoever reads them side by side.
 /// </summary>
-/// <remarks>
-/// One place, because the same edge is rendered by the interview, the coherence pass, the validator
-/// and the report and a colleague described four ways is four colleagues to whoever reads them
-/// side by side.
-/// </remarks>
 public static class PeerNaming
 {
-    /// <summary>Names one colleague, saying where it lives only when that is not this domain.</summary>
+    /// <summary>Names one colleague, saying which partner publishes it only when that is not this domain.</summary>
     /// <param name="peer">The declared colleague.</param>
     public static string Describe(Morgana.AI.Records.PeerReference peer)
         => peer.Instance is null ? peer.Intent : $"{peer.Intent} at {peer.Instance}";
@@ -20,19 +15,16 @@ public static class PeerNaming
     /// <param name="peers">The declared colleagues.</param>
     public static string Describe(IEnumerable<Morgana.AI.Records.PeerReference> peers)
     {
-        string[] described = [.. peers.Select(Describe)];
+        string[] colleagueNames = [.. peers.Select(Describe)];
 
-        return described.Length > 0 ? string.Join(", ", described) : "none";
+        // An agent without colleagues says so in a word, rather than leaving an empty line a reader takes for a fault.
+        return colleagueNames.Length > 0 ? string.Join(", ", colleagueNames) : "none";
     }
 
     /// <summary>
-    /// True when the two name the same colleague: same intent, at the same instance or both at home.
+    /// True when the two name the same colleague: same intent, at the same partner or both at home, ignoring case as the framework does.
+    /// The pair and not the intent, since one agent may hold colleagues of the same intent at two partners, offered as two functions.
     /// </summary>
-    /// <remarks>
-    /// Case-insensitive on both halves, the way the framework matches an intent and an instance entry.
-    /// The pair and not the intent, because one agent may hold a colleague of the same name at two
-    /// installations, which the framework offers as two distinct functions.
-    /// </remarks>
     /// <param name="peer">One colleague.</param>
     /// <param name="other">The other.</param>
     public static bool Same(Morgana.AI.Records.PeerReference peer, Morgana.AI.Records.PeerReference other)

@@ -10,7 +10,7 @@ public sealed class AgentFormattingTool : InterviewTool
     /// <summary>Binds the toolset to one interview.</summary>
     /// <param name="interviewState">The interview these tools write into.</param>
     /// <param name="draftStateService">The domain being built or evolved.</param>
-    /// <param name="draftValidationService">The deterministic checks.</param>
+    /// <param name="draftValidationService">The checks decidable by reading the Draft.</param>
     /// <param name="recapService">Composes the prompt the authored agent will really read.</param>
     public AgentFormattingTool(
         InterviewState interviewState,
@@ -33,24 +33,14 @@ public sealed class AgentFormattingTool : InterviewTool
     public override string GetToolkit() => base.GetToolkit();
 
     /// <summary>
-    /// Records the agent's Formatting section.
+    /// Records the agent's Formatting section, overwriting it and reporting its shape as <see cref="AgentTargetTool.SetAgentTarget"/> does.
+    /// The upper bound is wide because this is where each tool's card shape is named exactly, which a vaguer sentence would leave the model to improvise.
     /// </summary>
-    /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="AgentTargetTool.SetAgentTarget"/>. Its pass is
-    /// the last, since everything else about the agent — the toolkit included — is settled by the
-    /// time it runs.
-    /// <para>
-    /// The upper bound is wider than a plain presentation rule would need, on purpose: this section
-    /// is also where a quick-reply payload or a per-tool card shape gets named exactly and a domain
-    /// with several tools each earning one runs well past a handful of sentences to say so precisely
-    /// — the alternative is a vaguer instruction the model has to improvise from at runtime, which is
-    /// exactly what naming the payload here exists to avoid.
-    /// </para>
-    /// </remarks>
     [Description("Records the agent's FORMATTING section: how it presents what its own tools return. The one thing no global policy can know for it — Morgana cannot know that an invoice leads with its due date or that this agent's own confirm-or-cancel deserves two buttons. Say nothing about markdown or length, those are hers; if a button or a card belongs here, name it exactly.")]
     public string SetAgentFormatting(
         [Description("Addressed to the agent as 'you', about this agent's own data: normally two to five sentences, longer only where naming an exact card shape per tool or an exact button payload takes the room it takes. No section label; that is added for you.")] string formatting)
     {
+        // The last call stands; two to ten sentences, room for a card shape per tool.
         interviewState.Agent.Formatting = formatting?.Trim();
         return Shaped("Formatting", formatting, 2, 10);
     }

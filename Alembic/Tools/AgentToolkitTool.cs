@@ -8,20 +8,16 @@ namespace Alembic.Tools;
 /// <summary>The tools of the pass that declares an agent's tools.</summary>
 public sealed class AgentToolkitTool : InterviewTool
 {
-    /// <summary>
-    /// The scope of a parameter Morgana resolves from the session's own context variables.
-    /// </summary>
+    /// <summary>The scope of a parameter Morgana resolves from the session's own context variables.</summary>
     private const string ContextScope = Constants.Scopes.Context;
 
-    /// <summary>
-    /// The scope of a parameter the agent obtains from the user in conversation.
-    /// </summary>
+    /// <summary>The scope of a parameter the agent obtains from the user in conversation.</summary>
     private const string RequestScope = Constants.Scopes.Request;
 
     /// <summary>Binds the toolset to one interview.</summary>
     /// <param name="interviewState">The interview these tools write into.</param>
     /// <param name="draftStateService">The domain being built or evolved.</param>
-    /// <param name="draftValidationService">The deterministic checks.</param>
+    /// <param name="draftValidationService">The checks decidable by reading the Draft.</param>
     /// <param name="recapService">Composes the prompt the authored agent will really read.</param>
     public AgentToolkitTool(
         InterviewState interviewState,
@@ -44,29 +40,29 @@ public sealed class AgentToolkitTool : InterviewTool
     public override string GetToolkit() => base.GetToolkit();
 
     /// <summary>
-    /// Opens a tool or revises the description of one already open.
+    /// Opens a tool or revises the description of one already open, keeping its parameters.
+    /// A tool's contract is settled over several turns, so re-declaring it to sharpen the description must not empty it.
     /// </summary>
-    /// <remarks>
-    /// Revising keeps the parameters. A tool's contract is settled in several turns (the name and
-    /// what it does come out of one answer, its inputs out of the next), so re-declaring it to
-    /// sharpen the description must not silently empty it.
-    /// </remarks>
     [Description("Opens a tool or revises the description of one already open — revising keeps its parameters. Declare it as soon as the action is described, before you know its inputs.")]
     public string DeclareTool(
         [Description("PascalCase, no spaces or punctuation, a verb the agent performs (e.g. 'GetInvoices', 'CancelBooking'). It becomes a C# method name verbatim.")] string name,
         [Description("What the tool does, what it returns and WHEN to call it. Two to four sentences. Say what it does not cover where a neighbouring tool covers it. A description that names only the action leaves the timing to guesswork.")] string description)
     {
+        // The name as the model wrote it, without the spaces a payload carries at its ends.
         string cleanName = (name ?? string.Empty).Trim();
 
+        // The name pairs the tool with its C# method, so a nameless tool could never be emitted.
         if (cleanName.Length == 0)
             return "No tool recorded: a tool must have a name, because the name is what pairs it with its C# method.";
 
+        // The tool already open under that name, or a new one Alembic authors.
         ToolDraft? existing = Find(cleanName);
         bool revision = existing is not null;
 
         ToolDraft tool = existing ?? new ToolDraft { Name = cleanName, Origin = Provenance.Authored };
         tool.Description = description?.Trim();
 
+        // Only a new tool joins the toolkit; a revised one keeps its place in it.
         if (!revision)
             interviewState.Agent.Tools.Add(tool);
 
@@ -74,6 +70,7 @@ public sealed class AgentToolkitTool : InterviewTool
         // Alembic telling the client one word while the configuration carries another.
         string complaint = IdentifierComplaint(cleanName, "tool name", pascalCase: true);
 
+        // A tool without a description is one the model cannot decide to call, so the reply says so.
         return (revision ? $"'{cleanName}' revised." : $"'{cleanName}' declared.")
                + (complaint.Length > 0 ? " " + complaint : string.Empty)
                + (string.IsNullOrWhiteSpace(description)
@@ -82,13 +79,9 @@ public sealed class AgentToolkitTool : InterviewTool
     }
 
     /// <summary>
-    /// Adds a parameter to a tool or revises one already there.
+    /// Adds a parameter to a tool or revises one already there, in place.
+    /// The declaration order becomes the C# method's parameter order, which cannot put a required parameter after an optional one.
     /// </summary>
-    /// <remarks>
-    /// Revision is by name and in place, so the declaration order survives — which matters, because
-    /// that order becomes the C# method's parameter order and C# cannot declare a required
-    /// parameter after an optional one.
-    /// </remarks>
     /// <param name="toolName">The already-declared tool this parameter belongs to.</param>
     /// <param name="name">camelCase — becomes the C# method's parameter name, matched by name not position.</param>
     /// <param name="description">What the model reads when deciding what to pass here.</param>
@@ -107,11 +100,14 @@ public sealed class AgentToolkitTool : InterviewTool
         [Description("Whether the agent must supply this value on every call. Optional parameters come after the required ones.")] bool required,
         [Description("Whether the resolved value is published to the whole conversation, so other agents use it without asking again. Only meaningful alongside scope 'context'. True for an identity the domain establishes once, false for one agent's own working value.")] bool shared)
     {
+        // A parameter belongs to a tool already declared, which the model has to open first.
         if (Find(toolName) is not { } tool)
             return $"No parameter recorded: no tool named '{toolName}' has been declared yet.";
 
+        // The name as the model wrote it, without the spaces a payload carries at its ends.
         string cleanName = (name ?? string.Empty).Trim();
 
+        // The adapter pairs a parameter by name, so a nameless one could never be bound.
         if (cleanName.Length == 0)
             return "No parameter recorded: a parameter must have a name, because the adapter pairs it with the C# method's parameter by name and not by position.";
 
@@ -119,15 +115,22 @@ public sealed class AgentToolkitTool : InterviewTool
         string cleanScope = (scope ?? string.Empty).Trim().ToLowerInvariant();
         string? resolvedScope = cleanScope switch
         {
+            // The two scopes the framework reads.
             ContextScope => ContextScope,
             RequestScope => RequestScope,
+
+            // A value the agent authors itself.
             "" or "none" or "null" => null,
+
+            // Anything else is kept and reported below, never coerced into a scope the model did not mean.
             _ => cleanScope
         };
 
+        // The parameter already on the tool under that name, matched with the case the C# keeps.
         ToolParameterDraft? existing = tool.Parameters.FirstOrDefault(p =>
             string.Equals(p.Name, cleanName, StringComparison.Ordinal));
 
+        // Revised in place, so its position in the signature survives, or added at the end.
         bool revision = existing is not null;
         ToolParameterDraft parameter = existing ?? new ToolParameterDraft { Name = cleanName };
 
@@ -136,18 +139,23 @@ public sealed class AgentToolkitTool : InterviewTool
         parameter.Required = required;
         parameter.Shared = shared;
 
+        // Only a new parameter joins the signature.
         if (!revision)
             tool.Parameters.Add(parameter);
 
+        // Every problem the parameter now has, reported together so the model fixes them in one call.
         List<string> complaints = [];
 
+        // The name becomes a C# parameter, camelCase as the framework's own are.
         string identifier = IdentifierComplaint(cleanName, "parameter name", pascalCase: false);
         if (identifier.Length > 0)
             complaints.Add(identifier);
 
+        // A scope the framework does not read would leave the parameter with no source.
         if (resolvedScope is not null and not ContextScope and not RequestScope)
             complaints.Add($"'{cleanScope}' is not a scope: a parameter resolving an input declares '{ContextScope}' or '{RequestScope}' and one carrying a value you author yourself declares none.");
 
+        // Sharing publishes a resolved context variable, so it means nothing on any other scope.
         if (shared && resolvedScope != ContextScope)
             complaints.Add($"Shared only means something alongside scope '{ContextScope}': it publishes a resolved context variable so other agents can hydrate from it.");
 
@@ -157,39 +165,41 @@ public sealed class AgentToolkitTool : InterviewTool
         if (firstOptional >= 0 && tool.Parameters.Skip(firstOptional).Any(p => p.Required))
             complaints.Add("A required parameter now sits after an optional one, which C# cannot declare. Reorder them by dropping and re-adding or make the earlier one required.");
 
+        // Recorded either way: the complaints are what the model corrects next.
         return $"'{cleanName}' recorded on {tool.Name}."
                + (complaints.Count > 0 ? " " + string.Join(" ", complaints) : string.Empty);
     }
 
-    /// <summary>
-    /// Removes a parameter from a tool.
-    /// </summary>
+    /// <summary>Removes a parameter from a tool.</summary>
     [Description("Removes a parameter from a tool. Also how a parameter moves: drop it and add it again in the position you want.")]
     public string DropToolParameter(
         [Description("The exact name of the tool.")] string toolName,
         [Description("The exact name of the parameter to remove.")] string parameterName)
     {
+        // A tool not declared has no parameter to drop.
         if (Find(toolName) is not { } tool)
             return $"Nothing dropped: no tool named '{toolName}' has been declared.";
 
+        // Matched with the case the C# keeps.
         int removed = tool.Parameters.RemoveAll(p =>
             string.Equals(p.Name, parameterName?.Trim(), StringComparison.Ordinal));
 
+        // A drop that found nothing is said plainly, so the model does not believe the signature changed.
         return removed > 0
             ? $"'{parameterName}' dropped from {tool.Name}."
             : $"Nothing dropped: {tool.Name} has no parameter named '{parameterName}'.";
     }
 
-    /// <summary>
-    /// Removes a tool and everything on it.
-    /// </summary>
+    /// <summary>Removes a tool and everything on it.</summary>
     [Description("Removes a tool and every parameter on it. Use it when the agent turns out to have no such job or when you have split one action into two tools that cannot be told apart.")]
     public string DropTool(
         [Description("The exact name of the tool to remove.")] string toolName)
     {
+        // Matched with the case the C# keeps.
         int removed = interviewState.Agent.Tools.RemoveAll(t =>
             string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));
 
+        // A drop that found nothing is said plainly, so the model does not believe the toolkit changed.
         return removed > 0
             ? $"'{toolName}' dropped, with its parameters."
             : $"Nothing dropped: no tool named '{toolName}' has been declared.";
@@ -224,12 +234,8 @@ public sealed class AgentToolkitTool : InterviewTool
 
     /// <summary>
     /// Finds a declared tool by exact name.
+    /// The name becomes a C# method name, so two tools differing only in case are two tools here and a finding at startup.
     /// </summary>
-    /// <remarks>
-    /// Ordinal, because the name becomes a C# method name. Two tools differing only in case are
-    /// two tools here and one collision at startup, which is a finding rather than something to
-    /// paper over by matching loosely.
-    /// </remarks>
     private ToolDraft? Find(string? toolName) =>
         interviewState.Agent.Tools.FirstOrDefault(t =>
             string.Equals(t.Name, toolName?.Trim(), StringComparison.Ordinal));

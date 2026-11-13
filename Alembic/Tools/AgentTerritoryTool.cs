@@ -12,7 +12,7 @@ public sealed class AgentTerritoryTool : InterviewTool
     /// <summary>Binds the toolset to one interview.</summary>
     /// <param name="interviewState">The interview these tools write into.</param>
     /// <param name="draftStateService">The domain being built or evolved.</param>
-    /// <param name="draftValidationService">The deterministic checks.</param>
+    /// <param name="draftValidationService">The checks decidable by reading the Draft.</param>
     /// <param name="recapService">Composes the prompt the authored agent will really read.</param>
     public AgentTerritoryTool(
         InterviewState interviewState,
@@ -39,61 +39,48 @@ public sealed class AgentTerritoryTool : InterviewTool
     public override string GetExistingIntents() => base.GetExistingIntents();
 
     /// <summary>
-    /// Records what a colleague reads before consulting this agent.
+    /// Records what a colleague reads before consulting this agent, overwriting it and reporting its shape as <see cref="AgentTargetTool.SetAgentTarget"/> does.
+    /// It names a territory and never an inventory, since a caller handed an inventory rules questions out instead of asking them.
     /// </summary>
-    /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="AgentTargetTool.SetAgentTarget"/>. It is the
-    /// Target's scope addressed to a different reader: a colleague deciding whether a question is
-    /// this agent's. So it names a territory and never a list of what the agent can do — a caller handed an
-    /// inventory rules questions out instead of asking them. Short by nature, which is why the shape
-    /// it reports against is tighter than the Target's.
-    /// </remarks>
     [Description("Records what a colleague reads before consulting this agent: the scope of its agent, addressed to another agent instead of to itself. A territory, in one or two sentences — what falls here — never a list of what the agent can do, which a caller reads as grounds to rule its question out. Never asked of the client and never shown to them: you write it from the TARGET you have just settled.")]
     public string SetAgentTerritory(
         [Description("The statement, without its section marker.")] [ToolParameter(Records.ToolScope.Request)] string territory)
     {
+        // The last call stands; a territory is short by nature, one to three sentences.
         interviewState.Agent.Territory = territory?.Trim();
         return Shaped("Territory", territory, 1, 3);
     }
 
     /// <summary>
-    /// Rewrites the routing description of the intent in hand, strengthened by what the territory
-    /// settled.
+    /// Rewrites the routing description of the intent in hand in the sharper words the territory settled.
+    /// Only this entry's own: every other description is settled and reading them back keeps this one distinct.
     /// </summary>
-    /// <remarks>
-    /// The classifier reads this description against every other one, so it is the map's to write
-    /// and the map writes it before any agent exists. Once an agent has stated the competence it is
-    /// the one to answer for, the same subject is known in sharper words than the map could reach;
-    /// the routing that lands a user here can be said with them. Only this entry's own
-    /// description: every other one is settled and reading them back is what keeps this one distinct.
-    /// </remarks>
     [Description("Rewrites what this entry routes on, in the sharper words the territory settled. The classifier reads it against every other entry's description, so read those back first and leave this one distinct from all of them. Only this entry: no other intent of the domain is yours.")]
     public string SetIntentDescription(
         [Description("What lands on this agent, said for the classifier: the subject and the kinds of request that belong to it, in the client's own words. Never the agent's boundaries, its tools or its voice.")] string description)
     {
-        string written = (description ?? string.Empty).Trim();
+        // The sentence as the model wrote it, without the spaces a payload carries at its ends.
+        string descriptionText = (description ?? string.Empty).Trim();
 
-        if (written.Length == 0)
+        // An empty description would leave the intent nothing to route on, so the old one stays.
+        if (descriptionText.Length == 0)
             return "Nothing changed: an intent with no description is one the classifier cannot route to.";
 
-        interviewState.Intent.Description = written;
+        // The map's entry is the one the domain receives, so the classifier reads the new sentence.
+        interviewState.Intent.Description = descriptionText;
 
-        return $"'{interviewState.Intent.Name}' now routes on: {written}";
+        // The model reads back what now routes here.
+        return $"'{interviewState.Intent.Name}' now routes on: {descriptionText}";
     }
 
     /// <summary>
     /// Returns the card this agent will present to whoever might consult it.
+    /// A colleague reads its description and nothing else, so an inventory or a recycled routing phrase is visible here and nowhere else.
     /// </summary>
-    /// <remarks>
-    /// The last reading of a territory before it is published: a Morgana carries this card on the
-    /// A2A endpoint of every agent it holds; a colleague weighing a question reads its
-    /// description and nothing else. A sentence that reads as a list of functions or one that never
-    /// left the routing phrase the classifier uses, is visible here and nowhere else in the
-    /// interview.
-    /// </remarks>
     [Description("Returns the card this agent will present to anyone who might consult it: what it answers for and the skills it advertises. Call it once the territory is written — a colleague weighing a question reads that description and nothing else, so this is where a sentence that reads as a list of functions is visible.")]
     public string GetAgentCard()
     {
+        // Projected as Morgana projects the card she publishes, so what the model weighs is what a caller will be handed.
         return CardProjection.Render(interviewState.Intent, interviewState.Agent);
     }
 

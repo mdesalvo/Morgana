@@ -5,22 +5,19 @@ namespace Alembic.Models;
 /// </summary>
 public static class AgentSections
 {
-    /// <summary>
-    /// The rail whose content is the tools rather than prose.
-    /// </summary>
+    /// <summary>The rail whose content is the tools rather than prose.</summary>
     public const int ToolkitRail = 3;
 
-    /// <summary>
-    /// Every section rail, in the order the track walks them.
-    /// </summary>
+    /// <summary>Every section rail, in the order the track walks them.</summary>
     public static IReadOnlyList<int> All { get; } = [1, 2, 3, 4, 5, 6];
 
     /// <summary>
     /// A section's prose as the client reads it; <c>null</c> while unwritten.
+    /// The Toolkit has no prose and answers <c>null</c>: callers list its tools instead.
     /// </summary>
-    // The Toolkit has no prose: callers list its tools.
     public static string? Prose(AgentDraft agent, int rail) => rail switch
     {
+        // Each prose rail reads its section without the label; any other rail, the Toolkit included, has none.
         1 => AgentRows.Plain(agent.Target),
         2 => AgentRows.Plain(agent.Personality),
         4 => AgentRows.Plain(agent.Territory),

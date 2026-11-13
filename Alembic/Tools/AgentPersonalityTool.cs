@@ -11,7 +11,7 @@ public sealed class AgentPersonalityTool : InterviewTool
     /// <summary>Binds the toolset to one interview.</summary>
     /// <param name="interviewState">The interview these tools write into.</param>
     /// <param name="draftStateService">The domain being built or evolved.</param>
-    /// <param name="draftValidationService">The deterministic checks.</param>
+    /// <param name="draftValidationService">The checks decidable by reading the Draft.</param>
     /// <param name="recapService">Composes the prompt the authored agent will really read.</param>
     public AgentPersonalityTool(
         InterviewState interviewState,
@@ -30,51 +30,50 @@ public sealed class AgentPersonalityTool : InterviewTool
     public override string GetAgentSoFar() => base.GetAgentSoFar();
 
     /// <summary>
-    /// Offers words for the agent's voice, to be picked from freely.
+    /// Offers words for the agent's voice, to be picked from freely, several at a time.
+    /// They are not buttons, since none is a whole answer; the model writes them because they must fit this domain and Morgana's voice.
     /// </summary>
-    /// <remarks>
-    /// Not buttons and the tool is separate for the same reason the shape is: a button is one whole
-    /// answer and these are taken several at a time, none of them an answer on its own. The words
-    /// come from the model because they have to be about this domain and this agent and to sit
-    /// inside Morgana's own voice, which it has read and a template has not.
-    /// </remarks>
     [Description("Offers words for this agent's voice under the question you are about to ask, to be picked from freely: several, one or none. The text box stays open beside them. Call it BEFORE writing the question. Every word must be a way Morgana herself could speak: this section specialises her voice and never replaces it.")]
     public string SetTraits(
         [Description("JSON array of eight to fourteen single adjectives, in the client's language: [\"precise\",\"unhurried\",\"reassuring\"]. Real alternatives rather than shades of one temper, each plausible for THIS domain and none of them a way Morgana would never speak.")] string traits)
     {
         try
         {
+            // The words arrive as a JSON array in one string, the only list shape a tool parameter carries reliably.
             List<string>? parsed = JsonSerializer.Deserialize<List<string>>(
                 traits, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
+            // Blank entries would draw empty chips.
             List<string> words = [.. (parsed ?? []).Select(w => w.Trim()).Where(w => w.Length > 0)];
 
+            // Nothing to draw: the model is told so rather than left believing the words are on screen.
             if (words.Count == 0)
                 return "No words offered: the payload held none.";
 
+            // This call's words replace any offered earlier in the turn.
             interviewState.PendingTraits.Clear();
             interviewState.PendingTraits.AddRange(words);
 
+            // The model learns the text box stays open beside the words.
             return $"{words.Count} words will be drawn under your question, to be picked from freely. "
                    + "The text box stays open, so the answer may still come in the client's own words.";
         }
         catch (JsonException ex)
         {
+            // A payload that is not a JSON array is reported with the parser's reason, so the model can resend it right.
             return $"No words offered: the payload is not a JSON array of words ({ex.Message}).";
         }
     }
 
     /// <summary>
-    /// Records the agent's Personality section.
+    /// Records the agent's Personality section, overwriting it and reporting its shape as <see cref="AgentTargetTool.SetAgentTarget"/> does.
+    /// This pass is the one place in the interview a voice can be written.
     /// </summary>
-    /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="AgentTargetTool.SetAgentTarget"/>. This pass is
-    /// the one place in the interview a voice can be written.
-    /// </remarks>
     [Description("Records the agent's PERSONALITY section: the empathy, language, tone and humanity it meets a conversation with. Voice only — a sentence telling the agent what to DO belongs in its instructions. Name which facet of Morgana this agent is; do not list adjectives.")]
     public string SetAgentPersonality(
         [Description("Two to three sentences, addressed to the agent as 'you'. No section label; that is added for you.")] string personality)
     {
+        // The last call stands; the section's shape is two to three sentences of voice.
         interviewState.Agent.Personality = personality?.Trim();
         return Shaped("Personality", personality, 2, 3);
     }

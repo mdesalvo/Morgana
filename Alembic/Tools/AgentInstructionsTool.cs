@@ -10,7 +10,7 @@ public sealed class AgentInstructionsTool : InterviewTool
     /// <summary>Binds the toolset to one interview.</summary>
     /// <param name="interviewState">The interview these tools write into.</param>
     /// <param name="draftStateService">The domain being built or evolved.</param>
-    /// <param name="draftValidationService">The deterministic checks.</param>
+    /// <param name="draftValidationService">The checks decidable by reading the Draft.</param>
     /// <param name="recapService">Composes the prompt the authored agent will really read.</param>
     public AgentInstructionsTool(
         InterviewState interviewState,
@@ -33,23 +33,14 @@ public sealed class AgentInstructionsTool : InterviewTool
     public override string GetToolkit() => base.GetToolkit();
 
     /// <summary>
-    /// Records the agent's Instructions section.
+    /// Records the agent's Instructions section, overwriting it and reporting its shape as <see cref="AgentTargetTool.SetAgentTarget"/> does.
+    /// What a tool does, needs and refuses belongs to its own description, so a long section is a line per tool: a second authority on each.
     /// </summary>
-    /// <remarks>
-    /// Same overwrite-and-report contract as <see cref="AgentTargetTool.SetAgentTarget"/>. Its pass
-    /// runs once the toolkit exists: Instructions speaks about the agent's tools, so nothing earlier
-    /// may write it.
-    /// <para>
-    /// The tightest shape of the five is the one the client feels: what a tool does, needs and
-    /// refuses belongs to that tool's own description, so a section running long is one holding a
-    /// line per tool — a second authority on each subject and, stated back on screen, a wall of
-    /// text where a sentence was owed.
-    /// </para>
-    /// </remarks>
     [Description("Records the agent's INSTRUCTIONS section: how it does what it does, what it is trying to achieve on the way and what it is significant to say it must NOT do. The order of the work, the confirmations, the refusals. Only what is true of this domain.")]
     public string SetAgentInstructions(
         [Description("Four to twelve sentences, addressed to the agent as 'you', in the order the work happens. No section label; that is added for you.")] string instructions)
     {
+        // The last call stands; two to five sentences, written once the toolkit exists since they speak about it.
         interviewState.Agent.Instructions = instructions?.Trim();
         return Shaped("Instructions", instructions, 2, 5);
     }

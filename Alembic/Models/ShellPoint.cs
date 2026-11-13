@@ -16,66 +16,61 @@ public readonly record struct ShellPoint(int Entry, int Rail) : IComparable<Shel
     /// <summary>The domain's first moment.</summary>
     public const int CollaborationRail = 8;
 
-    /// <summary>
-    /// The seven moments every agent goes through, as the track names them.
-    /// </summary>
+    /// <summary>The seven moments every agent goes through, as the track names them.</summary>
     public static IReadOnlyList<string> AgentMoments { get; } =
         ["Target", "Personality", "Toolkit", "Territory", "Instructions", "Formatting", "Acceptance"];
 
-    /// <summary>
-    /// The three moments that close the domain, as the track names them.
-    /// </summary>
+    /// <summary>The three moments that close the domain, as the track names them.</summary>
     public static IReadOnlyList<string> DomainMoments { get; } = ["Collaboration", "Validation", "Archive"];
 
-    /// <summary>
-    /// The map, where every interview starts.
-    /// </summary>
+    /// <summary>The map, where every interview starts.</summary>
     public static ShellPoint Map => new(-1, MapRail);
 
-    /// <summary>
-    /// Whether this is the map.
-    /// </summary>
+    /// <summary>Whether this is the map.</summary>
     public bool IsMap => Rail == MapRail;
 
-    /// <summary>
-    /// Whether this is one of an agent's moments.
-    /// </summary>
+    /// <summary>Whether this is one of an agent's moments.</summary>
     public bool OnAgent => Entry >= 0 && Rail is > MapRail and <= AcceptanceRail;
 
-    /// <summary>
-    /// Whether this is one of the domain's closing moments.
-    /// </summary>
+    /// <summary>Whether this is one of the domain's closing moments.</summary>
     public bool OnDomain => Rail >= CollaborationRail;
 
-    /// <summary>
-    /// The moment's name on the track.
-    /// </summary>
+    /// <summary>The moment's name on the track.</summary>
     public string Name =>
         IsMap ? "Map" : OnAgent ? AgentMoments[Rail - 1] : DomainMoments[Rail - CollaborationRail];
 
     /// <summary>
     /// Where the state machine stands: the frontier the pointer may never pass.
+    /// The agent passes are numbered 1-6 in the order of the track's sections, so the pass is the rail.
     /// </summary>
-    // The agent passes are numbered 1-6 in the same order as the track's sections, so the pass is the
-    // rail. Acceptance is no pass: the interview waits there once Formatting is settled.
     public static ShellPoint FrontierOf(InterviewState interview) => interview switch
     {
+        // The map is drawn before any agent exists.
         { Pass: InterviewStep.DomainMapper } => Map,
+
+        // Acceptance is no pass: the interview waits there once Formatting is settled.
         { Pass: InterviewStep.AgentFormatting, ReadyForReview: true } => new ShellPoint(interview.At, AcceptanceRail),
+
+        // Any other pass stands on its own rail of the entry in hand.
         _ => new ShellPoint(interview.At, (int)interview.Pass)
     };
 
     /// <inheritdoc />
     public int CompareTo(ShellPoint other) => Order.CompareTo(other.Order);
 
-    /// <summary>
-    /// The track read left to right: the map, every agent in map order, then the domain.
-    /// </summary>
+    /// <summary>The track read left to right: the map, every agent in map order, then the domain.</summary>
     private (int Band, int Entry, int Rail) Order =>
         IsMap ? (0, 0, 0) : OnAgent ? (1, Entry, Rail) : (2, 0, Rail);
 
+    /// <summary>Whether <paramref name="left"/> comes before <paramref name="right"/> on the track.</summary>
     public static bool operator <(ShellPoint left, ShellPoint right) => left.CompareTo(right) < 0;
+
+    /// <summary>Whether <paramref name="left"/> comes after <paramref name="right"/> on the track.</summary>
     public static bool operator >(ShellPoint left, ShellPoint right) => left.CompareTo(right) > 0;
+
+    /// <summary>Whether <paramref name="left"/> comes before <paramref name="right"/> on the track or is the same place.</summary>
     public static bool operator <=(ShellPoint left, ShellPoint right) => left.CompareTo(right) <= 0;
+
+    /// <summary>Whether <paramref name="left"/> comes after <paramref name="right"/> on the track or is the same place.</summary>
     public static bool operator >=(ShellPoint left, ShellPoint right) => left.CompareTo(right) >= 0;
 }

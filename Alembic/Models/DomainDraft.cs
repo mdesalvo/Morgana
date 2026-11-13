@@ -3,123 +3,61 @@ using Morgana.AI;
 namespace Alembic.Models;
 
 /// <summary>
-/// The whole Morgana domain under construction: the single artifact the interview fills, the
-/// validator checks, the recap composes and the emit reads.
+/// The whole Morgana domain under construction: the single artifact the interview fills, the validator checks, the recap composes and the emit reads.
+/// It is the editing model beside the framework's immutable records: an interview in progress is incomplete, so every nullable string means "not asked yet";
+/// where a shape is final it is the framework's own record.
 /// </summary>
-/// <remarks>
-/// <para>
-/// <b>Why a Draft rather than the <c>Records</c> types directly.</b> The <c>Records</c> types are
-/// the <em>serialization</em> model: immutable, complete, positional. The Draft is the
-/// <em>editing</em> model and an interview in progress is by definition incomplete — a tool whose
-/// description has not been asked for yet is a different state from a tool whose description is
-/// deliberately empty and only a nullable field can tell the two apart. Every nullable string
-/// below means precisely "not asked yet". Nothing here duplicates a concept the framework already
-/// models: where a shape is final it IS the framework's own record.
-/// </para>
-/// <para>
-/// <b>What survives that Alembic does not understand.</b> An uploaded <c>agents.json</c> may carry
-/// AdditionalProperties entries. They are kept verbatim in
-/// <see cref="AgentDraft.UnmodelledProperties"/> and written back untouched: the round-trip
-/// invariant must not depend on Alembic having a use for every key it meets.
-/// </para>
-/// </remarks>
 public sealed class DomainDraft
 {
     /// <summary>
-    /// What is known about the client's business as a whole: what they sell or do, how the place
-    /// works, what is true of every counter in it.
+    /// What is known about the client's business as a whole: what they sell or do, how the place works, what is true of every counter in it.
+    /// It is kept with the domain, since it outlives any sitting, and never written into an agent: it is what the questions are made of.
     /// </summary>
-    /// <remarks>
-    /// Kept with the domain rather than with the sitting, because it outlives any one of them and an
-    /// upload has no sitting at all: a bare <c>agents.json</c> is read once for what it says about
-    /// the trade and every step of every later interview opens holding it. Each fact says whether
-    /// the client said it or Alembic read it. None of it is ever written into an agent — it is what
-    /// the questions are made of, not what the agents say.
-    /// </remarks>
     public List<KnownFact> Learned { get; set; } = [];
 
-    /// <summary>
-    /// Intent definitions, one per agent plus the framework's own <c>other</c>.
-    /// </summary>
+    /// <summary>Intent definitions, one per agent; the classifier's own <c>other</c> is never among them.</summary>
     public List<IntentDraft> Intents { get; set; } = [];
 
-    /// <summary>
-    /// Agent prompts, each keyed by an ID matching an intent name.
-    /// </summary>
+    /// <summary>Agent prompts, each keyed by an ID matching an intent name.</summary>
     public List<AgentDraft> Agents { get; set; } = [];
 
-    /// <summary>
-    /// Name of the uploaded file this Draft was imported from, or <c>null</c> for a greenfield
-    /// Draft. Carried for the migration report, which has to name what it is diffing against.
-    /// </summary>
+    /// <summary>Name of the uploaded file this Draft was imported from, which the migration report names; <c>null</c> for a greenfield Draft.</summary>
     public string? ImportedFrom { get; set; }
 
-    /// <summary>
-    /// When this Draft was created or last imported into, UTC.
-    /// </summary>
+    /// <summary>When this Draft was created or last imported into, UTC.</summary>
     public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
 
     /// <summary>
-    /// The domain exactly as it was uploaded, frozen at import. <c>null</c> for a greenfield Draft.
+    /// The domain exactly as it was uploaded, frozen at import, which the migration report diffs against; <c>null</c> for a greenfield Draft.
+    /// It is a Draft so the diff compares like with like and it is saved with the rest so a report resumed the next day still has it; its own baseline is always null.
     /// </summary>
-    /// <remarks>
-    /// The migration report has to diff against something and <see cref="Provenance"/> alone cannot
-    /// serve: it says an element was revised, never what it used to be and "the parameter list
-    /// changed" is only useful next to the list it changed from. Kept as a Draft rather than as the
-    /// uploaded bytes so the diff compares like with like — two Drafts, one projection, no chance of
-    /// reporting a difference that is really a parsing artefact.
-    /// <para>
-    /// Serialized with the rest, because an interview over a real domain does not fit in one
-    /// sitting and a report that forgets its baseline on resume is a report that lies the second
-    /// day. Its own baseline is always <c>null</c>: one level, never a chain.
-    /// </para>
-    /// </remarks>
     public DomainDraft? Baseline { get; set; }
 
     /// <summary>
-    /// The interview as it stood when this file was written, or <c>null</c> when none was under way.
+    /// The interview as it stood when this file was written; <c>null</c> when none was under way.
+    /// It saves the configuration in hand and never the conversation, so closing the tab mid-agent loses nothing and resuming re-enters the step with a fresh session.
     /// </summary>
-    /// <remarks>
-    /// Without this the save file holds only what has been let into the domain, so a client who
-    /// closes the tab while an agent is half written loses that agent and the map they dictated to
-    /// get to it — which is precisely the moment somebody has to stop, since the accepted ones are
-    /// the ones already behind them.
-    /// <para>
-    /// What is saved is the configuration in hand, never the conversation: the map, which entry is
-    /// being written, which step of it and what has been written so far. Resuming re-enters that
-    /// step the way stepping back into it does — a fresh agent and a fresh session reading what is
-    /// there as settled fact — because the memory of this interview has always been the
-    /// configuration rather than the transcript.
-    /// </para>
-    /// </remarks>
     public InterviewSitting? Sitting { get; set; }
 
-    /// <summary>
-    /// The name the classifier falls back to when it cannot place a message at all.
-    /// </summary>
+    /// <summary>The name the classifier falls back to when it cannot place a message at all.</summary>
     public const string FallbackIntent = Constants.Intents.Other;
 
     /// <summary>
     /// Takes the fallback intent out of the domain, wherever it came from.
+    /// It is the complement of the domain and belongs to Morgana's classifier, which refuses at startup a plugin declaring it, so a configuration carrying one loses it here.
     /// </summary>
-    /// <remarks>
-    /// It is the complement of the domain rather than a part of it — what a request matching no agent
-    /// is — so it belongs to Morgana's classifier and is described in that actor's own prompt. No
-    /// interview writes it, no client edits it and nothing this workbench emits declares it. A
-    /// configuration that arrived carrying one was written before that was true: it is dropped here
-    /// and the client is told, since an installation ignores such a declaration anyway.
-    /// </remarks>
     /// <returns>Whether a declaration was actually there to remove.</returns>
     public bool DropFallbackIntent()
     {
+        // The domain's own intents, the first place a configuration can declare it.
         bool dropped = Intents.RemoveAll(IsFallback) > 0;
 
-        // The map of an interrupted sitting is a second place a domain declares its agents; a
-        // sitting begun before this rule held can be resumed today carrying the fallback as an entry
-        // the walk would open an agent on.
+        // The map of an interrupted sitting is a second place: a sitting saved over such a configuration
+        // would otherwise resume with an entry the walk opens an agent on.
         if (Sitting is not null)
             dropped |= Sitting.Map.RemoveAll(IsFallback) > 0;
 
+        // The caller tells the client only when there was something to drop.
         return dropped;
     }
 
@@ -129,49 +67,30 @@ public sealed class DomainDraft
 }
 
 /// <summary>
-/// An interview interrupted: where it had got to and what it had in hand.
+/// An interview interrupted: where it had got to and what it had in hand, every one a fact the state machine owns.
+/// The entries already accepted are in the domain itself, where they belong the moment the client lets them in.
 /// </summary>
-/// <remarks>
-/// Everything here is a fact the state machine owns, which is why it is exactly what has to survive
-/// a closed tab. The entries already accepted are not here — they are in the domain itself, which is
-/// where they belong the moment the client lets them in.
-/// </remarks>
 public sealed class InterviewSitting
 {
-    /// <summary>
-    /// Which step of an entry the interview stood on.
-    /// </summary>
+    /// <summary>Which step of an entry the interview stood on.</summary>
     public InterviewStep Pass { get; set; }
 
-    /// <summary>
-    /// Which entry of the map it stood on, or -1 while the map was still being drawn.
-    /// </summary>
+    /// <summary>Which entry of the map it stood on; -1 while the map was still being drawn.</summary>
     public int At { get; set; } = -1;
 
-    /// <summary>
-    /// The map as dictated, entries already accepted included: it is one list and the interview walks
-    /// it, so half of it would resume as a different domain.
-    /// </summary>
+    /// <summary>The map as dictated, entries already accepted included, since half of the list would resume as a different domain.</summary>
     public List<IntentDraft> Map { get; set; } = [];
 
-    /// <summary>
-    /// The agent in hand, however far it had got.
-    /// </summary>
+    /// <summary>The agent in hand, however far it had got.</summary>
     public AgentDraft Agent { get; set; } = new();
 
     /// <summary>
-    /// The worked example standing in the answer box, if the question it belongs to still is.
+    /// The worked example standing in the answer box, kept for the turn that reopens this step.
+    /// A fresh example written by that turn wins, exactly as it would have without a save in between.
     /// </summary>
-    /// <remarks>
-    /// Carried only as a fallback for the turn that reopens this step: if that turn's own exchange
-    /// writes a fresh one, the fresh one wins, exactly as it would have without a save in between.
-    /// </remarks>
     public string? Example { get; set; }
 
-    /// <summary>
-    /// What the agent in hand was before it left the domain, when this sitting is one section of an
-    /// agent being revised rather than a fresh entry being written.
-    /// </summary>
+    /// <summary>What the agent in hand was before it left the domain, when this sitting corrects an agent rather than writing a fresh entry.</summary>
     public AgentRevision? Revision { get; set; }
 
     /// <summary>
@@ -181,22 +100,10 @@ public sealed class InterviewSitting
 }
 
 /// <summary>
-/// An agent taken out of the domain to be worked on and what it needs to go back the way it came.
+/// An agent taken out of the domain to be worked on and what it needs to go back the way it came: its place in both lists and its provenance.
+/// An agent being edited is out of the configuration, or letting it back in would write it twice; its place keeps the client's order and its provenance
+/// brings an imported agent back as revised. Reading an agent on the way past creates none.
 /// </summary>
-/// <remarks>
-/// An agent being edited must not also be sitting in the configuration, or letting it back in would
-/// write it twice — the rule <c>BackAsync</c> already obeys when it steps out of one entry into the
-/// one before. So the domain is without it for the length of the edit and this is what puts it back:
-/// its place in the two lists, since the order is the client's and an agent that walks to the bottom
-/// every time somebody fixes a sentence turns that order into a history of edits; and the provenance
-/// it arrived with, since an imported agent has to come back <see cref="Provenance.Revised"/> rather
-/// than as something Alembic claims to have authored.
-/// <para>
-/// It exists only while a section is actually being rewritten. Reading an agent on the way past
-/// creates none: leafing through a domain is not editing it and an agent nobody has changed never
-/// leaves the configuration at all.
-/// </para>
-/// </remarks>
 public sealed class AgentRevision
 {
     /// <summary>Where the intent stood in the domain's own list.</summary>
@@ -209,15 +116,9 @@ public sealed class AgentRevision
     public Provenance Origin { get; set; }
 
     /// <summary>
-    /// What the agent read when it left the domain, so leaving the edit can tell a rewrite from a
-    /// look.
+    /// What the agent read when it left the domain, so leaving the edit can tell a rewrite from a look.
+    /// An agent that goes back exactly as it came stays imported, or the migration report would list everything the client opened.
     /// </summary>
-    /// <remarks>
-    /// Opening a section is not changing it and an agent that goes back exactly as it came must go
-    /// back <see cref="Provenance.Imported"/> — otherwise the migration report names it among the
-    /// things this sitting touched and a report that lists everything the client opened is a report
-    /// they stop reading.
-    /// </remarks>
     public string? Was { get; set; }
 }
 
@@ -226,143 +127,76 @@ public sealed class AgentRevision
 /// </summary>
 public sealed class IntentDraft
 {
-    /// <summary>
-    /// Intent name. Matches the agent ID and the <c>[HandlesIntent]</c> argument.
-    /// </summary>
-    /// <remarks><c>null</c> until the mapping pass names this entry — never "no name".</remarks>
+    /// <summary>Intent name, matching the agent ID and the <c>[HandlesIntent]</c> argument; <c>null</c> until the mapping pass names this entry.</summary>
     public string? Name { get; set; }
 
     /// <summary>
-    /// What the intent covers, in the classifier's own words. This is the single most
-    /// collision-prone field in a domain: two descriptions that overlap produce a classifier
-    /// collision, which is why the cross-agent coherence pass exists.
+    /// What the intent covers, in the classifier's own words; <c>null</c> until asked.
+    /// It is the field most prone to collide, since two overlapping descriptions make a classifier collision.
     /// </summary>
-    /// <remarks><c>null</c> until asked, per the Draft-wide nullable convention — see the class
-    /// remarks on <see cref="DomainDraft"/>.</remarks>
     public string? Description { get; set; }
 
     /// <summary>
-    /// Human-facing label, used for the presenter's quick reply buttons.
+    /// The label of the button the presenter offers for this intent; <c>null</c> until the mapping pass writes it.
+    /// A label only reads correctly next to every other intent's, which is why the map writes them all.
     /// </summary>
-    /// <remarks>
-    /// <c>null</c> until the mapping pass writes the whole button set in one pass, once the intent
-    /// list is closed — never written one intent at a time, because a label only reads correctly
-    /// next to the labels of every other intent on the map.
-    /// </remarks>
     public string? Label { get; set; }
 
-    /// <summary>
-    /// Text sent on the user's behalf when the presenter's button for this intent is pressed.
-    /// </summary>
-    /// <remarks><c>null</c> until written alongside <see cref="Label"/>, for the same reason.</remarks>
+    /// <summary>Text sent on the user's behalf when that button is pressed; <c>null</c> until written beside <see cref="Label"/>.</summary>
     public string? DefaultValue { get; set; }
 
-    /// <summary>
-    /// Where this intent came from.
-    /// </summary>
+    /// <summary>Where this intent came from.</summary>
     public Provenance Origin { get; set; } = Provenance.Authored;
 }
 
-/// <summary>
-/// One domain agent under construction: its prose, its toolkit and the facts about its C#
-/// that <c>agents.json</c> does not carry.
-/// </summary>
+/// <summary>One domain agent under construction: its prose, its toolkit and the facts about its C# that <c>agents.json</c> does not carry.</summary>
 public sealed class AgentDraft
 {
-    /// <summary>
-    /// Agent ID, matching an intent name.
-    /// </summary>
-    /// <remarks><c>null</c> until the entry is opened against a named intent from the map.</remarks>
+    /// <summary>Agent ID, matching an intent name; <c>null</c> until the entry is opened against a named intent from the map.</summary>
     public string? ID { get; set; }
 
     /// <summary>
-    /// What the client has said about the work this agent does, in their own words: the picture of
-    /// their counter as the interview has painted it so far, step by step.
+    /// What the client has said about the work this agent does, in their own words, as the interview has gathered it step by step.
+    /// It holds what no section is addressed to (which screen they open, who rings, what goes wrong on a Saturday) and never enters the domain.
     /// </summary>
-    /// <remarks>
-    /// It travels with the agent exactly as its card does and for the same reason — every pass is a
-    /// fresh session that reads what is written and nothing else — but the two carry opposite things.
-    /// The card is what a caller is handed: it holds only what a running Morgana publishes. This
-    /// holds what no section can, because no section is addressed to a reader who wants it: which
-    /// screen they open at that counter, who rings, what goes wrong on a Saturday. It is what the
-    /// next step's questions are made of and it never enters the domain.
-    /// </remarks>
     public List<KnownFact> Known { get; set; } = [];
 
-    /// <summary>
-    /// What the agent is for: its scope and its boundaries.
-    /// </summary>
-    /// <remarks><c>null</c> until the <c>AgentTarget</c> pass settles it — the field
-    /// <see cref="InterviewState.MissingTarget"/> tests to decide whether that pass may close.</remarks>
+    /// <summary>What the agent is for, its scope and its boundaries; <c>null</c> until the AgentTarget pass settles it.</summary>
     public string? Target { get; set; }
 
     /// <summary>
-    /// What falls to this agent, addressed to a colleague who might consult it.
+    /// What falls to this agent, addressed to a colleague who might consult it, published on its A2A card and never in its own prompt.
+    /// The AgentTerritory pass settles it once the toolkit stands; every agent carries one, since an unread one costs nothing.
     /// </summary>
-    /// <remarks>
-    /// The one section whose reader is another agent: it never enters this agent's own prompt, it is
-    /// published on its A2A card and read by whoever holds a <c>consult_</c> function for it. Settled
-    /// by the <c>AgentTerritory</c> pass, once the toolkit stands: what this agent is characteristically
-    /// the one to be asked about is a competence of the client's own business, elicited like any
-    /// other; a territory its tools do not cover is a promise another agent would hold it to.
-    /// Every agent carries one, whether or not anybody consults it and whether or not this
-    /// installation ever speaks to another: an unread one costs nothing and its absence leaves every
-    /// other agent answering "go to them" where a precise answer was there to be had.
-    /// </remarks>
     public string? Territory { get; set; }
 
-    /// <summary>
-    /// Domain-specific behavioural rules. Written after the toolkit, because they speak about it.
-    /// </summary>
-    /// <remarks><c>null</c> until the <c>AgentInstructions</c> pass runs, which is why the pass order
-    /// puts the toolkit before it — instructions about tools cannot be asked for before the tools
-    /// they describe exist.</remarks>
+    /// <summary>How the agent goes about its work; <c>null</c> until the AgentInstructions pass, which runs after the toolkit it speaks about.</summary>
     public string? Instructions { get; set; }
 
-    /// <summary>
-    /// How the agent presents its own tools' output. Written after the toolkit, for the same reason.
-    /// </summary>
-    /// <remarks><c>null</c> until the <c>AgentFormatting</c> pass, the last one an entry goes
-    /// through before <see cref="AcceptAsync"/>-style acceptance.</remarks>
+    /// <summary>How the agent presents its own tools' output; <c>null</c> until the AgentFormatting pass, the last before the client accepts the agent.</summary>
     public string? Formatting { get; set; }
 
-    /// <summary>
-    /// Tone and voice. Optional in the framework and optional here.
-    /// </summary>
-    /// <remarks><c>null</c> until the <c>AgentPersonality</c> pass; unlike <see cref="Target"/> etc. this
-    /// one may legitimately stay <c>null</c> even once accepted, since a voice is optional.</remarks>
+    /// <summary>Tone and voice, optional in the framework; <c>null</c> until the AgentPersonality pass and legitimately so even once accepted.</summary>
     public string? Personality { get; set; }
 
-    /// <summary>
-    /// BCP 47 language code, e.g. <c>"en-US"</c>.
-    /// </summary>
+    /// <summary>BCP 47 language code, such as <c>en-US</c>.</summary>
     public string Language { get; set; } = "en-US";
 
-    /// <summary>
-    /// Prompt version string, for tracking iterations of the prose.
-    /// </summary>
+    /// <summary>Prompt version string, for tracking iterations of the prose.</summary>
     public string Version { get; set; } = "1";
 
-    /// <summary>
-    /// The agent's toolkit.
-    /// </summary>
+    /// <summary>The agent's toolkit.</summary>
     public List<ToolDraft> Tools { get; set; } = [];
 
     /// <summary>
-    /// AdditionalProperties entries, kept verbatim so a key Alembic has no
-    /// use for still survives a round trip. Values are <c>JsonElement</c>s and are written back as
-    /// they were read.
+    /// AdditionalProperties entries, kept verbatim and written back as read, so a key Alembic has no use for survives a round trip.
     /// </summary>
     public List<Dictionary<string, object>> UnmodelledProperties { get; set; } = [];
 
-    /// <summary>
-    /// The facts about this agent's C# that <c>agents.json</c> does not carry.
-    /// </summary>
+    /// <summary>The facts about this agent's C# that <c>agents.json</c> does not carry.</summary>
     public AgentCodeFacts Code { get; set; } = new();
 
-    /// <summary>
-    /// Where this agent came from.
-    /// </summary>
+    /// <summary>Where this agent came from.</summary>
     public Provenance Origin { get; set; } = Provenance.Authored;
 }
 
@@ -371,29 +205,19 @@ public sealed class AgentDraft
 /// </summary>
 public sealed class ToolDraft
 {
-    /// <summary>
-    /// Tool name. It is emitted as the C# method name, which is the name the model calls.
-    /// </summary>
-    /// <remarks><c>null</c> until the <c>AgentToolkit</c> pass declares this tool via
-    /// <c>DeclareTool</c>.</remarks>
+    /// <summary>Tool name, emitted as the C# method name the model calls; <c>null</c> until the AgentToolkit pass declares it.</summary>
     public string? Name { get; set; }
 
     /// <summary>
-    /// What the tool does, read by the model when it weighs whether to call it. The framework
-    /// splices <c>ToolDescriptionContextGuidance</c> onto this description when the tool declares
-    /// at least one context-scoped parameter — so what is authored here is only half of what the
-    /// model finally reads.
+    /// What the tool does, read by the model when it weighs whether to call it.
+    /// The framework splices ToolDescriptionContextGuidance onto it when the tool declares a context-scoped parameter.
     /// </summary>
     public string? Description { get; set; }
 
-    /// <summary>
-    /// The tool's parameters, in the order the C# method declares them.
-    /// </summary>
+    /// <summary>The tool's parameters, in the order the C# method declares them.</summary>
     public List<ToolParameterDraft> Parameters { get; set; } = [];
 
-    /// <summary>
-    /// Where this tool came from.
-    /// </summary>
+    /// <summary>Where this tool came from.</summary>
     public Provenance Origin { get; set; } = Provenance.Authored;
 }
 
@@ -402,119 +226,65 @@ public sealed class ToolDraft
 /// </summary>
 public sealed class ToolParameterDraft
 {
-    /// <summary>
-    /// Parameter name. Must match the C# method's parameter name.
-    /// </summary>
+    /// <summary>Parameter name, which must match the C# method's parameter name.</summary>
     public string? Name { get; set; }
 
-    /// <summary>
-    /// What the parameter is, exactly as authored: the framework splices no template onto a
-    /// parameter description, so this string reaches the model's schema unchanged.
-    /// </summary>
+    /// <summary>What the parameter is, which reaches the model's schema unchanged since the framework splices nothing onto it.</summary>
     public string? Description { get; set; }
 
-    /// <summary>
-    /// Whether the model must supply this parameter.
-    /// </summary>
+    /// <summary>Whether the model must supply this parameter.</summary>
     public bool Required { get; set; } = true;
 
     /// <summary>
-    /// <c>"context"</c> (resolved from the session's context variables) or <c>"request"</c>
-    /// (obtained from the user). A parameter carrying a value the model itself authors declares
-    /// no scope at all.
+    /// <c>context</c> when resolved from the session's variables, <c>request</c> when obtained from the user, <c>null</c> for a value the model authors.
+    /// It is inferred from one question about what the system knows of a user on arrival, never asked per parameter.
     /// </summary>
-    /// <remarks>
-    /// Never asked per parameter — inferred once from a single question about the client's setup
-    /// (what the system already knows about a user the moment they arrive), then applied to every
-    /// parameter of the toolkit: everything on that answer is <c>"context"</c>, everything else
-    /// <c>"request"</c>. A bare <c>null</c> here is a third, legitimate value, not an unanswered
-    /// question.
-    /// </remarks>
     public string? Scope { get; set; }
 
-    /// <summary>
-    /// Whether the resolved value is published to the conversation-scoped <c>shared_context</c>
-    /// registry so other agents can hydrate from it. Only meaningful when <see cref="Scope"/> is
-    /// <c>"context"</c>.
-    /// </summary>
+    /// <summary>Whether a context value is published to the conversation's <c>shared_context</c> for the other agents; meaningful only with scope <c>context</c>.</summary>
     public bool Shared { get; set; }
 }
 
 /// <summary>
-/// What an agent's C# declares and <c>agents.json</c> does not: class names, namespace, tier,
-/// MCP servers.
+/// What an agent's C# declares and <c>agents.json</c> does not: class names, namespace, tier, MCP servers and colleagues.
+/// On import all of it is unknown, so Alembic proposes class names from the agent ID and flags them inferred, a proposal for the client to confirm.
 /// </summary>
-/// <remarks>
-/// On import every field here is unknown, because the uploaded file simply does not contain them.
-/// Alembic infers defaults from the agent ID by the framework's own naming convention and flags
-/// them as such — an inferred value is a proposal for the client to confirm, never a finding.
-/// </remarks>
 public sealed class AgentCodeFacts
 {
     /// <summary>
-    /// Namespace of the generated classes.
+    /// Namespace of the generated classes, left <c>null</c> on import rather than guessed.
+    /// Nothing in agents.json implies it and a confident wrong value is worse than one the client will still be asked for.
     /// </summary>
-    /// <remarks>
-    /// Left <c>null</c> on import rather than guessed, unlike <see cref="AgentClassName"/> and
-    /// <see cref="ToolClassName"/>: a namespace follows from nothing in <c>agents.json</c> and a
-    /// confident wrong value here is worse than one the interview will still ask about.
-    /// </remarks>
     public string? Namespace { get; set; }
 
-    /// <summary>
-    /// Proposes a class name from an intent name by the framework's convention: <c>billing</c> and
-    /// <c>Agent</c> give <c>BillingAgent</c>. <c>null</c> when there is no name to go on.
-    /// </summary>
+    /// <summary>Proposes a class name from an intent name by the framework's convention, <c>billing</c> and <c>Agent</c> giving <c>BillingAgent</c>; <c>null</c> without a name.</summary>
     public static string? ProposeClassName(string? intentName, string suffix)
     {
         string bareName = intentName?.Trim() ?? string.Empty;
 
+        // The intent capitalised and suffixed, as the example plugin names its agent and tool classes.
         return bareName.Length > 0 ? $"{char.ToUpperInvariant(bareName[0])}{bareName[1..]}{suffix}" : null;
     }
 
-    /// <summary>
-    /// Name of the <c>MorganaAgent</c> subclass, e.g. <c>BillingAgent</c>.
-    /// </summary>
+    /// <summary>Name of the <c>MorganaAgent</c> subclass, such as <c>BillingAgent</c>.</summary>
     public string? AgentClassName { get; set; }
 
-    /// <summary>
-    /// Name of the <c>MorganaTool</c> subclass, e.g. <c>BillingTool</c>. <c>null</c> for an
-    /// MCP-only agent, which is a legal configuration.
-    /// </summary>
+    /// <summary>Name of the <c>MorganaTool</c> subclass, such as <c>BillingTool</c>; <c>null</c> for an MCP-only agent, which is legal.</summary>
     public string? ToolClassName { get; set; }
 
-    /// <summary>
-    /// The die the agent runs on, declared in C# via <c>[RequiresLLMTier]</c>.
-    /// </summary>
+    /// <summary>The model tier the agent runs on, declared in C# through <c>[RequiresLLMTier]</c>.</summary>
     public Morgana.AI.Records.LLMTier? Tier { get; set; }
 
-    /// <summary>
-    /// MCP server declarations, one per <c>[UsesMCPServer]</c> attribute.
-    /// </summary>
+    /// <summary>MCP server declarations, one per <c>[UsesMCPServer]</c> attribute.</summary>
     public List<string> MCPServers { get; set; } = [];
 
     /// <summary>
-    /// The colleagues this agent may put a question to, one entry per <c>[ConsultsAgent]</c>
-    /// attribute: an intent and the instance publishing it where that is not this domain.
+    /// The colleagues this agent may put a question to, one per <c>[ConsultsAgent]</c>: an intent and the partner publishing it where that is not this domain.
+    /// agents.json carries none of it, so the Collaboration form settles it over the whole domain; the framework refuses a second hop,
+    /// so an edge is worth declaring only where the colleague answers out of its own books.
     /// </summary>
-    /// <remarks>
-    /// A C# fact like <see cref="MCPServers"/> — <c>agents.json</c> carries no trace of it, so an
-    /// imported domain arrives with none and the colleagues step is where they are settled. It is
-    /// nonetheless a domain question and not an infrastructural one: whether the accounts agent has
-    /// to ring the greenhouse is something only the client knows about their own work, which is why
-    /// it is asked in the interview rather than ticked on the emit page beside the tier.
-    /// <para>
-    /// The framework refuses a second hop — an agent answering a colleague finds its own peer
-    /// functions refused — so an edge is worth declaring only where the colleague can answer out of
-    /// its own books.
-    /// </para>
-    /// </remarks>
     public List<Morgana.AI.Records.PeerReference> Consults { get; set; } = [];
 
-    /// <summary>
-    /// Whether the values above were inferred by Alembic rather than stated by the client.
-    /// True for everything reconstructed at import, since an uploaded <c>agents.json</c> carries
-    /// none of it.
-    /// </summary>
+    /// <summary>Whether the values above were inferred by Alembic rather than stated by the client, as everything reconstructed at import is.</summary>
     public bool Inferred { get; set; }
 }
