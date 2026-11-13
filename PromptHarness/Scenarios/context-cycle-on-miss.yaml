@@ -17,7 +17,7 @@ turns:
       noContextWrites: true
       contextVocabulary: [customerCode]
       toolsNotCalled: [GetInvoices, SetTurnEnding]
-      # Awaiting an operand the user must type: no buttons, no escape options.
+      # Awaiting an operand the user must type: no buttons.
       quickReplies: none
       richCard: absent
       textNotEmpty: true

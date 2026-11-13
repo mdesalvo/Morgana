@@ -1,0 +1,24 @@
+id: behaviour-exit-press-closes-agent
+description: >-
+  The exit button of Morgana's escape pair hands the conversation back whatever the model emits:
+  the agent still writes its farewell in its own voice, but the turn is completed and carries no
+  buttons and no card, so the user is never asked to leave twice.
+
+turns:
+  - say: "Hi, my customer code is P994E — show me my last 3 invoices"
+    expect:
+      agent: BillingAgent
+      toolsCalled: [GetInvoices, SetQuickReplies]
+      quickReplyIds: [continue_agent, exit_agent]
+      textNotEmpty: true
+
+  - press: exit_agent
+    expect:
+      agent: BillingAgent
+      agentCompleted: true
+      quickReplies: none
+      richCard: absent
+      textNotEmpty: true
+    judge:
+      # Same wording as behaviour-conversation-closure: the farewell is the model's on both paths.
+      - "The response reads as a farewell or as an acknowledgement of thanks."

@@ -1,26 +1,24 @@
 id: behaviour-conversation-closure
 description: >-
-  Family B in both its wordings: escape appended to a choice list so the user is never trapped and
-  closure withheld when the user has already said goodbye. Also where the removal of the
-  endsWithQuestion heuristic shows — nothing but the tool decides that the agent is done.
+  A goodbye the user types in their own words is answered with a farewell and hands the
+  conversation back, with no buttons: nothing but the SetTurnEnding tool decides that the agent is
+  done. The exit button's own path is behaviour-exit-press-closes-agent.
 
 turns:
-  # Two lawful shapes again: having shown the invoices, the agent may close the request (CLOSURE
-  # pair) or offer the invoices as further choices (Family A + ESCAPE appended). What holds either
-  # way is that the user always has a way out of the turn.
+  # Having shown the invoices, the agent offers them as buttons and Morgana appends her escape pair
+  # under them, so the user always has a way out of the turn.
   - say: "Hi, my customer code is P994E — show me my last 3 invoices"
     expect:
       agent: BillingAgent
       toolsCalled: [GetInvoices, SetQuickReplies]
-      quickReplies: any
-      escapeOptionsWithPrimary: true
+      quickReplyIds: [continue_agent, exit_agent]
       textNotEmpty: true
 
   - say: "That's all I needed, thanks"
     expect:
       agent: BillingAgent
       agentCompleted: true
-      # The point of the turn: a goodbye is answered with a farewell, not with two more buttons
+      # The point of the turn: a goodbye is answered with a farewell, not with more buttons
       # asking a departing user to depart again.
       quickReplies: none
       textNotEmpty: true

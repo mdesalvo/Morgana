@@ -44,6 +44,9 @@ public class MorganaAgent : MorganaActor
     /// <summary>The throwaway session that a colleague's question is answered on; null outside that turn.</summary>
     private AgentSession? consultationSession;
 
+    /// <summary>Morgana's escape pair, read from her prompt on this agent's first turn and kept for every later one; null before it.</summary>
+    private List<QuickReply>? escapeQuickReplies;
+
     /// <summary>
     /// The session that the running turn works on, which the tools hand to the context provider; never null during a turn.
     /// While a colleague is being answered this is the consultation's own session: that turn's tools and the guard refusing a
@@ -360,13 +363,44 @@ public class MorganaAgent : MorganaActor
                 agentLogger.LogInformation("Dropped rich card '{Title}' from context (ephemeral data)", richCard!.Title);
             }
 
+            // The escape pair is Morgana's own and is authored in her prompt, so every agent offers the same two buttons.
+            // The prompt never changes while the process runs, so it is read once and the later turns reuse it.
+            escapeQuickReplies ??= (await promptResolverService.ResolveAsync(Constants.Morgana))
+                .GetAdditionalProperty<List<QuickReply>>(Constants.PromptProperties.EscapeQuickReplies);
+
+            // The exit button of the pair, whose value is the phrase a channel sends when the user presses it.
+            // The pair is authored by Morgana, so a missing exit button is a broken prompt that must fail loudly.
+            QuickReply exitQuickReply = escapeQuickReplies.First(
+                escapeQuickReply => string.Equals(escapeQuickReply.Id, Constants.EscapeQuickReplyIds.ExitAgent, StringComparison.Ordinal));
+
+            // A user message equal to the exit button's value is a press of it or a goodbye typed in its very words:
+            // either way the user is leaving. Any other goodbye stays with the model, which hands back through SetTurnEnding.
+            bool isExitPress = string.Equals(req.Content?.Trim(), exitQuickReply.Value, StringComparison.OrdinalIgnoreCase);
+
             // The agent stays in service unless it hands the conversation back. A turn offering buttons
-            // or a card awaits the answer to them whatever it declared.
-            bool isCompleted = wantsEnding && !hasQuickReplies && !hasRichCard;
+            // or a card awaits the answer to them whatever it declared. A press of the exit button hands
+            // the conversation back whatever the model emitted, so the exit can never loop.
+            bool isCompleted = isExitPress || (wantsEnding && !hasQuickReplies && !hasRichCard);
+
+            // The buttons the user receives, decided by whether the turn is the farewell and whether the model offered any.
+            List<QuickReply>? deliveredQuickReplies = (isExitPress, hasQuickReplies) switch
+            {
+                // The farewell carries none: the conversation is already on its way back to Morgana.
+                (true, _) => null,
+
+                // The pair goes under the model's own buttons, so the user is never trapped among them.
+                (false, true) => [.. quickReplies!, .. escapeQuickReplies],
+
+                // An answer the model left without buttons is free text and gets no pair, as there is nothing to escape from.
+                (false, false) => quickReplies
+            };
+
+            // The card the user receives: none on the exit press, since the conversation is closing.
+            RichCard? deliveredRichCard = isExitPress ? null : richCard;
 
             agentLogger.LogInformation(
-                "Agent response analysis: WantsEnding={WantsEnding}, HasQuickReplies={HasQuickReplies}, HasRichCard={HasRichCard}, IsCompleted={IsCompleted}",
-                wantsEnding, hasQuickReplies, hasRichCard, isCompleted);
+                "Agent response analysis: WantsEnding={WantsEnding}, HasQuickReplies={HasQuickReplies}, HasRichCard={HasRichCard}, IsExitPress={IsExitPress}, IsCompleted={IsCompleted}",
+                wantsEnding, hasQuickReplies, hasRichCard, isExitPress, isCompleted);
 
             // The span closes on the turn's outcome: completion, buttons, the tools called and the start of the answer.
             string responsePreview = Preview(llmResponseText);
@@ -393,6 +427,17 @@ public class MorganaAgent : MorganaActor
                 finalAssistantMessage.AdditionalProperties ??= new AdditionalPropertiesDictionary();
                 finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.UserFacing] = true;
                 finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnText] = llmResponseText;
+
+                // The buttons travel with the text as the channel is given them, escape pair included, so a transcript
+                // redraws what the user had on screen rather than what the model asked for.
+                if (deliveredQuickReplies is { Count: > 0 })
+                    finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnQuickReplies] =
+                        JsonSerializer.Serialize(deliveredQuickReplies, Records.DefaultJsonSerializerOptions);
+
+                // The card likewise: a farewell on the exit button delivered none, whatever the model set.
+                if (deliveredRichCard is not null)
+                    finalAssistantMessage.AdditionalProperties[Constants.MessageProperties.TurnRichCard] =
+                        JsonSerializer.Serialize(deliveredRichCard, Records.DefaultJsonSerializerOptions);
             }
 
             // Written last, so what lands in the database is the history already stripped of the
@@ -405,7 +450,7 @@ public class MorganaAgent : MorganaActor
 
             // Dated as the history keeps it, so a client catching up recognises the reply it was pushed
             senderRef.Tell(new Records.AgentResponse(
-                llmResponseText, isCompleted, quickReplies, richCard, finalAssistantMessage?.CreatedAt?.UtcDateTime));
+                llmResponseText, isCompleted, deliveredQuickReplies, deliveredRichCard, finalAssistantMessage?.CreatedAt?.UtcDateTime));
         }
         // The supervisor stopped waiting: the run was cut and what it had already done is kept.
         catch (OperationCanceledException) when (req.TurnCancellation.IsCancellationRequested)

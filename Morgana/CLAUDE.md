@@ -153,7 +153,9 @@ Every endpoint but `health` authenticates through `ChannelAuthenticationFilter` 
 
 An agent stays in service by default and is remembered as `activeAgent`, so later messages skip
 classification. It hands the conversation back by calling `SetTurnEnding`, unless the same turn shows
-quick replies or a rich card, which always await an answer.
+quick replies or a rich card, which always await an answer. Under the buttons the model emits,
+`MorganaAgent` appends Morgana's escape pair (`EscapeQuickReplies` in `morgana.json`); a press of its
+exit hands the conversation back whatever the model emitted, so the exit can never loop.
 
 Tool parameters marked `Shared: true` route their values into a conversation-scoped `shared_context`
 registry (first-write-wins, `INSERT OR IGNORE`). Every agent merges it at the start of each turn, so
@@ -405,8 +407,8 @@ routed agent keeps for its model carries `morgana:context_only`. Chrome enters n
 banners, the typing indicator. Morgana has a row without being an agent — see
 `IConversationPersistenceService`, which alone knows how a row encodes its messages.
 
-History retrieval decrypts each row, applies a user-facing filter, merges chronologically and
-extracts quick replies and rich cards from the stored function calls.
+History retrieval decrypts each row, applies a user-facing filter, merges chronologically and reads
+each answer's quick replies and rich card as `MorganaAgent` recorded them on delivery, beside its text.
 
 ## Authentication
 

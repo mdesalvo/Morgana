@@ -2,8 +2,8 @@ id: behaviour-landing-presents-the-agent
 description: >-
   A press of one of Morgana's welcome buttons lands on that intent's agent, which opens its part of
   the conversation: the press is the choice of the agent and nothing else, so no classifier runs and
-  no domain tool is called. The agent offers what it can do as its own action buttons, with the
-  way out appended. Asked again what it can do once the conversation is under way, the same agent
+  no domain tool is called. The agent offers what it can do as its own buttons and Morgana appends
+  her escape pair under them. Asked again what it can do once the conversation is under way, the same agent
   answers the same way: one line and its action buttons, still without reaching for a domain tool.
 
 turns:
@@ -15,7 +15,7 @@ turns:
       agentCompleted: false
       toolsCalled: [SetQuickReplies]
       toolsNotCalled: [GetInvoices, GetInvoiceDetails, GetOutstandingBalance, GetPaymentHistory]
-      escapeOptionsWithPrimary: true
+      quickReplyIds: [continue_agent, exit_agent]
       richCard: absent
       textNotEmpty: true
     judge:
@@ -29,7 +29,7 @@ turns:
       agentCompleted: false
       toolsCalled: [SetQuickReplies]
       toolsNotCalled: [GetInvoices, GetInvoiceDetails, GetOutstandingBalance, GetPaymentHistory]
-      escapeOptionsWithPrimary: true
+      quickReplyIds: [continue_agent, exit_agent]
       textNotEmpty: true
     judge:
       - "The response tells the user what can be done for them about their invoices or payments."

@@ -49,6 +49,20 @@ public class MorganaChannelAdapter
         ChannelCapabilities channelCapabilities,
         CancellationToken cancellationToken = default)
     {
+        // On a channel without buttons the user always writes in prose, where asking something else and taking
+        // leave need no button: the escape pair is dropped rather than rewritten into the text. A message left
+        // with only the pair then fits the channel and reaches it untouched.
+        if (!channelCapabilities.SupportsQuickReplies && channelMessage.QuickReplies is { Count: > 0 })
+        {
+            // The agent's own buttons, which the adapter still has to carry into the text; none when the pair was all there was.
+            List<QuickReply> domainQuickReplies =
+            [
+                .. channelMessage.QuickReplies.Where(quickReply => !string.Equals(quickReply.Id, Constants.EscapeQuickReplyIds.ContinueAgent, StringComparison.Ordinal)
+                                                                     && !string.Equals(quickReply.Id, Constants.EscapeQuickReplyIds.ExitAgent, StringComparison.Ordinal))
+            ];
+            channelMessage = channelMessage with { QuickReplies = domainQuickReplies.Count > 0 ? domainQuickReplies : null };
+        }
+
         // A message within every capability of the channel reaches it as its agent wrote it.
         if (FitsWithin(channelMessage, channelCapabilities))
             return channelMessage;

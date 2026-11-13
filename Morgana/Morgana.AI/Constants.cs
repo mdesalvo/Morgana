@@ -179,6 +179,9 @@ public static class Constants
         /// </summary>
         public const string AgentExitMessage = "AgentExitMessage";
 
+        /// <summary>The two buttons Morgana appends under an agent's own buttons, authored in her prompt because they are hers on every agent.</summary>
+        public const string EscapeQuickReplies = "EscapeQuickReplies";
+
         /// <summary>What the user is told when the provider's own content filter blocked their message before the guard could judge it.</summary>
         public const string ContentFilteredMessage = "ContentFilteredMessage";
 
@@ -193,6 +196,16 @@ public static class Constants
         /// It belongs to the classifier and to no domain, so it is authored beside the vocabulary it closes rather than in any plugin.
         /// </summary>
         public const string ComplementIntentDescription = "ComplementIntentDescription";
+    }
+
+    /// <summary>The ids of the escape pair, read by the agent that recognises a press of its exit and the channel adapter that removes it where no button can be shown.</summary>
+    public static class EscapeQuickReplyIds
+    {
+        /// <summary>The button that keeps the user with the agent and leaves the next message free.</summary>
+        public const string ContinueAgent = "continue_agent";
+
+        /// <summary>The button that hands the conversation back to Morgana.</summary>
+        public const string ExitAgent = "exit_agent";
     }
 
     /// <summary>The names of the <c>ErrorAnswers</c> that the Morgana prompt declares, which code picks by name.</summary>
@@ -219,12 +232,6 @@ public static class Constants
 
         /// <summary>Attaches the turn's rich card.</summary>
         public const string SetRichCard = "SetRichCard";
-
-        /// <summary>The argument of a stored <see cref="SetQuickReplies"/> call, named after that tool's parameter.</summary>
-        public const string QuickRepliesArgument = "quickReplies";
-
-        /// <summary>The argument of a stored <see cref="SetRichCard"/> call, named after that tool's parameter.</summary>
-        public const string RichCardArgument = "richCard";
     }
 
     /// <summary>
@@ -269,6 +276,12 @@ public static class Constants
 
         /// <summary>The turn's reply exactly as the channel was given it, written beside <see cref="UserFacing"/> and read back by the transcript.</summary>
         public const string TurnText = "morgana:turn_text";
+
+        /// <summary>The turn's buttons exactly as the channel was given them, as JSON written beside <see cref="TurnText"/> and read back by the transcript.</summary>
+        public const string TurnQuickReplies = "morgana:turn_quick_replies";
+
+        /// <summary>The turn's card exactly as the channel was given it, as JSON written beside <see cref="TurnText"/> and read back by the transcript.</summary>
+        public const string TurnRichCard = "morgana:turn_rich_card";
 
         /// <summary>
         /// Marks the agent's copy of a phrase Morgana already filed as her own, every phrase that arrived while no agent was active.

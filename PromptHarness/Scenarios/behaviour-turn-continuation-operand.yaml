@@ -1,23 +1,19 @@
 id: behaviour-turn-continuation-operand
 description: >-
-  A turn that ends awaiting the user stays in service without declaring it, never calls
-  SetTurnEnding and never gates that wait behind a standalone exit button. This is the interplay of
-  TurnEnding, QuickReplyDoctrine and QuickReplyEscapeOptions read together.
+  A turn that ends awaiting the user stays in service without declaring it and never calls
+  SetTurnEnding. This is the interplay of TurnEnding and QuickReplyDoctrine read together.
 
 turns:
   # Deliberately admits two lawful shapes and asserts what holds in both.
   #
   # Asking for an invoice the user has not identified, with the customer code already given, may
   # legitimately end either as bare prose ("which invoice?") or as a list of the known invoices
-  # offered as choices — and the latter, per QuickReplyEscapeOptions, correctly carries the escape
-  # pair as an appendix. What the policy actually forbids is the escape pair standing alone, with no
-  # primary option beside it, on a turn that is waiting.
+  # offered as buttons. What holds in both is that the agent stays and waits for the answer.
   - say: "I need the details of one of my invoices, my customer code is P994E"
     expect:
       agent: BillingAgent
       agentCompleted: false
       toolsNotCalled: [SetTurnEnding]
-      noStandaloneEscapeOptions: true
       textNotEmpty: true
       textNotContains: ["context variable", "context store", "database", "endpoint", "cache", "GetContextVariable", "SetContextVariable"]
     judge:

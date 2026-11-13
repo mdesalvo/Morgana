@@ -78,15 +78,6 @@ public sealed class ExpectSpec
     /// <summary>Quick-reply ids that must all be absent.</summary>
     public List<string>? NoQuickReplyIds { get; init; }
 
-    /// <summary>
-    /// Asserts that the escape pair of the QuickReplyDoctrine policy is not the whole emission, since it is appended to a list of choices.
-    /// It is opt-in for turns that continue a step, where a standalone pair would gate the step behind an exit button.
-    /// </summary>
-    public bool? NoStandaloneEscapeOptions { get; init; }
-
-    /// <summary>The other half of the same rule: primary options carry the whole escape pair, so the user is never trapped inside a list of choices.</summary>
-    public bool? EscapeOptionsWithPrimary { get; init; }
-
     /// <summary>Rich card presence: <c>absent</c> or <c>present</c>.</summary>
     public string? RichCard { get; init; }
 

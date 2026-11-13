@@ -21,6 +21,7 @@ public sealed class BehaviourTests
     [InlineData("behaviour-landing-presents-the-agent")]
     [InlineData("behaviour-landing-only-on-a-press")]
     [InlineData("behaviour-conversation-closure")]
+    [InlineData("behaviour-exit-press-closes-agent")]
     [InlineData("behaviour-rich-card")]
     [InlineData("behaviour-order-confirmation-bills-invoice")]
     [InlineData("behaviour-order-cart-is-one-order")]

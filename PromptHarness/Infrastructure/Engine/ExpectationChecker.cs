@@ -16,10 +16,6 @@ namespace PromptHarness.Infrastructure.Engine;
 /// </summary>
 public static partial class ExpectationChecker
 {
-    /// <summary>The ids of the escape pair that the QuickReplyDoctrine policy of <c>morgana.json</c> appends to a list of choices.</summary>
-    private static readonly HashSet<string> EscapeOptionIds =
-        new HashSet<string>(["continue_agent", "exit_agent"], StringComparer.OrdinalIgnoreCase);
-
     /// <summary>
     /// Matches <c>MorganaChatHistoryProvider</c>'s per-turn log line of a reduced view.
     /// It is written every turn a reducer is configured, so only its two counts tell a reduction from a reducer that kept everything.
@@ -302,23 +298,6 @@ public static partial class ExpectationChecker
             if (quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase)))
                 failures.Add($"noQuickReplyIds: '{id}' present but must not be");
         }
-
-        // The escape pair of QuickReplyDoctrine is appended to a list of choices and never stands alone: emitted with no primary
-        // option beside it, it gates a step still in progress behind an exit button.
-        if (expect.NoStandaloneEscapeOptions is true
-            && quickReplies.Count > 0
-            && quickReplies.All(reply => EscapeOptionIds.Contains(reply.Id)))
-            failures.Add(
-                $"noStandaloneEscapeOptions: the turn emitted only the escape pair ({FormatIds(quickReplies)}) "
-              + "with no primary option beside it");
-
-        // The other half of the same rule: a list of primary options must carry the whole escape pair, so the user is never trapped in it.
-        if (expect.EscapeOptionsWithPrimary is true
-            && quickReplies.Any(reply => !EscapeOptionIds.Contains(reply.Id))
-            && !EscapeOptionIds.All(id => quickReplies.Any(reply => string.Equals(reply.Id, id, StringComparison.OrdinalIgnoreCase))))
-            failures.Add(
-                $"escapeOptionsWithPrimary: the turn offered primary options ({FormatIds(quickReplies)}) "
-              + "without appending the escape pair, trapping the user in the list");
     }
 
     /// <summary>Presence or absence of a rich card.</summary>

@@ -159,7 +159,7 @@ public sealed class DustTests
         // A channel coming back to the conversation learns at once that it is over, gauge at zero
         HttpResponseMessage resumed = await api.SendAsync("POST", "/api/morgana/conversation/{id}/resume", conversationId, api.HarnessToken());
         JsonElement body = await resumed.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
-        Assert.Equal(0.0, body.GetProperty("dustLevel").GetDouble());
+        Assert.Equal(0.0, body.GetProperty("conversationMetadata").GetProperty("dustLevel").GetDouble());
         Assert.False(string.IsNullOrWhiteSpace(body.GetProperty("dustExhaustedMessage").GetString()), "A resume of a spent conversation did not say it is over.");
     }
 }

@@ -429,7 +429,7 @@ ON CONFLICT(agent_identifier) DO UPDATE SET
                 allMessages: [
                     .. allMessages.Where(entry => entry.message.Role != ChatRole.Tool)
                                   .OrderBy(entry => entry.message.CreatedAt?.UtcDateTime ?? DateTime.UtcNow)
-                ], jsonSerializerOptions);
+                ]);
         }
         catch (Exception ex)
         {
@@ -1129,51 +1129,13 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
         return rowNode.ToJsonString(jsonSerializerOptions);
     }
 
-    /// <summary>
-    /// Turns the participants' messages into the transcript a channel redraws: one bubble per turn, its buttons and card attached.
-    /// The widgets are extracted first from the tool calls that set them, then attached to the answer that closes their turn.
-    /// </summary>
+    /// <summary>Turns the participants' messages into the transcript a channel redraws: one bubble per turn, with the buttons and card it delivered.</summary>
     private MorganaChatMessage[] ProcessMessagesForHistory(
         string conversationId,
-        List<(string agentName, bool agentCompleted, ChatMessage message)> allMessages,
-        JsonSerializerOptions jsonSerializerOptions)
+        List<(string agentName, bool agentCompleted, ChatMessage message)> allMessages)
     {
-        // The card that each SetRichCard call set, by the call that set it.
-        Dictionary<string, RichCard> richCardsByCallId = allMessages
-            .Where(entry => entry.message.Role == ChatRole.Assistant)
-            .SelectMany(entry => entry.message.Contents?
-                .OfType<FunctionCallContent>()
-                .Where(functionCall => functionCall.Name == Constants.Tools.SetRichCard) ?? [])
-            .Select(functionCall => new
-            {
-                CallId = functionCall.CallId,
-                RichCard = TryParseRichCardFromDictionary(functionCall.Arguments, jsonSerializerOptions)
-            })
-            .Where(parsedCall => parsedCall.RichCard != null)
-            .ToDictionary(parsedCall => parsedCall.CallId, parsedCall => parsedCall.RichCard!);
-
-        logger.LogDebug("Extracted rich cards from {Count} SetRichCard calls", richCardsByCallId.Count);
-
-        // The buttons that each SetQuickReplies call set, by the call that set them.
-        Dictionary<string, List<QuickReply>> quickRepliesByCallId = allMessages
-            .Where(entry => entry.message.Role == ChatRole.Assistant)
-            .SelectMany(entry => entry.message.Contents?
-                .OfType<FunctionCallContent>()
-                .Where(functionCall => functionCall.Name == Constants.Tools.SetQuickReplies) ?? [])
-            .Select(functionCall => new
-            {
-                CallId = functionCall.CallId,
-                QuickReplies = TryParseQuickRepliesFromDictionary(functionCall.Arguments, jsonSerializerOptions)
-            })
-            .Where(parsedCall => parsedCall.QuickReplies != null)
-            .ToDictionary(parsedCall => parsedCall.CallId, parsedCall => parsedCall.QuickReplies!);
-
-        logger.LogDebug("Extracted quick replies from {Count} SetQuickReplies calls", quickRepliesByCallId.Count);
-
-        // The transcript as it is built, with the widgets still waiting for the answer of their turn.
+        // The transcript as it is built.
         List<MorganaChatMessage> historyMessages = [];
-        string? pendingQuickRepliesCallId = null;
-        string? pendingRichCardCallId = null;
 
         // The participants whose history marks the answer of each turn: their intermediate messages, the tool loop's
         // scratchpad, stay out of the transcript. Morgana's own row carries no marker, so every message of hers is shown.
@@ -1188,68 +1150,17 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
         foreach ((string agentName, bool agentCompleted, ChatMessage chatMessage) in allMessages)
         {
-            // Whether this message set a widget, which usually means its text is not the turn's answer.
-            bool chatMessageHasToolCalls = false;
-
-            // A tool result is no part of what a user reads.
-            if (chatMessage.Role == ChatRole.Tool)
+            // The agent holds this phrase only so its model could read it: no agent was active when it arrived,
+            // so Morgana saved it on her own side and the user reads it once, from there.
+            if (chatMessage.Role == ChatRole.User
+                 && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.ContextOnly) == true)
                 continue;
 
-            // A user turn closes any pending assistant attachment that was never
-            // consumed (e.g. because the anchor reply arrived with empty text).
-            // Without this, a stale pending CallId would bleed into the next
-            // assistant response and attach the previous turn's widgets to it.
-            if (chatMessage.Role == ChatRole.User)
-            {
-                pendingRichCardCallId = null;
-                pendingQuickRepliesCallId = null;
-
-                // The agent holds this phrase only so its model could read it: no agent was active
-                // when it arrived, so Morgana saved it on her own side. Closing the pending
-                // attachments above still applies, the turn having happened either way, but the phrase
-                // itself is taken from where it was saved, so the user reads it once.
-                if (chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.ContextOnly) == true)
-                    continue;
-            }
-
-            // A card set here waits for the answer of this turn.
-            FunctionCallContent? setRichCardCall = chatMessage.Contents?
-                .OfType<FunctionCallContent>()
-                .FirstOrDefault(functionCall => functionCall.Name == Constants.Tools.SetRichCard);
-            if (setRichCardCall != null)
-            {
-                pendingRichCardCallId = setRichCardCall.CallId;
-                chatMessageHasToolCalls = true;
-            }
-
-            // Buttons set here wait for the answer of this turn.
-            FunctionCallContent? setQuickRepliesCall = chatMessage.Contents?
-                .OfType<FunctionCallContent>()
-                .FirstOrDefault(functionCall => functionCall.Name == Constants.Tools.SetQuickReplies);
-            if (setQuickRepliesCall != null)
-            {
-                pendingQuickRepliesCallId = setQuickRepliesCall.CallId;
-                chatMessageHasToolCalls = true;
-            }
-
-            // Decide whether this assistant message is the user-facing one for its turn. The
-            // marker is set by MorganaAgent at end-of-turn on the last assistant message that
-            // actually carries text — see MorganaAgent.ExecuteAgentAsync.
-            bool isUserFacing = chatMessage.Role == ChatRole.Assistant
-                             && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) == true;
-
-            // Tool-call messages are normally skipped: their widgets attach to a later,
-            // text-bearing assistant message. Exception: the user-facing message itself, when a
-            // model (typically Haiku-class) closes the turn carrying BOTH text and the tool call
-            // in one message: falling through here keeps text and widgets in one bubble.
-            if (chatMessageHasToolCalls && !isUserFacing)
-                continue;
-
-            // Skip intermediate assistant messages (no marker) for agents whose session contains
-            // at least one user_facing marker. Widgets that those messages may have introduced
-            // are already in pendingRichCardCallId / pendingQuickRepliesCallId from a few lines
-            // above, ready to be attached to the surviving final assistant.
-            if (chatMessage.Role == ChatRole.Assistant && markedAgents.Contains(agentName) && !isUserFacing)
+            // An agent's turn is shown through the one answer MorganaAgent marked at its end: the messages of the
+            // tool loop before it are its scratchpad.
+            if (chatMessage.Role == ChatRole.Assistant
+                 && markedAgents.Contains(agentName)
+                 && chatMessage.AdditionalProperties?.ContainsKey(Constants.MessageProperties.UserFacing) != true)
                 continue;
 
             // A message with no text has nothing for a bubble.
@@ -1257,17 +1168,19 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
             if (string.IsNullOrWhiteSpace(messageText))
                 continue;
 
-            // The card waiting for this answer attaches to it and waits no longer.
-            RichCard? richCard = null;
-            if (pendingRichCardCallId != null && chatMessage.Role == ChatRole.Assistant && richCardsByCallId.TryGetValue(pendingRichCardCallId, out richCard))
-                pendingRichCardCallId = null;
+            // The buttons the turn delivered, recorded beside its answer; a message that recorded none showed none.
+            string? recordedQuickReplies = chatMessage.ReadTextProperty(Constants.MessageProperties.TurnQuickReplies);
+            List<QuickReply>? quickReplies = recordedQuickReplies is null
+                ? null
+                : JsonSerializer.Deserialize<List<QuickReply>>(recordedQuickReplies, Records.DefaultJsonSerializerOptions);
 
-            // The buttons waiting for this answer attach to it and wait no longer.
-            List<QuickReply>? quickReplies = null;
-            if (pendingQuickRepliesCallId != null && chatMessage.Role == ChatRole.Assistant && quickRepliesByCallId.TryGetValue(pendingQuickRepliesCallId, out quickReplies))
-                pendingQuickRepliesCallId = null;
+            // The card the turn delivered, recorded the same way.
+            string? recordedRichCard = chatMessage.ReadTextProperty(Constants.MessageProperties.TurnRichCard);
+            RichCard? richCard = recordedRichCard is null
+                ? null
+                : JsonSerializer.Deserialize<RichCard>(recordedRichCard, Records.DefaultJsonSerializerOptions);
 
-            // The bubble, with whatever widgets its turn set.
+            // The bubble, with whatever widgets its turn delivered.
             historyMessages.Add(
                 MapToMorganaChatMessage(conversationId, agentName, agentCompleted, chatMessage, isLastHistoryMessage: false, quickReplies, richCard));
         }
@@ -1287,78 +1200,6 @@ CREATE INDEX IF NOT EXISTS idx_dust_usage_log_ts ON dust_usage_log(timestamp);
 
         // The transcript in the order it was said.
         return [.. historyMessages];
-    }
-
-    /// <summary>Reads the buttons that a SetQuickReplies call set; null when there are none or they cannot be read.</summary>
-    private List<QuickReply>? TryParseQuickRepliesFromDictionary(
-        IDictionary<string, object?>? arguments,
-        JsonSerializerOptions jsonSerializerOptions)
-    {
-        // A call recorded without its buttons leaves the replayed turn with none to show.
-        if (arguments == null || !arguments.TryGetValue(Constants.Tools.QuickRepliesArgument, out object? quickRepliesValue))
-            return null;
-
-        try
-        {
-            // The argument is the list itself: read back from the session it is the JSON element of the array,
-            // held in memory it is the list the tool received.
-            string quickRepliesString = quickRepliesValue switch
-            {
-                // A session read back from the record.
-                JsonElement jsonElement => jsonElement.GetRawText(),
-
-                // A session still in memory.
-                _ => JsonSerializer.Serialize(quickRepliesValue, jsonSerializerOptions)
-            };
-
-            // An empty list sets no button.
-            List<QuickReply>? quickReplies = JsonSerializer.Deserialize<List<QuickReply>>(quickRepliesString, jsonSerializerOptions);
-            return quickReplies?.Count > 0 ? quickReplies : null;
-        }
-        catch (Exception ex)
-        {
-            // Unreadable buttons cost only themselves: the bubble is shown without them.
-            logger.LogWarning(ex, "Failed to parse quick replies from function arguments");
-            return null;
-        }
-    }
-
-    /// <summary>Reads the card that a SetRichCard call set; null when there is none or it cannot be read.</summary>
-    private RichCard? TryParseRichCardFromDictionary(
-        IDictionary<string, object?>? arguments,
-        JsonSerializerOptions jsonSerializerOptions)
-    {
-        // A call recorded without its card leaves the replayed turn with none to show.
-        if (arguments == null || !arguments.TryGetValue(Constants.Tools.RichCardArgument, out object? richCardsValue))
-            return null;
-
-        try
-        {
-            // SetRichCard takes the card as a JSON string, so the argument is that string, in memory or read back from the session.
-            string richCardString = richCardsValue switch
-            {
-                // A session still in memory.
-                string cardJson => cardJson,
-
-                // A session read back from the record.
-                JsonElement { ValueKind: JsonValueKind.String } jsonElement => jsonElement.GetString() ?? "{}",
-
-                // A card that reached the tool as an object.
-                JsonElement jsonElement => jsonElement.GetRawText(),
-
-                // Any other shape is serialized as it is.
-                _ => JsonSerializer.Serialize(richCardsValue, jsonSerializerOptions)
-            };
-
-            // The card as the tool set it.
-            return JsonSerializer.Deserialize<RichCard>(richCardString, jsonSerializerOptions);
-        }
-        catch (Exception ex)
-        {
-            // An unreadable card costs only itself: the bubble is shown without it.
-            logger.LogWarning(ex, "Failed to parse rich card from function arguments");
-            return null;
-        }
     }
 
     /// <summary>
