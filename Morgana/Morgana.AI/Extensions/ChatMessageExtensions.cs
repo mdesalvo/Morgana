@@ -3,16 +3,12 @@ using Microsoft.Extensions.AI;
 
 namespace Morgana.AI.Extensions;
 
-/// <summary>
-/// Reads the properties that Morgana stamps on a chat message, whether the message is in memory or was read back from the record.
-/// </summary>
+/// <summary>Reads the properties that Morgana stamps on a chat message, whether the message is in memory or was read back from the record.</summary>
 internal static class ChatMessageExtensions
 {
     extension(ChatMessage chatMessage)
     {
-        /// <summary>
-        /// Text of a stamped property, <c>null</c> when the property is absent or is not text.
-        /// </summary>
+        /// <summary>Text of a stamped property, <c>null</c> when the property is absent or is not text.</summary>
         public string? ReadTextProperty(string propertyKey)
         {
             // Absent on a message that was never stamped with this property, which is the case of every user turn.

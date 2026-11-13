@@ -140,11 +140,12 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         bool warningsHeaderWritten = false;
 
         // An agent with no native tool is legal: an MCP-only agent acquires its competences at runtime,
-        // so this says what a reader would otherwise have to guess from silence.
+        // so this says what a reader would otherwise have to guess from silence. Every intent in these three loops
+        // is a key of the dictionary it is looked up in, so no lookup can miss.
         foreach (string intent in agentIntents.Except(toolIntents, StringComparer.OrdinalIgnoreCase))
         {
             WriteWarningsHeader();
-            Console.WriteLine($"  ℹ️  Agent '{intent}' ({agentsByIntent.GetValueOrDefault(intent)?.Name ?? "unknown"}) has no native tool registered!");
+            Console.WriteLine($"  ℹ️  Agent '{intent}' ({agentsByIntent[intent].Name}) has no native tool registered!");
         }
 
         // A tool built for an intent nobody claims: dead code left by a renamed or removed agent far
@@ -152,12 +153,12 @@ public class ProvidesToolForIntentRegistryService : IToolRegistryService
         foreach (string intent in toolIntents.Except(agentIntents, StringComparer.OrdinalIgnoreCase))
         {
             WriteWarningsHeader();
-            Console.WriteLine($"  ⚠️  Tool '{registry.GetValueOrDefault(intent)?.Name ?? "unknown"}' provides intent '{intent}' but no agent handles this intent.");
+            Console.WriteLine($"  ⚠️  Tool '{registry[intent].Name}' provides intent '{intent}' but no agent handles this intent.");
         }
 
         // The pairs that hold. Printed too, so the absence of an agent from this list is itself readable.
         foreach (string intent in agentIntents.Intersect(toolIntents, StringComparer.OrdinalIgnoreCase))
-            Console.WriteLine($"✅ Tool Registry: Agent '{intent}' → Tool '{registry.GetValueOrDefault(intent)?.Name ?? "unknown"}'");
+            Console.WriteLine($"✅ Tool Registry: Agent '{intent}' → Tool '{registry[intent].Name}'");
 
         // Two tools claiming one agent, which unlike the warnings above stops the startup.
         if (registrationErrors.Count > 0)

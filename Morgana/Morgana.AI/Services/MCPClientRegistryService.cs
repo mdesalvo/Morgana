@@ -344,7 +344,7 @@ public class MCPClientRegistryService : IMCPClientRegistryService
 /// One connected MCP server, its transport and its live session, pooled by <see cref="MCPClientRegistryService"/>.
 /// An instance exists only once <see cref="ConnectAsync"/> has completed the handshake.
 /// </summary>
-internal sealed class MCPClient : IAsyncDisposable
+public sealed class MCPClient : IAsyncDisposable
 {
     /// <summary>The underlying SDK client holding the transport and the live MCP session.</summary>
     private readonly McpClient mcpClient;

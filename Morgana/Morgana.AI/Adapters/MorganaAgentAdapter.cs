@@ -18,101 +18,69 @@ using Morgana.AI.Tools;
 
 namespace Morgana.AI.Adapters;
 
-// This suppresses the experimental API warning for IChatReducer usage.
-// Microsoft marks IChatReducer as experimental (MEAI001) but recommends it
-// for production use in context window management scenarios.
-#pragma warning disable MEAI001 // Type is for evaluation purposes only and is subject to change or removal in future updates
+// IChatReducer is marked experimental (MEAI001); the history provider every agent is built with takes one.
+#pragma warning disable MEAI001
 
 /// <summary>
-/// Creates and configures AIAgent instances from Morgana agent definitions.
-/// Handles instruction composition, tool/MCP registration, provider setup.
-/// Uses session accessor pattern: MorganaAIContextProvider + Func&lt;ToolContext&gt; factory.
+/// Builds the agent behind each Morgana agent: its composed instructions, its tools, MCP tools and colleagues, its providers and its tier's metered client.
+/// Tools reach the session of the turn in flight through a factory evaluated on every call, since the adapter holds no actor.
 /// </summary>
 public class MorganaAgentAdapter
 {
-    /// <summary>
-    /// Service for resolving prompt templates from configuration sources (morgana.json, agents.json).
-    /// </summary>
-    protected readonly IPromptResolverService promptResolverService;
+    /// <summary>Resolves the agent's domain prompt from agents.json.</summary>
+    private readonly IPromptResolverService promptResolverService;
+
+    /// <summary>Supplies the chat client and dust pricing of the tier each agent's <c>[RequiresLLMTier]</c> declares.</summary>
+    private readonly ILanguageModelService llmService;
+
+    /// <summary>Finds the tool class of an intent; none for an agent served by MCP alone or by the base tools.</summary>
+    private readonly IToolRegistryService toolRegistryService;
+
+    /// <summary>Lists an MCP server's tools when the tool guard is off.</summary>
+    private readonly IMCPClientRegistryService imcpClientRegistryService;
+
+    /// <summary>Builds the reducer of an agent's history from the deployment's settings.</summary>
+    private readonly HistoryReducerService chatReducerService;
+
+    /// <summary>The ledger an agent's own calls and its reducer's are charged to.</summary>
+    private readonly IDustLimitService dustLimitService;
+
+    /// <summary>Resolves each declared colleague into a callable agent together with its card.</summary>
+    private readonly IAgentDirectoryService agentDirectoryService;
 
     /// <summary>
-    /// LLM service abstraction, queried per-agent for the chat client and dust pricing of the
-    /// tier its <c>[RequiresLLMTier]</c> attribute declares. There is no single process-wide
-    /// chat client here anymore — each agent resolves its own tier at creation time.
+    /// Screens every tool result the agent's model is about to read and admits what MCP servers and partners offer.
+    /// A result that conceals a purpose against the assistant stays out of the tool loop and out of the session that would replay it.
     /// </summary>
-    protected readonly ILanguageModelService llmService;
+    private readonly IGuardRailService guardRailService;
 
-    /// <summary>
-    /// Service for discovering custom MorganaTool implementations via [ProvidesToolForIntent] attribute.
-    /// Returns null if no custom tool exists for an intent (MCP-only agents).
-    /// </summary>
-    protected readonly IToolRegistryService toolRegistryService;
+    /// <summary>The application configuration, read for the consultation budget and the two switches.</summary>
+    private readonly IConfiguration configuration;
 
-    /// <summary>
-    /// Service for managing MCP (Model Context Protocol) client connections and lifecycle.
-    /// Provides connection pooling and tool discovery from external MCP servers.
-    /// </summary>
-    protected readonly IMCPClientRegistryService imcpClientRegistryService;
-
-    /// <summary>
-    /// Service for creating IChatReducer instances for context window management.
-    /// Creates SummarizingChatReducer based on configuration to optimize LLM costs.
-    /// </summary>
-    protected readonly HistoryReducerService chatReducerService;
-
-    /// <summary>
-    /// Per-conversation lifetime token-budget limiter. Domain-agent LLM calls (and their
-    /// history reducer) are metered through it under a per-agent role.
-    /// </summary>
-    protected readonly IDustLimitService dustLimitService;
-
-    /// <summary>
-    /// Describes the agents of the ecosystem to one another. Consulted once per
-    /// <c>[ConsultsAgent]</c> declaration, to obtain the colleague's card.
-    /// </summary>
-    protected readonly IAgentDirectoryService agentDirectoryService;
-
-    /// <summary>
-    /// Screens every tool result the agent's model is about to read, keeping a result that conceals a
-    /// purpose against the assistant out of the tool loop and out of the session that would replay it.
-    /// </summary>
-    protected readonly IGuardRailService guardRailService;
-
-    /// <summary>
-    /// Application configuration, read for the peer-consultation budget and timeout.
-    /// </summary>
-    protected readonly IConfiguration configuration;
-
-    /// <summary>
-    /// Logger instance for agent creation diagnostics and tool registration tracking.
-    /// </summary>
-    protected readonly ILogger logger;
+    /// <summary>Records each agent's creation, its tools and the sources it ran without.</summary>
+    private readonly ILogger logger;
 
     /// <summary>The base tools every agent holds ahead of its own, projected from <see cref="MorganaTool"/>.</summary>
-    protected readonly Records.ToolDefinition[] morganaTools;
+    private readonly Records.ToolDefinition[] morganaTools;
 
     /// <summary>
-    /// Assembles everything the agent's model reads: the composed system prompt and the tool
-    /// descriptions. Passed on to <see cref="MorganaToolAdapter"/> and
-    /// <see cref="MorganaAIContextProvider"/>, which compose their own fragments through it.
+    /// Composes everything the agent's model reads: its instructions, its tool descriptions and the colleagues' declaration.
+    /// It is passed on to <see cref="MorganaToolAdapter"/> and <see cref="MorganaAIContextProvider"/>, which compose their own fragments through it.
     /// </summary>
-    protected readonly IPromptComposerService promptComposerService;
+    private readonly IPromptComposerService promptComposerService;
 
-    /// <summary>
-    /// Initializes a new instance of the MorganaAgentAdapter.
-    /// Loads the Morgana framework prompt for later composition with domain prompts.
-    /// </summary>
-    /// <param name="llmService">LLM service abstraction, queried per-agent for its declared tier's chat client and pricing</param>
-    /// <param name="promptResolverService">Service for resolving prompt templates</param>
-    /// <param name="promptComposerService">Service composing prompts and tool descriptions for the model</param>
-    /// <param name="toolRegistryService">Service for discovering custom MorganaTool implementations</param>
-    /// <param name="imcpClientRegistryService">Service for managing MCP server connections</param>
-    /// <param name="chatReducerService">Service for reducing context window sent to LLM</param>
-    /// <param name="dustLimitService">Per-conversation lifetime token-budget limiter</param>
-    /// <param name="agentDirectoryService">Supplies the card of each declared colleague and resolves it into a callable agent</param>
-    /// <param name="guardRailService">Screens every tool result before the agent's model reads it</param>
-    /// <param name="configuration">Application configuration, read for the peer-consultation budget and timeout</param>
-    /// <param name="logger">Logger instance for diagnostics</param>
+    /// <summary>Binds the adapter to the services an agent is built from.</summary>
+    /// <param name="llmService">Supplies each tier's chat client and pricing.</param>
+    /// <param name="promptResolverService">Resolves the domain prompts.</param>
+    /// <param name="promptComposerService">Composes instructions and tool descriptions.</param>
+    /// <param name="toolRegistryService">Finds an intent's tool class.</param>
+    /// <param name="imcpClientRegistryService">Lists MCP servers' tools.</param>
+    /// <param name="chatReducerService">Builds the history reducer.</param>
+    /// <param name="dustLimitService">The ledger agents are charged to.</param>
+    /// <param name="agentDirectoryService">Resolves declared colleagues.</param>
+    /// <param name="guardRailService">Screens tool results and admits offers.</param>
+    /// <param name="configuration">The application configuration.</param>
+    /// <param name="logger">Records each agent's creation.</param>
     public MorganaAgentAdapter(
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
@@ -142,59 +110,29 @@ public class MorganaAgentAdapter
         morganaTools = [.. MorganaToolAdapter.ProjectToolDefinitions(typeof(MorganaTool))];
     }
 
-    /// <summary>
-    /// Creates a fully configured <see cref="AIAgent"/> instance for the given agent type.
-    /// </summary>
-    /// <param name="agentType">
-    /// Agent class decorated with <c>[HandlesIntent]</c>.
-    /// </param>
-    /// <param name="conversationId">
-    /// Identifier of the ongoing conversation.
-    /// </param>
-    /// <param name="sessionAccessor">
-    /// Returns the agent's current <see cref="AgentSession"/> at tool-call time.
-    /// Wired as <c>() =&gt; CurrentSession</c> by <see cref="MorganaAgent"/>.
-    /// May return <c>null</c> at construction time; guaranteed non-null during actual tool execution.
-    /// </param>
-    /// <param name="sharedContextCallback">
-    /// Optional callback invoked when the agent writes a shared context variable. Wire to
-    /// <see cref="MorganaAgent.OnSharedContextUpdate"/>, which persists the value into the
-    /// conversation-scoped <c>shared_context</c> registry so other agents pick it up at the
-    /// start of their next turn.
-    /// </param>
-    /// <returns>
-    /// The agent with its context and history providers —
-    /// all three singletons for this agent instance.
-    /// </returns>
-    public Records.CreatedAgent CreateAgent(
+    /// <summary>Builds the agent of <paramref name="agentType"/> for one conversation, with the providers its turns read and write.</summary>
+    /// <param name="agentType">The agent class, carrying <c>[HandlesIntent]</c> and <c>[RequiresLLMTier]</c>.</param>
+    /// <param name="conversationId">The conversation the agent serves.</param>
+    /// <param name="sessionAccessor">Returns the agent's session of the turn in flight; <c>null</c> before the first turn.</param>
+    /// <param name="sharedContextCallback">Files a shared variable's value in the conversation's <c>shared_context</c>.</param>
+    /// <returns>The agent with its context and history providers.</returns>
+    internal Records.CreatedAgent CreateAgent(
         Type agentType,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
-        Func<string, object, Task>? sharedContextCallback = null)
-        // The single sync-over-async point of the whole creation path and it is a structural
-        // boundary rather than a shortcut: a MorganaAgent is materialized by Akka through
-        // DependencyResolver.Props, i.e. inside a constructor, which offers no async seam. Everything
-        // below this line is properly awaited; callers that DO have one — Forge composing a draft
-        // agent, or a future async actor-initialization pattern — should call CreateAgentAsync
-        // directly and never come through here.
+        Func<string, object, Task> sharedContextCallback)
+        // The one point where the creation path waits synchronously: Akka materializes a MorganaAgent inside its
+        // constructor through DependencyResolver.Props, which offers no asynchronous seam.
         => CreateAgentAsync(agentType, conversationId, sessionAccessor, sharedContextCallback)
             .GetAwaiter()
             .GetResult();
 
-    /// <summary>
-    /// Asynchronous counterpart of <see cref="CreateAgent"/> and the real implementation: prompt
-    /// resolution, prompt composition and tool-description assembly are all awaited here.
-    /// </summary>
-    /// <inheritdoc cref="CreateAgent" path="/param"/>
-    /// <returns>
-    /// The agent with its context and history providers —
-    /// all three singletons for this agent instance.
-    /// </returns>
-    public async Task<Records.CreatedAgent> CreateAgentAsync(
+    /// <summary>The body of <see cref="CreateAgent"/>, where prompt resolution, composition and tool discovery are awaited.</summary>
+    private async Task<Records.CreatedAgent> CreateAgentAsync(
         Type agentType,
         string conversationId,
         Func<AgentSession?> sessionAccessor,
-        Func<string, object, Task>? sharedContextCallback = null)
+        Func<string, object, Task> sharedContextCallback)
     {
         // 1) Identity: the [HandlesIntent] attribute is the agent's contract. Its absence
         //    is a wiring bug (a MorganaAgent subclass that forgot the attribute), so fail
@@ -202,11 +140,8 @@ public class MorganaAgentAdapter
         HandlesIntentAttribute? intentAttribute = agentType.GetCustomAttribute<HandlesIntentAttribute>()
             ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [HandlesIntent] attribute");
 
-        // 1b) Tier: the agent's fixed, "existential" declaration of which model class it runs
-        //     on. Mandatory alongside [HandlesIntent] — see RequiresLLMTierAttribute remarks.
-        //     Startup validation (HandlesIntentAgentRegistryService) already guarantees this
-        //     attribute is present and its tier is configured for the active provider before
-        //     any agent is ever created, so both lookups below are safe.
+        // 1b) Tier: the model class the agent declares it needs. The startup checks already refused an agent
+        //     without it, so the throw only guards a type that reached here around them.
         RequiresLLMTierAttribute tierAttribute = agentType.GetCustomAttribute<RequiresLLMTierAttribute>()
             ?? throw new InvalidOperationException($"Agent type '{agentType.Name}' must be decorated with [RequiresLLMTier] attribute");
 
@@ -222,18 +157,15 @@ public class MorganaAgentAdapter
         Records.ToolDefinition[] domainTools = toolType is null ? [] : [.. MorganaToolAdapter.ProjectToolDefinitions(toolType)];
         Records.ToolDefinition[] agentTools = [.. morganaTools, .. domainTools];
 
-        // 4) Per-agent context provider (the variable store behind GetVariable/SetVariable);
-        //    sharedContextCallback wires Shared:true writes into the cross-agent registry.
+        // 4) The agent's variables, its shared ones filed in the conversation's registry through sharedContextCallback.
         MorganaAIContextProvider morganaAIContextProvider = CreateAIContextProvider(
             intentAttribute.Intent,
             agentTools,
             sharedContextCallback);
 
-        // 5) ToolContext factory — evaluated lazily on EACH tool call, never now. The
-        //    adapter holds no actor reference, so the session is pulled fresh via
-        //    sessionAccessor at call time (Akka's single-thread guarantee makes it
-        //    non-null during execution). A null here means the agent was invoked without
-        //    ExecuteAgentAsync seeding the session — a hard wiring error, so throw.
+        // 5) ToolContext factory, evaluated on each tool call and never now: the adapter holds no actor, so the
+        //    session of the turn in flight is read through sessionAccessor at call time. A null there means the
+        //    agent ran without ExecuteAgentAsync setting its session, a wiring error the tool cannot recover from.
         Func<MorganaTool.ToolContext> toolContextFactory = () =>
         {
             AgentSession session = sessionAccessor()
@@ -241,25 +173,20 @@ public class MorganaAgentAdapter
                     $"Agent '{intentAttribute.Intent}' has no active session during tool execution. " +
                     $"Ensure ExecuteAgentAsync sets aiAgentSession before invoking the agent.");
 
+            // The conversation id travels with the session: the one identifier a domain tool may scope state to that the model can never write.
             return new MorganaTool.ToolContext(morganaAIContextProvider, session, conversationId);
         };
 
-        // 6a) Bind the declared tools to their delegates (native MorganaTool methods), then
-        //    layer on any [UsesMCPServer] tools discovered from external MCP servers.
+        // 6a) The base tools and the intent's own tool class, bound to the methods that implement them.
         MorganaToolAdapter morganaToolAdapter = CreateToolAdapterForIntent(
             intentAttribute.Intent,
             toolType,
             domainTools,
             toolContextFactory);
 
-        // 6b) Collect the tools of every [UsesMCPServer] on the agent. Best-effort by
-        //     design — a server that is down or misconfigured is logged per-server and skipped, never aborting
-        //     agent creation (an MCP-only agent simply ends up with no tools rather than
-        //     failing to exist). They stay apart from the native adapter because they need
-        //     nothing from it: each one arrives already an AIFunction. An MCP tool whose name collides
-        //     with a tool of Morgana, of the domain, with a colleague's prefix or with another MCP tool
-        //     is refused, since MCP tools enter last. With the tool guard on, the tools are the ones
-        //     the guard admitted from each server's current offer.
+        // 6b) The tools of every [UsesMCPServer], each arriving already a function. A server that is down costs its
+        //     own tools and never the agent. MCP tools enter last, so one whose name collides with a tool that
+        //     entered before is refused; with the tool guard on, they are the ones the guard admitted.
         Dictionary<string, UsesMCPServerAttribute> mcpToolServers = [];
         List<AIFunction> mcpTools = await RegisterMCPToolsAsync(agentType, intentAttribute.Intent, [.. agentTools.Select(tool => tool.Name)], mcpToolServers);
 
@@ -276,48 +203,39 @@ public class MorganaAgentAdapter
             morganaAIContextProvider,
             peerTerritories);
 
-        // 7) Resolve THIS agent's own tier client/pricing (never the framework-default
-        //    client) and wrap it in a per-agent dust meter. The role label
-        //    ("Morgana (Billing/Efficiency)" etc.) attributes consumption to this agent+tier in
-        //    the budget; conversationId scopes the charge. The reducer is built on the SAME
-        //    wrapped client so its summarization LLM calls (also token-bearing) are
-        //    metered too, not silently free.
+        // 7) The agent's own tier, metered under a role naming the agent and its tier, such as "Morgana (Billing/Efficiency)".
+        //    The role qualifies the one the pipeline charges under, so a ledger grouped by prefix keeps one installation together.
         string intent = intentAttribute.Intent;
-        // Builds a human-readable label for the dust ledger and OTel tags, e.g. "billing" ->
-        // "Morgana (Billing/Efficiency)". Qualifies the same framework role the pipeline charges
-        // under, so a ledger grouped by prefix keeps every charge of one installation together.
         string dustRole = $"{Constants.Morgana} ({char.ToUpperInvariant(intent[0])}{intent[1..]}/{tierAttribute.Tier})";
         IChatClient tierChatClient = llmService.GetChatClient(tierAttribute.Tier);
         Records.MagicDustPricing tierPricing = llmService.GetMorganaDust(tierAttribute.Tier);
         IChatClient agentChatClient =
             new DustAccountingChatClient(tierChatClient, dustLimitService, tierPricing, dustRole, conversationId);
 
-        // 8) History provider: keeps the full transcript in AgentSession, exposes the
-        //    (optionally reduced) view to the LLM. Null reducer → full history verbatim.
+        // 8) The history provider keeps the whole transcript in the session and hands the model the reducer's view.
+        //    The reducer runs on the metered client, so its summaries are charged like every other call.
         IChatReducer? chatReducer = chatReducerService.CreateReducer(agentChatClient);
         MorganaChatHistoryProvider chatHistoryProvider = new MorganaChatHistoryProvider(intentAttribute.Intent, chatReducer, logger);
 
-        // 9) Assemble the Microsoft.Agents.AI agent over the metered client, injecting the
-        //    context + history providers, a stable per-conversation Id (intent-conversationId),
-        //    the two-layer composed instructions (framework prompt + domain prompt) and the
-        //    tool delegates materialized as AIFunctions.
+        // 9) The agent over the metered client: its providers, an id stable for the conversation, the
+        //    two-layer instructions and every tool, the agent's own ahead of MCP's and the colleagues'.
         AIAgent aiAgent = agentChatClient.AsAIAgent(
             new ChatClientAgentOptions
             {
-                // Give the agent its context providers
+                // The variables and the per-turn declarations
                 AIContextProviders = [morganaAIContextProvider],
 
-                // Give the agent its history provider
+                // The transcript and the model's view of it
                 ChatHistoryProvider = chatHistoryProvider,
 
-                // Give the agent its identifiers
+                // The id the agent is known by in this conversation and the intent it serves
                 Id = $"{intentAttribute.Intent.ToLowerInvariant()}-{conversationId}",
                 Name = intentAttribute.Intent,
 
-                // Give the agent its instructions and tools
+                // What the model reads and what it may call
                 ChatOptions = new ChatOptions
                 {
-                    // Instructions of the agent may add A2A peer consultation directives
+                    // The two layers, closed by the colleagues' declaration where the agent holds any
                     Instructions = await ComposeInstructionsWithColleaguesAsync(
                         agentPrompt,
 
@@ -326,6 +244,8 @@ public class MorganaAgentAdapter
                         // whole a colleague's question can land on it at any turn.
                         PeerConsultationEnabled,
                         peerTerritories),
+
+                    // MCP tools and colleagues come last, after the names they may not take
                     Tools = [.. await morganaToolAdapter.CreateAllFunctionsAsync(), .. mcpTools, .. peerAgents]
                 }
             });
@@ -335,71 +255,48 @@ public class MorganaAgentAdapter
         if (ToolGuardrailEnabled)
             aiAgent = GuardToolResults(aiAgent, agentType, intentAttribute.Intent, mcpToolServers, conversationId, sessionAccessor, morganaAIContextProvider);
 
-        // 10) Return all three: the caller (MorganaAgent) keeps the provider and
-        //     history-provider handles to drive context/history across turns — the agent
-        //     alone is not enough because providers are queried/mutated outside InvokeAsync.
+        // 10) The providers travel with the agent, since MorganaAgent reads and writes them outside a run.
         return new Records.CreatedAgent(aiAgent, morganaAIContextProvider, chatHistoryProvider);
     }
 
-    /// <summary>
-    /// Creates and configures a MorganaAIContextProvider for an agent with shared variable detection.
-    /// Analyzes tool definitions to identify variables that participate in the conversation-scoped
-    /// shared_context registry.
-    /// </summary>
-    /// <param name="agentName">Name of the agent for logging purposes (e.g., "billing")</param>
-    /// <param name="tools">Tool definitions to scan for shared variable declarations</param>
-    /// <param name="sharedContextCallback">
-    /// Optional callback invoked when a shared variable is set. Wired to agent's
-    /// OnSharedContextUpdate which persists the value via IConversationPersistenceService.
-    /// </param>
-    /// <returns>Configured MorganaAIContextProvider instance for the agent</returns>
+    /// <summary>Builds the agent's context provider, knowing which of its tools' parameters are shared with the other agents.</summary>
+    /// <param name="agentName">The agent's intent, named in the log line.</param>
+    /// <param name="tools">The agent's tool definitions, read for shared context parameters.</param>
+    /// <param name="sharedContextCallback">Files a shared variable's value in the conversation's <c>shared_context</c>.</param>
     private MorganaAIContextProvider CreateAIContextProvider(
         string agentName,
         IEnumerable<Records.ToolDefinition> tools,
-        Func<string, object, Task>? sharedContextCallback = null)
+        Func<string, object, Task> sharedContextCallback)
     {
-        // Derive the shared-variable allow-list from the tool definitions: a parameter is
-        // cross-agent shared only if it is BOTH flagged Shared AND context-scoped. The
-        // Scope=="context" guard is essential — a Shared but request-scoped parameter is
-        // asked of the user every turn, not carried in the registry, so promoting it would
-        // wrongly route a per-turn input into first-write-wins shared state. Flatten across
-        // all tools and Distinct() because the same logical variable (e.g. "customerCode") is
-        // typically declared on several tools and must register exactly once.
+        // A parameter is shared only when it is both flagged shared and context-scoped: a request-scoped one is
+        // asked every turn, so filing it first-write-wins would freeze a per-turn input. One variable is usually
+        // declared on several tools, so each name is taken once.
         List<string> sharedVariables = [.. tools
              .SelectMany(t => t.Parameters)
              .Where(p => p.Shared && string.Equals(p.Scope, Constants.Scopes.Context, StringComparison.OrdinalIgnoreCase))
              .Select(p => p.Name)
              .Distinct()];
 
-        // Startup-visible diagnostic: the shared set is part of the cross-agent contract,
-        // so surface it (or its emptiness) explicitly rather than leaving it implicit.
         logger.LogInformation(
             sharedVariables.Count > 0
                 ? $"Agent '{agentName}' has {sharedVariables.Count} shared variables: {string.Join(", ", sharedVariables)}"
                 : $"Agent '{agentName}' has NO shared variables");
 
-        // The provider needs the allow-list up front: only writes to a name in this set
-        // trigger OnSharedContextUpdate; everything else stays agent-local. The composer goes
-        // with it because the held-context declaration is assembled per turn, not now: it names
-        // the variables the session holds at that moment, which nobody knows at creation time.
-        MorganaAIContextProvider aiContextProvider =
-            new MorganaAIContextProvider(logger, sharedVariables, promptComposerService: promptComposerService);
-
-        // Wire persistence only when a callback was supplied. Left null (e.g. an agent
-        // created outside the actor path) shared writes still update local state but are
-        // not propagated to the conversation-scoped registry — no NPE, just no fan-out.
-        if (sharedContextCallback != null)
-            aiContextProvider.OnSharedContextUpdate = sharedContextCallback;
-
-        return aiContextProvider;
+        // Only a write to a name in the shared set reaches the registry. The composer goes with the provider because the
+        // held-context declaration names what the session holds at each turn, which nobody knows at creation time.
+        return new MorganaAIContextProvider(logger, promptComposerService, sharedVariables)
+        {
+            // The agent's own filing of a shared value in the conversation's registry
+            OnSharedContextUpdate = sharedContextCallback
+        };
     }
 
     /// <summary>Binds the base tools and the intent's own tool class to the AIFunctions the agent's model calls.</summary>
     /// <param name="intent">Agent intent name.</param>
     /// <param name="toolType">The intent's tool class; null when the intent declares none.</param>
     /// <param name="domainTools">The tool definitions projected from the intent's tool class.</param>
-    /// <param name="toolContextFactory">Factory supplying the (provider, session) pair to tool constructors.</param>
-    /// <returns>Configured MorganaToolAdapter with registered tool implementations</returns>
+    /// <param name="toolContextFactory">Returns the provider, session and conversation of the turn in flight to every tool.</param>
+    /// <returns>The adapter holding every native tool of the agent.</returns>
     private MorganaToolAdapter CreateToolAdapterForIntent(
         string intent,
         Type? toolType,
@@ -426,17 +323,17 @@ public class MorganaAgentAdapter
 
         logger.LogInformation("Found custom native tool: {ToolTypeName} for intent '{Intent}' via ToolRegistry", toolType.Name, intent);
 
-        // A discovered tool class that cannot be constructed is fatal: it is a hard
-        // authoring bug, almost always a constructor that does not match the
-        // required (ILogger, Func<MorganaTool.ToolContext>) signature. Fail loud with that
-        // exact remediation rather than silently shipping an agent missing its domain tools.
+        // A tool class that cannot be built is an authoring fault, almost always a constructor other than
+        // (ILogger, Func<MorganaTool.ToolContext>): the agent is refused rather than shipped without its domain tools.
         MorganaTool customToolInstance;
         try
         {
+            // One instance per agent and so per conversation, so a tool class never carries state across conversations.
             customToolInstance = (MorganaTool)Activator.CreateInstance(toolType, logger, toolContextFactory)!;
         }
         catch (Exception ex)
         {
+            // The exception names the constructor the class must offer.
             logger.LogError(ex, "Failed to instantiate custom tool {ToolTypeName} for intent '{Intent}'", toolType.Name, intent);
             throw new InvalidOperationException(
                 $"Could not create custom tool instance for intent '{intent}'. " +
@@ -444,22 +341,18 @@ public class MorganaAgentAdapter
                 $"(ILogger, Func<MorganaTool.ToolContext>).", ex);
         }
 
-        // Bind only the intent-specific definitions to the discovered instance (base tools
-        // were already registered above against the base instance).
+        // The domain definitions bind to the domain instance, the base ones being already bound to the base instance.
         morganaToolAdapter.AddTools(customToolInstance, domainTools);
         logger.LogInformation("Registered {Length} custom tools for intent '{Intent}'", domainTools.Length, intent);
 
+        // The base tools ahead of the domain's, as the model reads them.
         return morganaToolAdapter;
     }
 
     /// <summary>
-    /// True when this installation takes part in peer consultation at all — which is also the whole
-    /// of what decides whether an agent may be asked a question, since the ring is raised whole and
-    /// every agent discovered is published over A2A.
+    /// True when this installation takes part in peer consultation at all.
+    /// It alone decides whether an agent may be asked a question, since every agent discovered is published over A2A.
     /// </summary>
-    /// <remarks>
-    /// Read per agent creation rather than cached: a configuration value belongs to whoever reads it.
-    /// </remarks>
     private bool PeerConsultationEnabled
         => configuration.GetValue("Morgana:AgentToAgent:Enabled", true);
 
@@ -507,12 +400,6 @@ public class MorganaAgentAdapter
         // An MCP server and a partner answer from outside the installation: a call to them is sent only while their source is available and secure.
         HashSet<string> externalToolNames = [.. mcpToolServers.Keys, .. partnerToolPeers.Keys];
 
-        // Whether the source behind an external tool currently holds a completed approval of its offer.
-        bool SourceIsAvailableAndSecure(string toolName)
-            => mcpToolServers.TryGetValue(toolName, out UsesMCPServerAttribute? server)
-                ? guardRailService.IsServerAvailableAndSecure(server)
-                : partnerToolPeers.TryGetValue(toolName, out Records.PeerReference? peer) && guardRailService.IsPeerAvailableAndSecure(peer);
-
         // The guard joins the agent's tool loop through the agent framework's own function-invocation
         // middleware, which wraps every call of every run, streamed or not.
         return new AIAgentBuilder(agent)
@@ -552,6 +439,7 @@ public class MorganaAgentAdapter
                             [Telemetry.SecurityOutcome] = Telemetry.SecurityOutcomes.WithheldWithoutRunning
                         }));
 
+                    // The model reads the same fact of the quarantine it read the first time.
                     return await promptComposerService.ComposeQuarantinedResultAsync(toolName);
                 }
 
@@ -630,7 +518,7 @@ public class MorganaAgentAdapter
                         [Telemetry.SecurityFinding] = verdict.Violation ?? ""
                     }));
 
-                // The tool is recorded as withheld for the rest of the turn.
+                // The tool is recorded as withheld for the rest of the turn, beside those refused before it.
                 if (session is not null)
                 {
                     string[] quarantinedToolNames = [.. ReadQuarantinedTools(session, contextProvider), toolName];
@@ -642,17 +530,22 @@ public class MorganaAgentAdapter
                 return await promptComposerService.ComposeQuarantinedResultAsync(toolName);
             })
             .Build();
+
+        #region Utilities
+
+        // Whether the source behind an external tool currently holds a completed approval of its offer.
+        bool SourceIsAvailableAndSecure(string toolName)
+            => mcpToolServers.TryGetValue(toolName, out UsesMCPServerAttribute? server)
+                ? guardRailService.IsServerAvailableAndSecure(server)
+                : partnerToolPeers.TryGetValue(toolName, out Records.PeerReference? peer) && guardRailService.IsPeerAvailableAndSecure(peer);
+
+        #endregion
     }
 
     /// <summary>
     /// Composes the agent's two-layer instructions and closes them with the colleagues it holds.
+    /// Which colleagues resolved is known only here, so the composer is handed the roster and never asked to discover one.
     /// </summary>
-    /// <remarks>
-    /// The block is appended here rather than inside the composer because which colleagues actually
-    /// resolved is known only to this method: the composer is handed a topology, never asked to
-    /// discover one. It stays ahead of the per-turn held-context tail, so it rides in the cached
-    /// prefix — the roster is fixed for the agent's life, unlike the context it is composed beside.
-    /// </remarks>
     /// <param name="agentPrompt">The agent's own domain prompt.</param>
     /// <param name="peerCapable">Whether this agent sits inside the A2A topology at either end.</param>
     /// <param name="peerTerritories">Function name → the colleague's own statement of what falls to it.</param>
@@ -661,20 +554,20 @@ public class MorganaAgentAdapter
         bool peerCapable,
         IReadOnlyDictionary<string, string> peerTerritories)
     {
+        // The framework layer over the domain layer, with the consultation policy where the agent can be asked.
         string instructions = await promptComposerService.ComposeAgentInstructionsAsync(agentPrompt, peerCapable);
+
+        // Null for an agent that holds no colleague.
         string? colleagues = await promptComposerService.ComposeColleaguesDeclarationAsync(peerTerritories);
 
+        // The roster stays ahead of the per-turn tail, in the cached prefix: it is fixed for the agent's life.
         return colleagues is null ? instructions : $"{instructions}\n{colleagues}\n";
     }
 
     /// <summary>
-    /// Builds one callable function per colleague the agent declares with <c>[ConsultsAgent]</c>.
+    /// Builds one callable function per colleague the agent declares with <c>[ConsultsAgent]</c>, leaving out those it cannot reach.
+    /// The startup checks already refused a declaration naming no agent, so a colleague missing here is one whose endpoint did not answer.
     /// </summary>
-    /// <remarks>
-    /// Best-effort as MCP registration is: an unreachable colleague costs that colleague and nothing
-    /// more. Startup validation already rejects a declaration naming no agent, so a failure here
-    /// means the A2A endpoints are unreachable, not that the topology is wrong.
-    /// </remarks>
     /// <param name="agentType">Agent whose <c>[ConsultsAgent]</c> declarations are being honoured</param>
     /// <param name="callerIntent">Asking agent, recorded on the credentials every consultation presents</param>
     /// <param name="conversationId">Conversation the consultations are scoped to, carried as the A2A context id</param>
@@ -690,23 +583,24 @@ public class MorganaAgentAdapter
         MorganaAIContextProvider contextProvider,
         Dictionary<string, string> peerTerritories)
     {
+        // The colleagues in the order the agent's author declared them.
         ConsultsAgentAttribute[] attributes = [.. agentType.GetCustomAttributes<ConsultsAgentAttribute>()];
 
+        // Consulting nobody, the agent still reads the consultation policy in its instructions, since any colleague may consult it.
         if (attributes.Length == 0)
         {
             logger.LogDebug("Agent {AgentTypeName} consults no colleague", agentType.Name);
             return [];
         }
 
-        // The whole mechanism is switchable off in one place: with it disabled an agent runs exactly
-        // as it did before, unaware it ever had colleagues, which is what makes the feature safe to
-        // turn off in a deployment that cannot afford the extra turns.
-        if (!configuration.GetValue("Morgana:AgentToAgent:Enabled", true))
+        // Switched off, an agent runs unaware it ever had colleagues: a deployment that cannot afford the extra turns pays none of them.
+        if (!PeerConsultationEnabled)
         {
             logger.LogInformation("Peer consultation is disabled: agent {AgentTypeName} will not see its {Count} declared colleague(s)", agentType.Name, attributes.Length);
             return [];
         }
 
+        // How many consultations one user turn may spend before the exchange is cut short.
         int maxRoundsPerTurn = configuration.GetValue("Morgana:AgentToAgent:MaxRoundsPerTurn", 4);
 
         // Every colleague is reached for at once. They are independent agents, often at different
@@ -724,6 +618,7 @@ public class MorganaAgentAdapter
             if (colleague is not (string peerFunctionName, AIFunction peerFunction, string peerTerritory))
                 continue;
 
+            // In declaration order, which keeps the model's tool list identical from one run to the next.
             peerAgents.Add(peerFunction);
 
             // The same territory the tool description carries, kept under the callable name: the
@@ -737,6 +632,8 @@ public class MorganaAgentAdapter
         // running at all.
         return peerAgents;
 
+        #region Utilities
+
         // One declared colleague, from its published card to the function the model may call. Local to
         // the registration because everything it closes over is this agent's — who is asking, which
         // conversation and the session the guards read at invocation.
@@ -748,10 +645,10 @@ public class MorganaAgentAdapter
             // it and it is that fetched card the model is told about: the colleague describes itself,
             // rather than being described by whatever this installation believes about it.
             Records.PeerReference peer = new Records.PeerReference(attribute.Intent, attribute.Instance);
-
             (AIAgent Agent, AgentCard Card)? resolvedPeer =
                 await agentDirectoryService.ResolvePeerAgentAsync(peer, callerIntent);
 
+            // A colleague that cannot be resolved is left out and reported, the agent running without it.
             if (resolvedPeer is not (AIAgent peerAgent, AgentCard peerCard))
             {
                 logger.LogWarning("Agent {AgentTypeName} cannot reach declared colleague '{PeerIntent}'; it will run without it", agentType.Name, attribute.Intent);
@@ -799,7 +696,7 @@ public class MorganaAgentAdapter
             AIAgent guardedPeerAgent = new AIAgentBuilder(peerAgent)
                 .Use(async (messages, session, options, innerAgent, cancellationToken) =>
                 {
-                    // The two rules a consultation is bound by, evaluated against the CALLER's live
+                    // The two rules a consultation is bound by, evaluated against the caller's live
                     // session — not the peer session this function was built with — because both are
                     // facts about the turn asking: whether it is itself serving a colleague and how
                     // many rounds it has already spent. Passing means the round is charged.
@@ -822,9 +719,8 @@ public class MorganaAgentAdapter
                 }, null)
                 .Build();
 
-            // The function name is what the model calls, so it is derived from the colleague's intent
-            // rather than from the card's free-form name and sanitized because a name is constrained
-            // where a card's name is not.
+            // The function name is what the model calls, so it is derived from the colleague's intent and its
+            // partner rather than from the card's free-form name.
             string peerFunctionName = ToFunctionName(peer);
 
             // The colleague becomes one more callable function in this agent's tool list, bound to the
@@ -845,22 +741,20 @@ public class MorganaAgentAdapter
             // no description — a colleague still exists when it failed to say what it is for.
             return (peerFunctionName, peerFunction, peerCard.Description ?? "");
         }
+
+        #endregion
     }
 
     /// <summary>
-    /// Applies the two rules a consultation is bound by and charges the round to the turn's budget
-    /// when they pass.
+    /// Applies the two rules a consultation is bound by and charges the round to the turn's budget when they pass.
+    /// A refusal comes back as an ordinary answer, never an exception: the asking agent is mid-turn with a user waiting.
     /// </summary>
-    /// <remarks>
-    /// A refusal comes back as an ordinary answer, never an exception: the asking agent is mid-turn
-    /// with a user waiting and a refused consultation must degrade its answer, not destroy the turn.
-    /// </remarks>
     /// <param name="callerIntent">Asking agent, named in the diagnostics.</param>
     /// <param name="peerIntent">Colleague being consulted, named in the diagnostics.</param>
-    /// <param name="callerSession">The asking agent's session, or null when it has none yet.</param>
+    /// <param name="callerSession">The asking agent's session; null when it has none yet.</param>
     /// <param name="maxRoundsPerTurn">Consultations one user turn may spend before the exchange is cut short.</param>
     /// <param name="contextProvider">Context store of the asking agent, holding the turn's round count.</param>
-    /// <returns>The serialized refusal envelope, or <c>null</c> when the consultation may proceed.</returns>
+    /// <returns>The serialized refusal envelope; <c>null</c> when the consultation may proceed.</returns>
     private async Task<string?> ApplyPeerGuardsAsync(
         string callerIntent,
         string peerIntent,
@@ -905,17 +799,19 @@ public class MorganaAgentAdapter
     }
 
     /// <summary>
-    /// Returns a copy of the run options declaring who is asking, so nothing outside this call is
-    /// mutated. The A2A layer carries the property as message metadata and hands it back to the
-    /// answering agent, which is how a consultation names its requester without putting it in the text.
+    /// Returns a copy of the run options declaring who is asking.
+    /// The A2A layer carries the property as message metadata to the answering agent, so the requester is named outside the question's text.
     /// </summary>
     private static AgentRunOptions WithDeclaredCaller(AgentRunOptions? options, string callerIntent)
     {
+        // A copy, so the options the pipeline handed in stay as they were for whoever else reads them.
         AgentRunOptions declaredOptions = options?.Clone() ?? new AgentRunOptions();
 
+        // The asking agent's intent under the key the answering side reads it from.
         declaredOptions.AdditionalProperties ??= [];
         declaredOptions.AdditionalProperties[Constants.MessageProperties.CallerIntent] = callerIntent;
 
+        // Handed to the colleague's run in place of the options the pipeline passed in.
         return declaredOptions;
     }
 
@@ -947,14 +843,9 @@ public class MorganaAgentAdapter
         };
 
     /// <summary>
-    /// Takes what a colleague reports having spent off its answer and charges it home when that
-    /// colleague was published elsewhere.
+    /// Takes what a colleague reports having spent off its answer and charges it home when that colleague was published elsewhere.
+    /// The figure is always taken off, since a model given a number narrates it, while one of this installation's agents already charged the conversation itself.
     /// </summary>
-    /// <remarks>
-    /// Two independent halves. Stripping is unconditional: a model given a number will narrate it and
-    /// every colleague reports one. Charging is not: one of ours already billed this conversation.
-    /// An envelope that will not parse is handed back untouched rather than made to fail.
-    /// </remarks>
     /// <param name="peerResponse">The colleague's answer, carrying the serialized envelope.</param>
     /// <param name="conversationId">Conversation charged for what the colleague spent.</param>
     /// <param name="peerIntent">Colleague consulted, named in the metric.</param>
@@ -987,6 +878,7 @@ public class MorganaAgentAdapter
         }
         catch (Exception ex)
         {
+            // An envelope that does not parse is handed on untouched: the answer stands and only the charge is lost.
             logger.LogWarning(ex, "Could not read what '{PeerIntent}' at '{PeerSystem}' spent; its answer stands and the charge is lost", peerIntent, peerSystem ?? Constants.Morgana);
             return peerResponse;
         }
@@ -996,32 +888,24 @@ public class MorganaAgentAdapter
     private static string RefusalEnvelope(string message)
         => JsonSerializer.Serialize(new Records.PeerConsultationResponse(message, false), Records.DefaultJsonSerializerOptions);
 
-    /// <summary>Builds the name under which a colleague is offered as a callable function.</summary>
-    /// <remarks>
-    /// Intents are authored freely while a function name is not, so anything outside the permitted
-    /// alphabet folds to an underscore; the prefix keeps a colleague visibly distinct from the
-    /// agent's own tools in the model's tool list. A colleague published by an instance carries that
-    /// instance in the name, so an agent may hold two colleagues handling the same intent at two agents
-    /// without them colliding. Public because the startup check must derive the same name: instance
-    /// names are written by people and two of them can fold to one function, which is a startup error
-    /// rather than something to discover when the provider rejects the tool list.
-    /// </remarks>
+    /// <summary>
+    /// Builds the name under which a colleague is offered as a callable function, the one the startup checks derive too.
+    /// Two partners' names can fold to one function, which the startup checks refuse before a provider rejects the tool list.
+    /// </summary>
     /// <param name="peer">Colleague being offered.</param>
-    public static string ToFunctionName(Records.PeerReference peer)
+    internal static string ToFunctionName(Records.PeerReference peer)
     {
+        // A partner's colleague carries the partner in its name, so two colleagues handling one intent at two partners stay apart.
         string peerName = peer.Instance is null ? peer.Intent : $"{peer.Instance}_{peer.Intent}";
 
+        // The prefix sets a colleague apart from the agent's own tools and anything outside a function name's alphabet folds to an underscore.
         return $"{Constants.AgentToAgent.PeerFunctionNamePrefix}{new string([.. peerName.Select(c => char.IsAsciiLetterOrDigit(c) ? c : '_')])}";
     }
 
-    /// <summary>Names why an MCP tool may not join the agent; null when its name is free.</summary>
-    /// <remarks>
-    /// An MCP tool enters last, after Morgana's own tools, the domain's and the colleagues', so it may
-    /// never take a name that one of them holds or may hold: a duplicate name would have the provider
-    /// refuse the agent's whole tool list and a borrowed name would inherit an exemption granted by name.
-    /// Case is ignored so a lookalike name is refused too. Public so the rule can be asserted without a
-    /// server, as <see cref="ToFunctionName"/> is public so a startup check derives the same name.
-    /// </remarks>
+    /// <summary>
+    /// Names why an MCP tool may not join the agent; null when its name is free.
+    /// A duplicate name would have the provider refuse the agent's whole tool list and a borrowed one would inherit an exemption granted by name.
+    /// </summary>
     /// <param name="mcpToolName">Name the MCP server declares for the tool.</param>
     /// <param name="agentToolNames">The names of the agent's base tools and of its tool class's tools.</param>
     /// <param name="admittedMCPToolNames">The MCP tools already admitted for this agent.</param>
@@ -1047,11 +931,7 @@ public class MorganaAgentAdapter
         return null;
     }
 
-    /// <summary>
-    /// Discovers tools from every MCP server declared on the agent.
-    /// Collects [UsesMCPServer] attributes and discovers tools from each.
-    /// McpClientTool instances are already AIFunctions; no schema conversion applied.
-    /// </summary>
+    /// <summary>Collects the tools of every MCP server the agent declares, refusing each one whose name is taken.</summary>
     /// <param name="agentType">Agent type to inspect for [UsesMCPServer] attributes</param>
     /// <param name="agentIntent">The intent the agent serves, tagged on the security event of a refused tool</param>
     /// <param name="agentToolNames">Names of the agent's base tools and of its tool class's tools, which an MCP tool may not take</param>
@@ -1059,12 +939,10 @@ public class MorganaAgentAdapter
     /// <returns>Discovered tools as AIFunctions, empty if no servers declared</returns>
     private async Task<List<AIFunction>> RegisterMCPToolsAsync(Type agentType, string agentIntent, IReadOnlyCollection<string> agentToolNames, Dictionary<string, UsesMCPServerAttribute> mcpToolServers)
     {
-        // An agent may declare several [UsesMCPServer] (multiple servers, mixed
-        // Http/Stdio) — collect them all, not just the first.
+        // The attribute is repeatable: an agent may draw tools from several servers, HTTP and stdio mixed.
         UsesMCPServerAttribute[] attributes = [.. agentType.GetCustomAttributes<UsesMCPServerAttribute>()];
 
-        // No MCP on this agent is the common, expected case (native-tool or tool-less
-        // agents) — Debug, not Warning: it is not a problem, just not applicable.
+        // Most agents use no MCP server, which is why this is a debug line and not a warning.
         if (attributes.Length == 0)
         {
             logger.LogDebug("Agent {AgentTypeName} does not use MCP servers", agentType.Name);
@@ -1073,20 +951,18 @@ public class MorganaAgentAdapter
 
         logger.LogInformation("Agent {AgentTypeName} declares {AttributesLength} MCP server(s)", agentType.Name, attributes.Length);
 
+        // The tools admitted so far, which a later tool's name may not take.
         List<AIFunction> mcpTools = [];
 
+        // Each server is tried on its own, so a dead one costs its own tools and never the others' or the agent.
         foreach (UsesMCPServerAttribute attribute in attributes)
         {
-            // Per-server isolation is the whole point of this loop: each server is
-            // attempted independently and a failure (unreachable host, bad URI, discovery
-            // error) is logged and swallowed so it cannot abort the remaining servers or
-            // agent creation. This is what makes MCP registration "best-effort" — a dead
-            // server costs that server's tools, nothing more.
             try
             {
                 // The server's whole list, to be admitted tool by tool.
                 IList<AIFunction> serverTools = await DiscoverMCPToolsFromServerAsync(attribute);
 
+                // Each tool is admitted or refused on its own name.
                 foreach (AIFunction serverTool in serverTools)
                 {
                     // The reason this tool's name collides with a tool that entered before it: null when free.
@@ -1120,20 +996,21 @@ public class MorganaAgentAdapter
             }
             catch (Exception ex)
             {
+                // The server's tools are lost to this agent; the next server is still tried.
                 logger.LogError(ex, "Failed to register MCP tools from server: {AttributeCommand}", attribute.Command);
             }
         }
 
+        // They enter the agent's tool list after its own tools, whose names they were checked against.
         return mcpTools;
     }
 
     /// <summary>
-    /// Discovers tools from a single MCP server: the ones the guard admitted when the tool guard is on and the registry's listing otherwise.
-    /// Tools retain server-declared names and schema untouched and survive the server ending its session
-    /// for the whole life of the agent, which discovers them only once, at creation.
+    /// Lists one MCP server's tools: those the guard admitted when the tool guard is on, the registry's listing otherwise.
+    /// They keep the server's names and schemas and serve the agent for its whole life, since it discovers them once, at creation.
     /// </summary>
-    /// <param name="serverAttribute">Attribute declaring the MCP server (transport, command, args)</param>
-    /// <returns>Server's tools as AIFunctions</returns>
+    /// <param name="serverAttribute">The server's declaration: transport, command and arguments.</param>
+    /// <returns>The server's tools.</returns>
     private async Task<IList<AIFunction>> DiscoverMCPToolsFromServerAsync(UsesMCPServerAttribute serverAttribute)
     {
         logger.LogInformation("Registering MCP tools from server: {ServerAttributeCommand}", serverAttribute.Command);
@@ -1143,9 +1020,7 @@ public class MorganaAgentAdapter
             ? [.. (await guardRailService.AdmitMCPServerToolsAsync(serverAttribute)).Tools]
             : await imcpClientRegistryService.DiscoverResilientToolsAsync(serverAttribute);
 
-        // A reachable server that advertises zero tools is not an error (it may expose
-        // none yet or only prompts/resources) and a refused or unlisted server yields none either:
-        // warn for visibility and return — there is simply nothing to bind and the agent keeps its base/native tools.
+        // A server that offers no tool, is refused or cannot be reached leaves the agent with its other tools.
         if (mcpTools.Count == 0)
         {
             logger.LogWarning("No tools discovered from MCP server: {ServerAttributeCommand}", serverAttribute.Command);
@@ -1157,6 +1032,7 @@ public class MorganaAgentAdapter
 
         logger.LogInformation("Successfully registered {McpToolsCount} MCP tools from {ServerAttributeCommand}", mcpTools.Count, serverAttribute.Command);
 
+        // The server's tools as one list of their own, apart from the registry's.
         return [.. mcpTools];
     }
 }

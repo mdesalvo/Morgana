@@ -1,22 +1,17 @@
 namespace Morgana.AI;
 
 /// <summary>
-/// The framework's glossary: every literal that is a CONTRACT between two parties rather than a
-/// value belonging to one of them. Peer of <see cref="Records"/> — that one centralizes the model,
-/// this one the vocabulary the model is spoken in.
+/// The framework's glossary: every literal that is a contract between two parties who cannot see each other.
+/// <see cref="Records"/> holds the model and this class the vocabulary it is spoken in; log text, prompt prose and configuration keys stay out.
 /// </summary>
 public static class Constants
 {
-    /// <summary>
-    /// The reserved name of the system, on which everything else rests...
-    /// </summary>
+    /// <summary>The system's reserved name: the framework prompt's id, the dust role of its actors and the speaker of what no agent wrote.</summary>
     public const string Morgana = "Morgana";
 
     /// <summary>
-    /// IDs of the framework prompts in <c>morgana.json</c>, resolved through
-    /// <c>IPromptResolverService</c>. They name framework actors rather than domain concepts: a domain
-    /// intent or prompt taking one of them is refused at startup. The framework layer's own prompt is filed under the
-    /// system's name itself, <see cref="Morgana"/>, which only <see cref="All"/> lists beside them.
+    /// The ids of the framework prompts in <c>morgana.json</c>, which a domain intent or prompt may not take.
+    /// The framework layer's own prompt is filed under <see cref="Morgana"/>, which only <see cref="All"/> lists beside them.
     /// </summary>
     public static class Prompts
     {
@@ -43,10 +38,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// Name prefixes of the pipeline actors. An actor's path is <c>/user/{prefix}-{conversationId}</c>,
-    /// built by <c>ActorSystemExtensions.GetOrCreateActorAsync</c>: the prefix is what makes a path
-    /// predictable, so an actor is reached by name from a later turn (or from a controller that
-    /// holds nothing but the conversation id) instead of a reference having to be kept alive.
+    /// The name prefixes of the pipeline actors, whose path is <c>/user/{prefix}-{conversationId}</c>.
+    /// A predictable path lets a later turn reach an actor by name, as it lets a controller holding only the conversation id.
     /// </summary>
     public static class Actors
     {
@@ -67,9 +60,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// The labels that open each section of a composed prompt. Put there by code at composition, never
-    /// written in configuration, so a section can never reach a model without the label that tells it
-    /// which section it is reading.
+    /// The labels that open each section of a composed prompt.
+    /// The composer puts them there and no configuration writes them, so a section never reaches a model without its label.
     /// </summary>
     public static class SectionLabels
     {
@@ -87,11 +79,10 @@ public static class Constants
     }
 
     /// <summary>
-    /// The fences the composer draws around the global policies and around the framework and domain
-    /// layers. They are the composer's design rather than configuration. They live here because the
-    /// tool-result guard refuses a result that forges them.
+    /// The fences the composer draws around the global policies and around the framework and domain layers.
+    /// They are the composer's design rather than configuration and live here because the tool-result guard refuses a result forging them.
     /// </summary>
-    public static class PromptFences
+    internal static class PromptFences
     {
         /// <summary>Opens the block of global policies.</summary>
         public const string GlobalPoliciesHeader =
@@ -121,24 +112,18 @@ public static class Constants
     }
 
     /// <summary>
-    /// Names of the global policies that code resolves by name. The rest of the list lives in
-    /// <c>morgana.json</c> and nowhere else: a policy the framework only renders is read by the model
-    /// and by whoever edits the prompt and naming it here would be an index that no rename breaks.
+    /// The names of the global policies that code resolves by name.
+    /// A policy the framework only renders lives in <c>morgana.json</c> alone, where naming it here would be an index no rename breaks.
     /// </summary>
-    public static class Policies
+    internal static class Policies
     {
-        /// <summary>
-        /// P8 — the two-role contract of a consultation and the one policy rendered conditionally:
-        /// only an agent inside the A2A topology reads it (see <c>ComposeAgentInstructionsAsync</c>),
-        /// so this name is resolved on every composition rather than only edited in the prompt.
-        /// </summary>
+        /// <summary>P8, the contract of a consultation and the one policy rendered only for an agent inside the A2A topology.</summary>
         public const string PeerConsultation = "PeerConsultation";
     }
 
     /// <summary>
-    /// Names of the entries in the framework prompt's <c>Injections</c> array, the sibling of its
-    /// policies. They are templates, not rules: each is spliced at exactly one site instead of being
-    /// rendered among the policies and each is resolved by name through <c>Injection.ResolveTemplate</c>.
+    /// The names of the entries in the framework prompt's <c>Injections</c> array, resolved through <c>Injection.ResolveTemplate</c>.
+    /// They are templates, not rules: each is spliced at exactly one site and never rendered among the policies.
     /// </summary>
     public static class Injections
     {
@@ -165,9 +150,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// The keys of a prompt's <c>AdditionalProperties</c>: everything a prompt declares beside its
-    /// four authored sections. Each is written in <c>morgana.json</c> or a plugin's <c>agents.json</c>
-    /// and read by code that never sees that file, which is exactly the contract this glossary holds.
+    /// The keys of a prompt's <c>AdditionalProperties</c>: everything a prompt declares beside its authored sections.
+    /// Each is written in <c>morgana.json</c> or a plugin's <c>agents.json</c> and read by code that never sees that file.
     /// </summary>
     public static class PromptProperties
     {
@@ -190,9 +174,8 @@ public static class Constants
         public const string DisambiguationMessage = "DisambiguationMessage";
 
         /// <summary>
-        /// What Morgana says when an agent finishes and the conversation comes back to her. <c>{0}</c>
-        /// is that agent's display name. Authored here because it is Morgana speaking: every channel
-        /// used to carry its own copy and invent when to show it, from a history that never held it.
+        /// What Morgana says when an agent finishes and the conversation comes back to her; <c>{0}</c> is that agent's display name.
+        /// It is authored in her prompt because she is the one speaking, so no channel writes a copy of its own.
         /// </summary>
         public const string AgentExitMessage = "AgentExitMessage";
 
@@ -206,8 +189,8 @@ public static class Constants
         public const string ClassificationError = "ClassificationError";
 
         /// <summary>
-        /// What a request matching no modelled agent is. It belongs to the classifier and to no domain,
-        /// so it is authored beside the vocabulary it closes rather than in any plugin.
+        /// What a request matching no modelled agent is.
+        /// It belongs to the classifier and to no domain, so it is authored beside the vocabulary it closes rather than in any plugin.
         /// </summary>
         public const string ComplementIntentDescription = "ComplementIntentDescription";
     }
@@ -223,9 +206,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// The base tools whose names travel further than the tool loop: a stored function call is
-    /// recognised by name when a conversation's history is replayed, long after the agent that made
-    /// it is gone.
+    /// The base tools whose names travel further than the tool loop.
+    /// A stored function call is recognised by name when a history is read back, long after the agent that made it is gone.
     /// </summary>
     public static class Tools
     {
@@ -246,11 +228,10 @@ public static class Constants
     }
 
     /// <summary>
-    /// The framework's own context keys: ephemeral, one turn long and excluded from the held-context
-    /// declaration precisely because they are machinery rather than knowledge about the user. Written
-    /// by a base tool or by the consultation guards, read and dropped by the agent at end of turn.
+    /// The framework's own context keys, one turn long, which the held-context declaration leaves out as machinery rather than knowledge about the user.
+    /// A base tool or a consultation guard writes them and the agent reads and drops them at the end of the turn.
     /// </summary>
-    public static class ContextKeys
+    internal static class ContextKeys
     {
         /// <summary>Set by <see cref="Tools.SetTurnEnding"/>; read once, then dropped.</summary>
         public const string TurnEnding = "turn_ending";
@@ -275,48 +256,38 @@ public static class Constants
     }
 
     /// <summary>
-    /// Keys stamped on a <c>ChatMessage</c>'s AdditionalProperties. They are the only way a later
-    /// reader — the persistence layer rebuilding a transcript, the reducer resuming a summarized
-    /// session, the answering side of a consultation — can tell what a stored message was FOR.
+    /// The keys stamped on a chat message's additional properties.
+    /// They are how a later reader, such as the transcript, the reducer or a consultation's answering side, tells what a stored message was for.
     /// </summary>
-    public static class MessageProperties
+    internal static class MessageProperties
     {
         /// <summary>
-        /// Written by <c>MorganaAgent</c> at end-of-turn to mark the LAST assistant message of that
-        /// turn as the user-facing one. Read by
-        /// <c>SQLiteConversationPersistenceService.GetConversationHistoryAsync</c> to filter out the
-        /// intermediate tool-calling assistant messages when history is rendered on resume.
+        /// Marks the last assistant message of a turn as the one the user read, written by <c>MorganaAgent</c> at the end of the turn.
+        /// The transcript reads it to leave out the turn's intermediate tool-calling messages.
         /// </summary>
         public const string UserFacing = "morgana:user_facing";
 
-        /// <summary>
-        /// Written alongside <see cref="UserFacing"/>, carrying the turn's reply exactly as it was
-        /// delivered to the channel and read back by
-        /// <c>SQLiteConversationPersistenceService.ExtractTextFromMessage</c>.
-        /// </summary>
+        /// <summary>The turn's reply exactly as the channel was given it, written beside <see cref="UserFacing"/> and read back by the transcript.</summary>
         public const string TurnText = "morgana:turn_text";
 
         /// <summary>
-        /// Written by <c>MorganaAgent</c> on a user message the orchestrator had already filed as
-        /// her own, which is every phrase that arrived while no agent was active. The agent keeps
-        /// the phrase because its model must read it. This says the phrase belongs to somebody
-        /// else's side of the conversation: a transcript takes it from there and skips this copy,
-        /// so the user reads what they said once rather than twice.
+        /// Marks the agent's copy of a phrase Morgana already filed as her own, every phrase that arrived while no agent was active.
+        /// The agent's model must read the phrase, while the transcript skips this copy so the user reads what they said once.
         /// </summary>
         public const string ContextOnly = "morgana:context_only";
 
-        /// <summary>A2A message metadata naming the agent that asked. Dotted, not colon-separated, because it travels the protocol.</summary>
+        /// <summary>The A2A message metadata naming the intent of the agent that asked.</summary>
         public const string CallerIntent = "morgana:caller";
 
-        /// <summary>The running summary a reducer stores on its anchor message. MEAI's own name, kept so sessions summarized before <c>MorganaChatReducer</c> shipped still resume.</summary>
+        /// <summary>The running summary <c>MorganaChatReducer</c> stores on its anchor message, under the key MEAI's own summarizer uses.</summary>
         public const string Summary = "__summary__";
     }
 
     /// <summary>
-    /// Placeholders authored inside prompt prose and resolved in code. Double parentheses because no
-    /// natural sentence contains them and a prompt is edited by people who are not reading this file.
+    /// The placeholders authored inside prompt prose and resolved in code.
+    /// Double parentheses appear in no natural sentence, which matters because a prompt is edited by people who are not reading this file.
     /// </summary>
-    public static class Placeholders
+    internal static class Placeholders
     {
         /// <summary>In <see cref="Injections.ToolDescriptionContextGuidance"/> — the tool's own context-scoped parameter names.</summary>
         public const string ContextParameters = "((context_parameters))";
@@ -347,8 +318,8 @@ public static class Constants
     }
 
     /// <summary>
-    /// Values of <c>Records.ToolParameter.Scope</c>: where a tool's input comes FROM. A parameter
-    /// carrying a value the model itself authors declares neither.
+    /// The values of <c>Records.ToolParameter.Scope</c>: where a tool's input comes from.
+    /// A parameter carrying a value the model itself authors declares neither.
     /// </summary>
     public static class Scopes
     {
@@ -359,22 +330,14 @@ public static class Constants
         public const string Request = "request";
     }
 
-    /// <summary>
-    /// Intent names the framework itself knows. Every other intent is a domain's own.
-    /// </summary>
+    /// <summary>The intent names the framework itself knows; every other intent is a domain's own.</summary>
     public static class Intents
     {
         /// <summary>
-        /// The complement of whatever domain is deployed: what a request matching no modelled agent
-        /// is. No agent handles it, it is never offered as a quick reply and never counts as a
-        /// collision candidate. Routed all the same: the router answers a genuine complement with
-        /// Morgana's presentation, a classification failure with the classification-error message.
+        /// The complement of whatever domain is deployed, which no agent handles and no button or collision ever offers.
+        /// The router answers it with Morgana's presentation, with the classification-error message when it is a fallback.
+        /// Three parties compare the name, while its description is authored in the Classifier prompt; a plugin declaring it is refused.
         /// </summary>
-        /// <remarks>
-        /// The classifier's own and no domain's: the name is here because three parties compare it,
-        /// while the description a model reads is authored in the Classifier prompt beside the rest
-        /// of that actor's prose. A plugin declaring it is ignored at the door.
-        /// </remarks>
         public const string Other = "other";
     }
 
@@ -389,21 +352,14 @@ public static class Constants
         /// <summary>The top intent's confidence on a 0 to 1 scale, written with two decimals whatever the host's locale.</summary>
         public const string Confidence = "confidence";
 
-        /// <summary>
-        /// The colliding intents, comma-separated and most confident first: written by the classifier, read by the supervisor.
-        /// Its presence alone diverts the turn to the disambiguation.
-        /// </summary>
+        /// <summary>The colliding intents, comma-separated and most confident first, whose presence alone diverts the turn to the disambiguation.</summary>
         public const string AmbiguousIntents = "ambiguousIntents";
     }
 
     /// <summary>
-    /// Transport dispatch keys: a channel announces one at the handshake and the host must have a
-    /// service registered under exactly that spelling or the conversation is refused at ingress.
+    /// The two delivery modes the framework ships, which a channel announces at the handshake and a transport is registered under.
+    /// <c>ChannelCoordinates.DeliveryMode</c> stays a free-form string, so a new transport needs no contract change.
     /// </summary>
-    /// <remarks>
-    /// The set is deliberately open: <c>ChannelCoordinates.DeliveryMode</c> stays a free-form string
-    /// so a new transport needs no contract change. These are the two this framework ships.
-    /// </remarks>
     public static class DeliveryModes
     {
         /// <summary>Duplex push over a hub; needs no callback address.</summary>
@@ -413,10 +369,7 @@ public static class Constants
         public const string Webhook = "webhook";
     }
 
-    /// <summary>
-    /// The agent-to-agent surface: how a colleague is named to a model, where its card lives and
-    /// under whose name this installation signs its own peer traffic.
-    /// </summary>
+    /// <summary>The agent-to-agent surface: how a colleague is named to a model, where its card lives and the name this installation signs its own peer traffic under.</summary>
     public static class AgentToAgent
     {
         /// <summary>Prefix of the function a colleague is offered under and the marker by which a consultation is recognised in an agent's own history.</summary>
@@ -425,16 +378,12 @@ public static class Constants
         /// <summary>Root of the published A2A routes: <c>/a2a/{intent}</c>, with the card one level below it.</summary>
         public const string AgentPathPrefix = "/a2a";
 
-        /// <summary>
-        /// Where a published agent's card is served, relative to its own route. Fixed by the A2A
-        /// specification: it is the one address a caller that knows nothing else can try.
-        /// </summary>
+        /// <summary>Where a published agent's card is served relative to its route, as the A2A specification fixes it for a caller that knows nothing else.</summary>
         public const string WellKnownAgentCardPath = ".well-known/agent-card.json";
 
         /// <summary>
-        /// Name this installation signs consultations between its own agents under and admits them
-        /// back in under. Configured nowhere: the secret behind it is coined at every start, so the
-        /// name is reserved rather than declared and no partner may be given it.
+        /// The name this installation signs consultations between its own agents under and admits them back under.
+        /// Its secret is coined at every start, so the name is reserved rather than configured and no partner may take it.
         /// </summary>
         public const string IssuerName = "morgana";
 
@@ -446,15 +395,11 @@ public static class Constants
 
         /// <summary>Format the bearer token is advertised in, as a hint to whoever has to produce one.</summary>
         public const string BearerFormat = "JWT";
-
     }
 
     /// <summary>
-    /// Log lines somebody OUTSIDE the process reads. Ordinary logging is prose for an operator and
-    /// belongs nowhere near this file; these three lines are different — they are the only place a
-    /// context variable's NAME becomes observable and the PromptHarness parses them to assert the
-    /// lookup-before-asking cycle, which no span attribute carries (a name is data and spans carry
-    /// none). That makes their shape a contract with a reader that cannot be recompiled with them.
+    /// The log lines a reader outside the process parses: the only place a context variable's name becomes observable.
+    /// The PromptHarness reads them to assert the lookup-before-asking cycle, which no span carries since a name is data.
     /// </summary>
     public static class ObservableLogs
     {
@@ -474,9 +419,8 @@ public static class Constants
         public const string Set = "SET";
 
         /// <summary>
-        /// The stable head of all three context-access lines. Everything the harness needs is in it —
-        /// the emitter, the operation and the variable name — so the per-operation tails below may
-        /// change without moving the reader.
+        /// The stable head of all three context-access lines: the emitter, the operation and the variable name.
+        /// Everything the harness needs is here, so the tails below may change without moving the reader.
         /// </summary>
         public const string ContextAccessHead = "{MorganaToolName} ({Name}) {Operation} variable '{VariableName}'";
 
@@ -490,19 +434,17 @@ public static class Constants
         public const string ContextSet = ContextAccessHead + " into agent context. Value is: {Value}";
 
         /// <summary>
-        /// The per-turn declaration: the variables handed to the model outright, which is why an agent
-        /// may legitimately use one without ever calling GetContextVariable. Names several at once.
+        /// The per-turn declaration of the variables handed to the model outright, several at once.
+        /// It is why an agent may legitimately use a variable without ever calling GetContextVariable.
         /// </summary>
         public const string DeclaredContext = "{MorganaAiContextProviderName} DECLARED '{VariableNames}'";
     }
 
     /// <summary>
-    /// Sentinel values <c>appsettings.json</c> ships in place of a setting that MUST be filled in
-    /// before the application is usable — a secret through User Secrets or the environment, a
-    /// non-secret required value through either. A setting still holding one has not been
-    /// configured and every reader treats it as absent rather than as a value.
+    /// The sentinels <c>appsettings.json</c> ships in place of a setting that must be filled in through User Secrets or the environment.
+    /// A setting still holding one has not been configured and every reader treats it as absent.
     /// </summary>
-    public static class SecretOverrides
+    internal static class SecretOverrides
     {
         /// <summary>Stands in for a secret: an API key, a signing key.</summary>
         public const string Secure = "_SECURE_OVERRIDE_";
@@ -514,31 +456,22 @@ public static class Constants
         public static readonly string[] All = [Secure, Functional];
     }
 
-    /// <summary>
-    /// Characters that join or separate two pieces of composed text. Never prose: each one is
-    /// structure and says nothing of its own to whoever reads the text it punctuates.
-    /// </summary>
+    /// <summary>The characters that join or separate two pieces of composed text, structure that says nothing of its own.</summary>
     public static class Markers
     {
         /// <summary>
-        /// Separates the stable framework+domain prompt from the per-turn dynamic tail, so
-        /// <c>MorganaAnthropicClient</c> can cache the former without a changing declaration busting
-        /// it. The actual ASCII Record Separator (U+001E), not its printable glyph: never typed by a
-        /// human and never produced by a model, so it cannot collide with real content.
+        /// Separates the stable two-layer prompt from the per-turn tail, so a provider's client can cache the former.
+        /// The ASCII Record Separator is never typed by a person nor written by a model, so it cannot collide with real content.
         /// </summary>
         public const string DynamicInstructions = "\u001E";
 
-        /// <summary>
-        /// Inserted between the text of two consecutive assistant messages of the same turn, both
-        /// while streaming and when batching, so two messages meant to be read apart do not weld
-        /// into one paragraph.
-        /// </summary>
+        /// <summary>Joins the text of two consecutive assistant messages of one turn, streamed or not, so they never weld into one paragraph.</summary>
         public const string MessageSeparator = "\n\n";
     }
 
     /// <summary>
-    /// Keys of the extra counts that a provider's chat client reports beside the standard usage. The client writes
-    /// them; the dust ledger and the telemetry read the same key, so a charge and a span count the same tokens.
+    /// The keys of the extra counts a provider's chat client reports beside the standard usage.
+    /// The dust ledger and the telemetry read the same key, so a charge and a span count the same tokens.
     /// </summary>
     public static class UsageCounts
     {

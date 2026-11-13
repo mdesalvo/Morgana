@@ -190,7 +190,7 @@ public class ConversationManagerActor : MorganaActor
     private async Task HandleConversationResponseAsync(Records.ConversationResponse response)
     {
         actorLogger.Info(
-            $"Received response from supervisor (agent: {response.AgentName ?? "unknown"}," +
+            $"Received response from supervisor (agent: {response.AgentName ?? Constants.Morgana}," +
             $"completed: {response.AgentCompleted}): " +
             $"{response.Response[..Math.Min(50, response.Response.Length)]}...," +
             $"#quickReplies: {response.QuickReplies?.Count ?? 0}" +

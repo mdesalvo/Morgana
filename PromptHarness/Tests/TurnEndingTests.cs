@@ -110,7 +110,7 @@ public sealed class TurnEndingTests
         // The real composer over the embedded morgana.json: the landing declaration is authored there.
         ConfigurationPromptComposerService composer = new ConfigurationPromptComposerService(
             new ConfigurationPromptResolverService(new ScriptedDomain()));
-        MorganaAIContextProvider provider = new MorganaAIContextProvider(NullLogger.Instance, promptComposerService: composer);
+        MorganaAIContextProvider provider = new MorganaAIContextProvider(NullLogger.Instance, composer);
         ScriptedChatClient model = new ScriptedChatClient(Text("Welcome."), Text("Here you are."));
         ChatClientAgent agent = new ChatClientAgent(model, new ChatClientAgentOptions
         {
@@ -187,7 +187,11 @@ public sealed class TurnEndingTests
         {
             // The loop is the real one: the tools are only told what the turn wrote because it runs them.
             IChatClient loop = new ChatClientBuilder(model).UseFunctionInvocation().Build();
-            MorganaAIContextProvider provider = new MorganaAIContextProvider(NullLogger.Instance);
+
+            // The provider keeps the tool's variables and declares the held ones as a deployed agent's does, through the real composer.
+            MorganaAIContextProvider provider = new MorganaAIContextProvider(
+                NullLogger.Instance,
+                new ConfigurationPromptComposerService(new ConfigurationPromptResolverService(new ScriptedDomain())));
 
             // The session belongs to an agent that carries no tools: it only holds the tool's context variables.
             AgentSession session = await new ChatClientAgent(new ScriptedChatClient()).CreateSessionAsync();

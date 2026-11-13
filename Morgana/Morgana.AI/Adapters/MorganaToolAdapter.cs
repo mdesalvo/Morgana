@@ -9,26 +9,20 @@ namespace Morgana.AI.Adapters;
 /// <summary>Bridges the tool classes whose methods carry their own descriptions to the AIFunctions the model calls.</summary>
 public class MorganaToolAdapter
 {
-    /// <summary>
-    /// Dictionary mapping tool names to their delegate implementations.
-    /// </summary>
+    /// <summary>The bound method of each registered tool, by tool name.</summary>
     private readonly Dictionary<string, Delegate> toolMethods = [];
 
-    /// <summary>
-    /// Dictionary mapping tool names to their configuration definitions.
-    /// </summary>
+    /// <summary>The definition each registered tool was projected into, by tool name.</summary>
     private readonly Dictionary<string, Records.ToolDefinition> toolDefinitions = [];
 
     /// <summary>
-    /// Assembles the description each generated AIFunction presents to the model, splicing the
-    /// framework's context guidance into the tools that declare context-scoped parameters.
+    /// Composes the description each tool presents to the model.
+    /// It splices the framework's context guidance into the tools that declare context-scoped parameters.
     /// </summary>
     private readonly IPromptComposerService promptComposerService;
 
-    /// <summary>
-    /// Initializes a new instance of the MorganaToolAdapter.
-    /// </summary>
-    /// <param name="promptComposerService">Composes the descriptions exposed to the model</param>
+    /// <summary>Binds the adapter to the composer of the tools' descriptions.</summary>
+    /// <param name="promptComposerService">Composes the descriptions the model reads.</param>
     public MorganaToolAdapter(IPromptComposerService promptComposerService)
     {
         this.promptComposerService = promptComposerService;
@@ -114,29 +108,22 @@ public class MorganaToolAdapter
         return toolDefinitions;
     }
 
-    /// <summary>
-    /// Registers a tool implementation with validation and fluent chaining support.
-    /// Validates delegate signature matches tool definition (parameter count, names, required flags).
-    /// </summary>
-    /// <param name="toolName">Unique tool name</param>
-    /// <param name="toolMethod">Delegate implementing the tool</param>
-    /// <param name="definition">Tool definition with parameters and metadata</param>
-    /// <returns>This adapter for method chaining</returns>
-    public MorganaToolAdapter AddTool(string toolName, Delegate toolMethod, Records.ToolDefinition definition)
+    /// <summary>Registers one tool under its name, refusing a name already taken or a definition that does not match the method.</summary>
+    private void AddTool(string toolName, Delegate toolMethod, Records.ToolDefinition definition)
     {
+        // Two tools under one name would have the provider refuse the agent's whole tool list.
         if (!toolMethods.TryAdd(toolName, toolMethod))
             throw new InvalidOperationException($"Tool '{toolName}' already registered");
 
+        // The definition must describe this very method: otherwise the model would be offered parameters it cannot fill.
         ValidateToolDefinition(toolMethod, definition);
         toolDefinitions[toolName] = definition;
-
-        return this;
     }
 
     /// <summary>Binds each of the given definitions to the method of the tool instance that carries its name.</summary>
-    /// <param name="toolInstance">The tool instance containing the tool method implementations.</param>
-    /// <param name="toolDefinitions">The definitions specifying which methods to register from the instance.</param>
-    /// <returns>This adapter for method chaining</returns>
+    /// <param name="toolInstance">The tool instance whose methods implement the tools.</param>
+    /// <param name="toolDefinitions">The definitions naming the methods to register.</param>
+    /// <returns>This adapter, so a caller can bind several instances in one expression.</returns>
     public MorganaToolAdapter AddTools(object toolInstance, IEnumerable<Records.ToolDefinition> toolDefinitions)
     {
         // Each definition names one method of the instance and becomes one registered tool.
@@ -145,19 +132,18 @@ public class MorganaToolAdapter
             // The definition was projected from this very method, so the method always exists.
             MethodInfo method = toolInstance.GetType().GetMethod(definition.Name)!;
 
-            // Build a strongly-typed delegate whose exact Func<…> type is computed from
-            // the method's own ParameterInfo at runtime: tools are discovered on
-            // plugin classes and bound to implementations via reflection, so the
-            // concrete delegate type is unknowable at compile time.
+            // Tools live on plugin classes discovered at runtime, so the delegate's exact Func<...> type
+            // is computed from the method's own signature and bound to the instance.
             Delegate implementation = Delegate.CreateDelegate(
                 System.Linq.Expressions.Expression.GetDelegateType(
                 [
-                    .. method.GetParameters().Select(p => p.ParameterType),
+                    .. method.GetParameters().Select(parameter => parameter.ParameterType),
                     method.ReturnType
                 ]),
                 toolInstance,
                 method);
 
+            // Registered under the tool's name, which a second registration of the same name is refused on.
             AddTool(definition.Name, implementation, definition);
         }
 
@@ -165,41 +151,21 @@ public class MorganaToolAdapter
         return this;
     }
 
-    /// <summary>
-    /// Resolves a tool delegate by name.
-    /// </summary>
-    /// <param name="toolName">Name of the tool to resolve</param>
-    /// <returns>Delegate implementation for the tool</returns>
-    /// <exception cref="InvalidOperationException">Thrown if tool is not registered</exception>
-    public Delegate ResolveTool(string toolName)
-        => toolMethods.TryGetValue(toolName, out Delegate? method)
-            ? method
-            : throw new InvalidOperationException($"Tool '{toolName}' not registered");
-
-    /// <summary>
-    /// Creates an AIFunction instance for a registered tool with resolved descriptions.
-    /// Applies global policies and resolves context-parameter placeholders in tool descriptions.
-    /// Converts the tool delegate into a JSON schema-ready AIFunction for the LLM.
-    /// </summary>
-    /// <param name="toolName">Name of the tool to create function for</param>
-    /// <returns>AIFunction instance ready for agent use</returns>
-    /// <exception cref="InvalidOperationException">Thrown if tool or definition not found</exception>
-    public async Task<AIFunction> CreateFunctionAsync(string toolName)
+    /// <summary>Turns one registered tool into the function the model calls, with its composed description and its parameters described in the schema.</summary>
+    private async Task<AIFunction> CreateFunctionAsync(string toolName)
     {
-        Delegate implementation = ResolveTool(toolName);
-        Records.ToolDefinition definition = toolDefinitions.TryGetValue(toolName, out Records.ToolDefinition? def)
-            ? def
-            : throw new InvalidOperationException($"Tool definition '{toolName}' not found");
+        // Both lookups are of a name AddTool registered, so neither can miss.
+        Delegate implementation = toolMethods[toolName];
+        Records.ToolDefinition definition = toolDefinitions[toolName];
 
+        // The tool's description with the framework's context guidance spliced in where its parameters call for it.
         string description = await promptComposerService.ComposeToolDescriptionAsync(definition);
 
-        // Build parameter name → description map; fed to AIFunctionFactory's ParameterDescriptionProvider hook,
-        // which resolves each parameter's description keyword in the generated JSON schema
+        // Each parameter's description, which reaches the model only through the generated JSON schema.
         Dictionary<string, string> parameterDescriptions =
-            definition.Parameters.ToDictionary(p => p.Name, p => p.Description);
+            definition.Parameters.ToDictionary(parameter => parameter.Name, parameter => parameter.Description);
 
-        // Create AIFunction with custom ParameterDescriptionProvider that looks up each parameter's description
-        // from the map; unknown parameters fall back to null, which lets AIFunctionFactory use [Description] attributes (none here)
+        // The function under the tool's name, its schema describing each parameter from the projected definition.
         return AIFunctionFactory.Create(implementation,
             new AIFunctionFactoryOptions
             {
@@ -216,46 +182,30 @@ public class MorganaToolAdapter
             });
     }
 
-    /// <summary>
-    /// Creates AIFunction instances for all registered tools.
-    /// </summary>
-    /// <returns>Enumerable of AIFunction instances ready for agent use</returns>
-    /// <remarks>
-    /// <para>This is typically called during agent creation to pass all tools to the AIAgent constructor.</para>
-    /// <code>
-    /// AIAgent agent = chatClient.CreateAIAgent(
-    ///     instructions: instructions,
-    ///     name: "billing",
-    ///     tools: await toolAdapter.CreateAllFunctionsAsync()
-    /// );
-    /// </code>
-    /// </remarks>
+    /// <summary>Turns every registered tool into the function the model calls, in registration order.</summary>
     public async Task<AIFunction[]> CreateAllFunctionsAsync()
         => await Task.WhenAll(toolMethods.Keys.Select(CreateFunctionAsync));
 
-    /// <summary>
-    /// Validates delegate implementation matches tool definition.
-    /// Checks parameter count, names and required-vs-optional consistency.
-    /// </summary>
-    /// <param name="implementation">Delegate to validate</param>
-    /// <param name="definition">Tool definition to validate against</param>
+    /// <summary>Refuses a definition whose parameters differ from the method's in number or name and one that requires a parameter the method makes optional.</summary>
     private static void ValidateToolDefinition(Delegate implementation, Records.ToolDefinition definition)
     {
-        ParameterInfo[] methodParams = implementation.Method.GetParameters();
-        List<Records.ToolParameter> definitionParams = [.. definition.Parameters];
+        // The method is the truth the definition must agree with, parameter by parameter.
+        ParameterInfo[] methodParameters = implementation.Method.GetParameters();
+        List<Records.ToolParameter> definitionParameters = [.. definition.Parameters];
 
-        if (methodParams.Length != definitionParams.Count)
-            throw new ArgumentException($"Parameter count mismatch: method has {methodParams.Length}, definition has {definitionParams.Count}");
+        // A parameter missing from either side is a definition projected from another method.
+        if (methodParameters.Length != definitionParameters.Count)
+            throw new ArgumentException($"Parameter count mismatch: method has {methodParameters.Length}, definition has {definitionParameters.Count}");
 
-        foreach (ParameterInfo methodParam in methodParams)
+        // Each of the method's parameters must be declared under its own name.
+        foreach (ParameterInfo methodParameter in methodParameters)
         {
-            ParameterInfo param = methodParam;
-            Records.ToolParameter defParam = definitionParams.FirstOrDefault(p => p.Name == param.Name)
-                                             ?? throw new ArgumentException($"Parameter '{methodParam.Name}' not found in definition");
+            Records.ToolParameter definitionParameter = definitionParameters.FirstOrDefault(parameter => parameter.Name == methodParameter.Name)
+                ?? throw new ArgumentException($"Parameter '{methodParameter.Name}' not found in definition");
 
-            bool isOptional = methodParam.HasDefaultValue;
-            if (defParam.Required && isOptional)
-                throw new ArgumentException($"Parameter '{methodParam.Name}' is required in definition but optional in method");
+            // The model would be made to fill a parameter the method can do without.
+            if (definitionParameter.Required && methodParameter.HasDefaultValue)
+                throw new ArgumentException($"Parameter '{methodParameter.Name}' is required in definition but optional in method");
         }
     }
 }

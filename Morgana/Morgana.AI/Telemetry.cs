@@ -4,51 +4,22 @@ using System.Diagnostics.Metrics;
 namespace Morgana.AI;
 
 /// <summary>
-/// Central OpenTelemetry instrumentation hub for the Morgana framework.
-/// Provides the shared <see cref="ActivitySource"/> and all activity/attribute name constants
-/// used across the actor pipeline to ensure naming consistency.
+/// Morgana's activity source and meter with the glossary of every span, attribute, event and metric they publish.
+/// One trace per turn: a <c>morgana.turn</c> span linked to its HTTP request, with the guard, classifier, router and agent spans beneath it.
+/// Actors run on threads that break the ambient activity, so the turn's context travels inside the actor messages.
 /// </summary>
-/// <remarks>
-/// <para><strong>Design Philosophy:</strong></para>
-/// <para>All tracing in Morgana flows from a single <see cref="ActivitySource"/> with name "Morgana".
-/// This produces one coherent trace per conversation that is readable both by IT (latencies, errors,
-/// classification confidence) and by non-IT audiences (intent, agent name, response preview).</para>
-///
-/// <para><strong>Trace Structure:</strong></para>
-/// <code>
-/// Activity: morgana.turn             ← one per user message (root span, lives in supervisor for full pipeline duration)
-///   link → HTTP span                 ← ActivityLink to the originating ASP.NET Core request span
-///   ├── Activity: morgana.guard      ← content moderation (spans full guard-check duration)
-///   ├── Activity: morgana.classifier ← intent classification (new requests only, spans full LLM call)
-///   ├── Activity: morgana.router     ← agent selection marker (new requests only)
-///   └── Activity: morgana.agent      ← agent execution (includes streaming)
-///       event: "first_chunk"         ← TTFT marker
-///       event: "morgana.security.tool_withheld" ← a tool result kept from the model
-/// </code>
-///
-/// <para><strong>Context Propagation:</strong></para>
-/// <para>Because Akka.NET actors run on different threads and break .NET's ambient
-/// <c>Activity.Current</c>, the <see cref="ActivityContext"/> of the turn span is carried
-/// explicitly inside <see cref="Records.ProcessingContext"/> and
-/// <see cref="Records.AgentRequest"/>. Each actor reconstructs the
-/// parent link via <see cref="ActivitySource.StartActivity(string, ActivityKind)"/>.</para>
-/// </remarks>
 public static class Telemetry
 {
     // ==============================================================================
     // ACTIVITY SOURCE
     // ==============================================================================
 
-    /// <summary>
-    /// The single <see cref="ActivitySource"/> for the entire Morgana framework.
-    /// </summary>
+    /// <summary>The one activity source every span of Morgana starts from.</summary>
     public static readonly ActivitySource Source = new ActivitySource("Morgana");
 
     /// <summary>
-    /// Activity source / meter name used by the MEAI <c>OpenTelemetryChatClient</c> decorator
-    /// applied uniformly to every tier by <c>ConfigurationLanguageModelService</c>. Single
-    /// name across providers; the <c>gen_ai.system</c> attribute on each emitted span
-    /// differentiates them at consumption time.
+    /// The source and meter name of the model calls every tier makes, instrumented by <c>ConfigurationLanguageModelService</c>.
+    /// One name serves every provider, which each span tells apart by its <c>gen_ai.system</c> attribute.
     /// </summary>
     public const string LLMChatClientSourceName = "Morgana.AI.LLM";
 
@@ -56,12 +27,10 @@ public static class Telemetry
     // METER & METRICS
     // ==============================================================================
 
-    /// <summary>
-    /// The single <see cref="Meter"/> for all Morgana metrics (counters, histograms).
-    /// </summary>
+    /// <summary>The one meter every metric of Morgana is published on.</summary>
     public static readonly Meter MorganaMeter = new Meter("Morgana");
 
-    /// <summary>Counts completed turns, tagged with intent and completion status.</summary>
+    /// <summary>Counts completed turns, tagged with <see cref="TurnIntent"/> and <see cref="TurnCompleted"/>.</summary>
     public static readonly Counter<long> TurnCounter =
         MorganaMeter.CreateCounter<long>("morgana.turn.count", description: "Number of completed conversation turns");
 
@@ -70,9 +39,8 @@ public static class Telemetry
         MorganaMeter.CreateCounter<long>("morgana.guard.rejections", description: "Number of messages rejected by content moderation");
 
     /// <summary>
-    /// Counts security events at Morgana's doors: messages rejected, tool results withheld and MCP tools refused.
-    /// Tagged by door, outcome, deciding layer and agent intent, never by tool name: an MCP server chooses its names
-    /// and a hostile one would multiply the metric's series without bound.
+    /// Counts security events at Morgana's doors, tagged by door, outcome, deciding layer and agent intent.
+    /// A tool's name is never a tag, since an MCP server chooses its names and a hostile one would multiply the series without bound.
     /// </summary>
     public static readonly Counter<long> SecurityEvents =
         MorganaMeter.CreateCounter<long>("morgana.security.events", description: "Security events at Morgana's doors: messages rejected, tool results withheld and MCP tools refused");
@@ -93,11 +61,7 @@ public static class Telemetry
     public static readonly Histogram<double> AgentTtftHistogram =
         MorganaMeter.CreateHistogram<double>("morgana.agent.ttft", "ms", "Agent time-to-first-token");
 
-    /// <summary>
-    /// Magic dust charged per LLM call, tagged with the consuming role
-    /// (<c>"Morgana"</c> for framework actors, <c>"Morgana (Intent)"</c> for agents) and
-    /// the conversation id.
-    /// </summary>
+    /// <summary>The dust charged per model call, tagged with <see cref="DustLlmRole"/> and <see cref="ConversationId"/>.</summary>
     public static readonly Counter<double> DustConsumed =
         MorganaMeter.CreateCounter<double>("morgana.dust.consumed", "dust", "Magic dust charged per LLM call");
 
@@ -127,19 +91,24 @@ public static class Telemetry
     // ATTRIBUTE NAMES — CONVERSATION
     // ==============================================================================
 
-    /// <summary>Unique identifier of the conversation. Maps to conversationId.</summary>
+    /// <summary>The conversation's id.</summary>
     public const string ConversationId = "conversation.id";
 
-    /// <summary>Role that consumed dust on a charge: "Morgana" (framework actors) or
-    /// "Morgana (Intent/Tier)" (domain agents). Tag on <see cref="DustConsumed"/>.</summary>
+    /// <summary>The role a charge is filed under: <c>Morgana</c> for the framework actors, <c>Morgana (Intent/Tier)</c> for an agent.</summary>
     public const string DustLlmRole = "dust.llm_role";
 
     // ==============================================================================
     // ATTRIBUTE NAMES — TURN
     // ==============================================================================
 
-    /// <summary>User message text, truncated to 200 characters.</summary>
+    /// <summary>The user's message, cut to 200 characters.</summary>
     public const string TurnUserMessage = "turn.user_message";
+
+    /// <summary>The intent a counted turn was served by, absent when the turn closed before any intent served it; a tag on <see cref="TurnCounter"/>.</summary>
+    public const string TurnIntent = "turnIntent";
+
+    /// <summary>Whether a counted turn's agent handed the conversation back; a tag on <see cref="TurnCounter"/>.</summary>
+    public const string TurnCompleted = "turnCompleted";
 
     // ==============================================================================
     // ATTRIBUTE NAMES — GUARD
@@ -193,17 +162,14 @@ public static class Telemetry
     // ATTRIBUTE NAMES — ROUTER
     // ==============================================================================
 
-    /// <summary>Intent used to select the agent (matches classification.intent on success).</summary>
+    /// <summary>The intent the router selected the agent by.</summary>
     public const string RouterIntent = "router.intent";
-
-    /// <summary>Akka.NET path of the agent actor selected by the router.</summary>
-    public const string RouterAgentPath = "router.agent_path";
 
     // ==============================================================================
     // ATTRIBUTE NAMES — AGENT
     // ==============================================================================
 
-    /// <summary>Display name of the agent (e.g. "BillingAgent").</summary>
+    /// <summary>The agent's class name, such as <c>BillingAgent</c>.</summary>
     public const string AgentName = "agent.name";
 
     /// <summary>Intent handled by this agent (e.g. "billing").</summary>
@@ -218,10 +184,7 @@ public static class Telemetry
     /// <summary>True if the agent returned quick replies to the user.</summary>
     public const string AgentHasQuickReplies = "agent.has_quick_replies";
 
-    /// <summary>
-    /// Comma-separated names of the tools invoked during this turn, in call order (names only,
-    /// never arguments — span attributes reach every configured exporter).
-    /// </summary>
+    /// <summary>The names of the tools called during the turn, comma-separated in call order and never their arguments, since spans reach every exporter.</summary>
     public const string AgentToolsInvoked = "agent.tools_invoked";
 
     /// <summary>First 150 characters of the agent response, for non-IT readability.</summary>
@@ -234,7 +197,7 @@ public static class Telemetry
     // ATTRIBUTE NAMES — PEER CONSULTATION
     // ==============================================================================
 
-    /// <summary>Intent of the agent that asked. Without it a consultation span names no requester.</summary>
+    /// <summary>The intent of the agent that asked.</summary>
     public const string ConsultationCaller = "consultation.caller";
 
     /// <summary>Intent of the agent that answered.</summary>
@@ -244,11 +207,8 @@ public static class Telemetry
     public const string ConsultationAwaitingReply = "consultation.awaiting_reply";
 
     /// <summary>
-    /// The question a colleague was asked, whole, alongside <see cref="ConsultationAnswer"/>. The
-    /// two are the only record of an exchange the conversation deliberately keeps no trace of, so
-    /// they are the one place a preview would defeat the purpose: a truncated question and a
-    /// truncated answer leave a consultation that went wrong showing a caller, a target, a tool
-    /// list and the opening words of each — never the sentence that actually caused it.
+    /// The question a colleague was asked, whole.
+    /// It and the answer are the only record of an exchange the conversation keeps no trace of, so a preview would hide the sentence that went wrong.
     /// </summary>
     public const string ConsultationQuestion = "consultation.question";
 
@@ -319,7 +279,7 @@ public static class Telemetry
     }
 
     /// <summary>The values of <see cref="ErrorType"/> that are not an exception's name.</summary>
-    public static class ErrorTypes
+    internal static class ErrorTypes
     {
         /// <summary>The caller stopped waiting before the guard answered.</summary>
         public const string Timeout = "timeout";

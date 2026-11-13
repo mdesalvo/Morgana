@@ -1,6 +1,6 @@
 # Examples — the example plugin
 
-Four agents of one fictional shop, *The Greenhouse & Nursery*, and the MCP server one of them draws
+Four agents of the fictional shop *The Greenhouse & Nursery* and the MCP server one of them draws
 its tools from. It is what an author reads to learn how a domain is written for Morgana.
 
 ## What it shows

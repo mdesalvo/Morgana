@@ -1026,10 +1026,14 @@ public class ConversationSupervisorActor : MorganaActor
         // The turn lasted from its span's start until now, the span still being open.
         Telemetry.TurnDuration.Record((DateTime.UtcNow - turnSpan.StartTimeUtc).TotalMilliseconds);
 
-        // The turn is counted by intent and completion, so a dashboard can break the volume down by either.
-        Telemetry.TurnCounter.Add(1,
-            new KeyValuePair<string, object?>("intent", intent ?? "unknown"),
-            new KeyValuePair<string, object?>("completed", completed ?? false));
+        // The turn is counted by completion and, where one served it, by intent, so a dashboard can break the volume down by either.
+        TagList turnTags = new TagList { { Telemetry.TurnCompleted, completed ?? false } };
+
+        // A turn closed before any intent served it, such as one the guard refused, carries no intent rather than an invented one.
+        if (intent is not null)
+            turnTags.Add(Telemetry.TurnIntent, intent);
+
+        Telemetry.TurnCounter.Add(1, turnTags);
 
         // Ends the span and forgets it so no later path closes it twice.
         turnSpan.Dispose();

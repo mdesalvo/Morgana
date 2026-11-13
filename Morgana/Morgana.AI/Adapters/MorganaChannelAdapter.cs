@@ -10,39 +10,25 @@ using Morgana.Contracts;
 namespace Morgana.AI.Adapters;
 
 /// <summary>
-/// Adapts fully-featured ChannelMessage to target channel capabilities. Three-path strategy: short-circuit hot path
-/// if message fits; LLM rewrite via ChannelDowngrade prompt for semantic plain rendering; template fallback (markdown
-/// strip, inline quick replies, drop rich cards) if LLM fails. Never throws; best-effort with semantic fidelity.
+/// Fits an outbound message to what the target channel can show, never throwing.
+/// A message that fits passes untouched, one that does not is rewritten by the ChannelAdapter prompt
+/// and a failed rewrite falls back to a template that strips markdown, inlines the buttons and drops the card.
 /// </summary>
 public class MorganaChannelAdapter
 {
-    /// <summary>
-    /// LLM service used to rewrite rich messages into a channel-compliant plain form when
-    /// the target channel cannot carry the original features (rich cards, quick replies,
-    /// markdown). Invoked only when <see cref="FitsWithin"/> rejects the message.
-    /// </summary>
+    /// <summary>Runs the rewrite on the framework tier, charged to the conversation; asked only for a message that does not fit.</summary>
     private readonly ILanguageModelService llmService;
 
-    /// <summary>
-    /// Resolves the ChannelDowngrade prompt that instructs the LLM on how to produce a
-    /// semantically-equivalent plain rendering of a rich message, given the budget of
-    /// capabilities advertised by the target channel.
-    /// </summary>
+    /// <summary>Resolves the ChannelAdapter prompt and Morgana's own, whose personality the rewrite keeps.</summary>
     private readonly IPromptResolverService promptResolverService;
 
-    /// <summary>
-    /// Logger for diagnostic output. Emits informational entries when a message is
-    /// degraded (with the triggering capability gap) and error entries when the LLM
-    /// rewrite fails and the template fallback takes over.
-    /// </summary>
+    /// <summary>Records each degradation with the capabilities that caused it and each rewrite that fell back to the template.</summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Initialises a new instance of <see cref="MorganaChannelAdapter"/>.
-    /// </summary>
-    /// <param name="llmService">LLM service used to rewrite rich messages into channel-compliant plain form.</param>
-    /// <param name="promptResolverService">Prompt resolver used to load the ChannelDowngrade prompt.</param>
-    /// <param name="logger">Logger for diagnostic output.</param>
+    /// <summary>Binds the adapter to the rewriting model and the prompts it reads.</summary>
+    /// <param name="llmService">Runs the rewrite.</param>
+    /// <param name="promptResolverService">Resolves the ChannelAdapter prompt and Morgana's own.</param>
+    /// <param name="logger">Records degradations and fallbacks.</param>
     public MorganaChannelAdapter(
         ILanguageModelService llmService,
         IPromptResolverService promptResolverService,
@@ -53,20 +39,17 @@ public class MorganaChannelAdapter
         this.logger = logger;
     }
 
-    /// <summary>
-    /// Adapts a message to channel capabilities: returns unchanged if it fits,
-    /// otherwise rewrites via LLM or template fallback. Never null, never throws.
-    /// </summary>
-    /// <param name="channelMessage">Fully-featured outbound message</param>
-    /// <param name="channelCapabilities">Expressive budget of the target channel</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>Channel-conformant message</returns>
+    /// <summary>Returns the message as the channel can show it: untouched when it fits, rewritten otherwise; never throws.</summary>
+    /// <param name="channelMessage">The outbound message with every feature its agent gave it.</param>
+    /// <param name="channelCapabilities">What the target channel can show.</param>
+    /// <param name="cancellationToken">Not observed: the rewrite runs on the framework tier's own budget.</param>
+    /// <returns>A message within the channel's capabilities.</returns>
     public async Task<ChannelMessage> AdaptAsync(
         ChannelMessage channelMessage,
         ChannelCapabilities channelCapabilities,
         CancellationToken cancellationToken = default)
     {
-        // ── Short-circuit: nothing to degrade ─────────────────────────────────────
+        // A message within every capability of the channel reaches it as its agent wrote it.
         if (FitsWithin(channelMessage, channelCapabilities))
             return channelMessage;
 
@@ -83,14 +66,15 @@ public class MorganaChannelAdapter
             channelCapabilities.SupportsMarkdown,
             channelCapabilities.MaxMessageLength);
 
-        // ── LLM-guided rewrite ────────────────────────────────────────────────────
         try
         {
+            // The rewrite's task, authored in morgana.json under the ChannelAdapter prompt.
             Records.Prompt adapterPrompt = await promptResolverService.ResolveAsync(Constants.Prompts.ChannelAdapter);
 
             // A rewritten message still reaches the user as Morgana's, so the rewrite keeps the voice her agents speak in.
             Records.Prompt morganaPrompt = await promptResolverService.ResolveAsync(Constants.Morgana);
 
+            // The capabilities as the channel announced them, for the placeholder that tells the model the limits it writes to.
             string capabilitiesJson = JsonSerializer.Serialize(
                 channelCapabilities, Records.DefaultJsonSerializerOptions);
 
@@ -102,20 +86,22 @@ public class MorganaChannelAdapter
                     Records.Prompt.Labeled(Constants.SectionLabels.Formatting, adapterPrompt.Formatting))
                 .Replace(Constants.Placeholders.ChannelCapabilities, capabilitiesJson);
 
+            // The whole message as the agent wrote it, card and buttons included, so the rewrite can carry them into prose.
             string userPrompt = JsonSerializer.Serialize(channelMessage, Records.DefaultJsonSerializerOptions);
 
+            // One call on the framework tier, charged to the conversation the message belongs to.
             string llmResponse = await llmService.CompleteWithSystemPromptAsync(
                 channelMessage.ConversationId, systemPrompt, userPrompt);
 
+            // The prompt asks for the text and the buttons it kept as JSON; anything else fails here and falls to the template.
             Records.ChannelAdapterResponse? channelAdapterResponse =
                 JsonSerializer.Deserialize<Records.ChannelAdapterResponse>(llmResponse, Records.DefaultJsonSerializerOptions);
 
+            // Only a rewrite with some text replaces the message; anything else falls to the template.
             if (channelAdapterResponse != null && !string.IsNullOrWhiteSpace(channelAdapterResponse.Text))
             {
-                // The LLM prompt instructs it to respect maxMessageLength, but we cannot trust it:
-                // a rewrite that overshoots the hard limit would fail downstream on length-capped
-                // channels (SMS, IVR, …). Apply the budget enforcement locally so the adapter
-                // contract holds regardless of how disciplined the model was.
+                // The prompt asks for the channel's length but a model may overshoot it, which a length-capped
+                // channel such as SMS would refuse: the limit is enforced here whatever the model wrote.
                 string enforcedText = EnforceLengthBudget(channelAdapterResponse.Text, channelCapabilities);
 
                 logger.LogInformation(
@@ -143,43 +129,51 @@ public class MorganaChannelAdapter
         }
         catch (Exception ex)
         {
+            // A rewrite that fails costs the message its rewrite, never its delivery.
             logger.LogError(ex,
                 "MorganaChannelAdapter: LLM rewrite failed for {ConversationId} — using template fallback", channelMessage.ConversationId);
         }
 
-        // ── Template fallback ─────────────────────────────────────────────────────
+        // The template needs no model, so the message always reaches the channel in some form.
         return BuildTemplateFallback(channelMessage, channelCapabilities);
     }
 
-    // ── Short-circuit predicate ───────────────────────────────────────────────────
-
+    /// <summary>Whether the message uses only what the channel can show and fits its length.</summary>
     private static bool FitsWithin(ChannelMessage channelMessage, ChannelCapabilities channelCapabilities)
     {
+        // A card on a channel that draws none would be lost, so the rewrite has to carry it into prose.
         if (channelMessage.RichCard != null && !channelCapabilities.SupportsRichCards)
             return false;
 
+        // Buttons on a channel that draws none would leave the user without the choice they offer.
         if (channelMessage.QuickReplies is { Count: > 0 } && !channelCapabilities.SupportsQuickReplies)
             return false;
 
+        // Markdown on a channel without it would show its asterisks and hashes as text.
         if (!channelCapabilities.SupportsMarkdown && ContainsMarkdown(channelMessage.Text))
             return false;
 
-        if (channelCapabilities.MaxMessageLength is { } max && EstimateVisualCost(channelMessage) > max)
+        // A length-capped channel such as SMS refuses what runs past its limit, card and buttons counted.
+        if (channelCapabilities.MaxMessageLength is { } maxMessageLength && EstimateVisualCost(channelMessage) > maxMessageLength)
             return false;
 
+        // Within every capability, the message reaches the channel as its agent wrote it.
         return true;
     }
 
-    // Sums visual cost of all message components (text, rich card, quick replies).
+    /// <summary>The length the message takes on screen: its text plus the cost its card and buttons estimate for themselves.</summary>
     private static int EstimateVisualCost(ChannelMessage channelMessage) =>
         channelMessage.Text.Length
       + (channelMessage.RichCard?.EstimateCost() ?? 0)
       + (channelMessage.QuickReplies?.Sum(quickReply => quickReply.EstimateCost()) ?? 0);
 
-    // Detects markdown via Markdig parser: plain text is paragraphs of literals, whose lines may
-    // simply follow one another. Only a hard break (trailing spaces, backslash) is markdown syntax.
+    /// <summary>
+    /// Whether the text uses any markdown syntax.
+    /// Plain text parses as paragraphs of literals whose lines may simply follow one another: only a hard break is syntax.
+    /// </summary>
     private static bool ContainsMarkdown(string text)
     {
+        // Any node other than a paragraph, a literal or a soft line break is markdown the channel would show raw.
         MarkdownDocument document = Markdown.Parse(text);
         return document.Descendants()
                        .Any(node => node is not ParagraphBlock
@@ -187,49 +181,53 @@ public class MorganaChannelAdapter
                                     && node is not LineBreakInline { IsHard: false });
     }
 
-    // Enforces MaxMessageLength: strip markdown first (cheaper); truncate with ellipsis if still over.
+    /// <summary>Cuts the text to the channel's length: without its markdown first, then with an ellipsis when that is still too long.</summary>
     private static string EnforceLengthBudget(string text, ChannelCapabilities channelCapabilities)
     {
-        if (channelCapabilities.MaxMessageLength is not { } max || max <= 0 || text.Length <= max)
+        // A channel with no length limit keeps the text as it is, as does a text already within the limit.
+        if (channelCapabilities.MaxMessageLength is not { } maxMessageLength || maxMessageLength <= 0 || text.Length <= maxMessageLength)
             return text;
 
+        // Dropping the markdown syntax shortens the text without losing a word.
         string plain = StripMarkdown(text);
-        if (plain.Length <= max)
+        if (plain.Length <= maxMessageLength)
             return plain;
 
-        return plain[..Math.Max(0, max - 1)] + "…";
+        // Still too long: cut with an ellipsis that keeps the result within the limit.
+        return plain[..Math.Max(0, maxMessageLength - 1)] + "…";
     }
 
-    // ── Template fallback ─────────────────────────────────────────────────────────
-
+    /// <summary>
+    /// The message within the channel's capabilities without a model: the buttons inlined as text, the markdown stripped and the length cut.
+    /// A card is dropped, since its title alone would look alien beside the text and only the model's rewrite can turn a card into prose.
+    /// </summary>
     private static ChannelMessage BuildTemplateFallback(
         ChannelMessage channelMessage,
         ChannelCapabilities channelCapabilities)
     {
-        // When the channel cannot carry a rich card, we deliberately drop it here:
-        // title + subtitle in isolation (without the component payload) would look alien
-        // next to the narrative text. The happy path's LLM rewrite is the only place
-        // capable of transcoding a card into prose — if we're in the template fallback,
-        // the LLM call already failed and an honestly incomplete message beats a message
-        // with orphaned metadata.
+        // The agent's text comes first, untouched until the markdown and length rules below apply to the whole.
         StringBuilder sb = new StringBuilder();
         sb.Append(channelMessage.Text);
 
+        // Buttons the channel cannot draw become one line of options under the text.
         if (channelMessage.QuickReplies is { Count: > 0 } && !channelCapabilities.SupportsQuickReplies)
         {
+            // A blank line sets the options apart, so they do not read as the end of the agent's sentence.
             if (sb.Length > 0)
                 sb.AppendLine().AppendLine();
-            // Inline quick replies as plain prose for channels that have no button widget.
-            // The "Options: A / B / C" format keeps them scannable without any markdown.
+
+            // "Options: A / B / C" stays scannable without any markdown.
             sb.Append("Options: ");
-            sb.Append(string.Join(" / ", channelMessage.QuickReplies.Select(r => r.Label)));
+            sb.Append(string.Join(" / ", channelMessage.QuickReplies.Select(quickReply => quickReply.Label)));
         }
 
         string text = sb.ToString();
 
+        // A channel that would show markdown syntax as text gets the plain words.
         if (!channelCapabilities.SupportsMarkdown)
             text = StripMarkdown(text);
 
+        // The length limit applies to the whole fallback, the inlined options included.
         text = EnforceLengthBudget(text, channelCapabilities);
 
         // Only the text and the features the channel lacks change: a command's frame stays one when its text is
@@ -242,38 +240,43 @@ public class MorganaChannelAdapter
         };
     }
 
-    // Walks Markdig parse tree, collects literal text, preserves block structure as line breaks.
+    /// <summary>The words of a markdown text without its syntax, its blocks kept apart by blank lines.</summary>
     private static string StripMarkdown(string text)
     {
+        // The parse tree yields the words; the trailing blank lines of the last block are dropped.
         StringBuilder sb = new StringBuilder();
         RenderContainerBlock(Markdown.Parse(text), sb);
         return sb.ToString().TrimEnd();
     }
 
-    // Walks Markdig ContainerBlock (document or nested): paragraphs/headings flattened via RenderContainerInline,
-    // code blocks emitted verbatim, other containers recursed. Results separated by blank lines.
+    /// <summary>Writes the words of a block container, each block followed by a blank line.</summary>
     private static void RenderContainerBlock(ContainerBlock containerBlock, StringBuilder sb)
     {
+        // A block of any other kind, such as a thematic break, carries no words and is left out.
         foreach (Block block in containerBlock)
         {
             switch (block)
             {
+                // A paragraph's words, followed by the blank line that keeps it apart from the next block.
                 case ParagraphBlock paragraph:
                     RenderContainerInline(paragraph.Inline, sb);
                     sb.AppendLine().AppendLine();
                     break;
 
+                // A heading keeps its words and loses the hashes a plain channel would print.
                 case HeadingBlock heading:
                     RenderContainerInline(heading.Inline, sb);
                     sb.AppendLine().AppendLine();
                     break;
 
+                // A code block's lines verbatim, read up to their count: the line array keeps spare room that would print as empty lines.
                 case CodeBlock code:
-                    foreach (var line in code.Lines.Lines)
-                        sb.AppendLine(line.ToString());
+                    for (int lineIndex = 0; lineIndex < code.Lines.Count; lineIndex++)
+                        sb.AppendLine(code.Lines.Lines[lineIndex].ToString());
                     sb.AppendLine();
                     break;
 
+                // A list or a quote holds blocks of its own, whose words are kept.
                 case ContainerBlock nested:
                     RenderContainerBlock(nested, sb);
                     break;
@@ -281,34 +284,44 @@ public class MorganaChannelAdapter
         }
     }
 
-    // Walks Markdig ContainerInline: literals/code as-is, line breaks→newlines, links/containers recursed.
+    /// <summary>Writes the words of an inline container: literals and code as they are, line breaks as new lines, a link's text or address.</summary>
     private static void RenderContainerInline(ContainerInline? containerInline, StringBuilder sb)
     {
-        if (containerInline == null) return;
+        // A block with no inline content contributes no words.
+        if (containerInline == null)
+            return;
+
+        // An inline of any other kind, such as raw HTML, is left out.
         foreach (Inline inline in containerInline)
         {
             switch (inline)
             {
+                // Plain words, which are all a plain channel can show.
                 case LiteralInline literal:
                     sb.Append(literal.Content.ToString());
                     break;
 
+                // Inline code keeps its text and loses the backticks a plain channel would print.
                 case CodeInline code:
                     sb.Append(code.Content);
                     break;
 
+                // A line break of either kind, since the author meant the words on two lines.
                 case LineBreakInline:
                     sb.AppendLine();
                     break;
 
+                // A bare address has no other text, so it is kept to stay usable.
                 case AutolinkInline autolink:
                     sb.Append(autolink.Url);
                     break;
 
+                // A link keeps its visible text, its address only cluttering the line.
                 case LinkInline link:
                     RenderContainerInline(link, sb);
                     break;
 
+                // Emphasis keeps its words and loses its asterisks.
                 case ContainerInline nested:
                     RenderContainerInline(nested, sb);
                     break;

@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
@@ -7,66 +6,40 @@ using Microsoft.Extensions.Logging;
 namespace Morgana.AI.Providers;
 
 /// <summary>
-/// Chat history provider that decouples storage from the LLM context view.
-/// The complete conversation history is always preserved in <see cref="AgentSession"/>,
-/// while an optional <see cref="IChatReducer"/> produces a condensed view sent to the LLM.
+/// Keeps an agent's whole history in its session and hands the model either all of it or the reducer's view of it.
+/// The reducer works on a copy for each run, so the stored history, which the record and the transcript are read from, is never shortened.
 /// </summary>
-/// <remarks>
-/// <para>One instance is created per agent intent and shared across all sessions of that agent.
-/// Per-session data (the full message list) lives in <see cref="AgentSession"/> via
-/// <see cref="ProviderSessionState{T}"/> and is serialized automatically by the framework.</para>
-///
-/// <para><strong>Storage vs. LLM view:</strong></para>
-/// <list type="bullet">
-/// <item><term>Storage</term><description>All messages are appended to <c>MorganaHistoryState.Messages</c> in AgentSession. The reducer never touches this list.</description></item>
-/// <item><term>LLM view</term><description>If a reducer is configured, a temporary reduced copy is computed before each invocation and discarded afterward.</description></item>
-/// <item><term>UI / diagnostics</term><description>Consumers can read the unmodified full history via <see cref="GetMessages"/>.</description></item>
-/// </list>
-/// </remarks>
-public class MorganaChatHistoryProvider : ChatHistoryProvider
+internal class MorganaChatHistoryProvider : ChatHistoryProvider
 {
-    /// <summary>Logger for provider-level diagnostics.</summary>
+    /// <summary>Writes what each run is handed and what each turn stores.</summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Optional reducer applied to produce an optimized context window for the LLM.
-    /// Never modifies the stored history.
-    /// </summary>
+    /// <summary>Shortens the copy of the history a run is handed; <c>null</c> hands the model everything.</summary>
     private readonly IChatReducer? viewReducer;
 
-    /// <summary>Agent intent label used in log output.</summary>
+    /// <summary>The intent of the agent whose history this is, named in the log lines.</summary>
     private readonly string agentIntent;
 
-    /// <summary>
-    /// Manages storage and retrieval of <see cref="MorganaHistoryState"/> within <see cref="AgentSession"/>.
-    /// </summary>
+    /// <summary>Keeps the <see cref="MorganaHistoryState"/> inside each session, so it is saved and restored with it.</summary>
     private readonly ProviderSessionState<MorganaHistoryState> sessionState;
 
-    /// <summary>
-    /// Keys used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
-    /// </summary>
+    /// <summary>The key this provider's state is kept under in the session.</summary>
     public override IReadOnlyList<string> StateKeys => [ nameof(MorganaChatHistoryProvider) ];
 
-    /// <summary>
-    /// Initializes a new singleton instance of <see cref="MorganaChatHistoryProvider"/>.
-    /// </summary>
-    /// <param name="agentIntent">Agent intent label (e.g. "billing") used in log output.</param>
-    /// <param name="chatReducer">Reducer used only for LLM context optimization. Pass <c>null</c> to disable reduction.</param>
-    /// <param name="logger">Logger for diagnostics.</param>
-    /// <param name="jsonSerializerOptions">
-    /// JSON serialization options for state persistence.
-    /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
-    /// </param>
+    /// <summary>Binds the provider to its agent and to the reducer that shortens what the model reads.</summary>
+    /// <param name="agentIntent">The intent of the agent, such as <c>billing</c>.</param>
+    /// <param name="chatReducer">The reducer of the model's view; <c>null</c> hands the model the whole history.</param>
+    /// <param name="logger">Writes the provider's log lines.</param>
     public MorganaChatHistoryProvider(
         string agentIntent,
         IChatReducer? chatReducer,
-        ILogger logger,
-        JsonSerializerOptions? jsonSerializerOptions = null)
+        ILogger logger)
     {
         this.agentIntent = agentIntent;
         viewReducer = chatReducer;
         this.logger = logger;
 
+        // Whether this agent's model reads a reduced view, said once when the agent is created.
         string reducerInfo = chatReducer != null
             ? $"with view-reducer={chatReducer.GetType().Name}"
             : "without reducer";
@@ -74,22 +47,21 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         logger.LogInformation(
             "{MorganaChatHistoryProviderName} CREATED {ReducerInfo} for agent '{AgentIntent}'", nameof(MorganaChatHistoryProvider), reducerInfo, agentIntent);
 
+        // The history lives in the session under this provider's key, serialized as Microsoft.Agents.AI serializes the rest of the session.
         sessionState = new ProviderSessionState<MorganaHistoryState>(
             stateInitializer: _ => new MorganaHistoryState(),
             stateKey: StateKeys[0],
-            jsonSerializerOptions: jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions);
+            jsonSerializerOptions: AgentAbstractionsJsonUtilities.DefaultOptions);
     }
 
-    /// <summary>
-    /// Returns the complete, unreduced conversation history for the given session.
-    /// Useful for UI display or audit. Never returns a reduced view.
-    /// </summary>
+    /// <summary>Returns the session's whole history, never the reduced view.</summary>
     public List<ChatMessage> GetMessages(AgentSession session) =>
         sessionState.GetOrInitializeState(session).Messages;
 
     /// <summary>Files a message into the history outside a run of the agent: the user's phrase before the turn and the tool calls of a turn that was stopped.</summary>
     public void AppendMessage(AgentSession session, ChatMessage message)
     {
+        // Filed in the session at once, so the next run's model reads the message in its place in the history.
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(session);
         historyState.Messages.Add(message);
         sessionState.SaveState(session, historyState);
@@ -104,18 +76,16 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
     // ChatHistoryProvider overrides
     // =========================================================================
 
-    /// <summary>
-    /// Called BEFAORE each agent invocation to supply conversation history to the LLM.
-    /// Returns a reduced view if a reducer is configured; otherwise returns the full history.
-    /// The stored history is never modified.
-    /// </summary>
+    /// <summary>Hands the run the history its model reads: the reducer's view when one is configured, the whole history otherwise.</summary>
     protected override async ValueTask<IEnumerable<ChatMessage>> ProvideChatHistoryAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
+        // Each agent keeps its history in its own session, so two agents of one conversation each read only what they were told.
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(context.Session);
         List<ChatMessage> fullMessageHistory = historyState.Messages;
 
+        // With a reducer the model reads a shortened copy, while the stored list stays whole.
         if (viewReducer != null)
         {
             List<ChatMessage> reducedView = [.. await viewReducer.ReduceAsync(fullMessageHistory, cancellationToken)];
@@ -124,24 +94,23 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
                 $"{nameof(MorganaChatHistoryProvider)} PROVIDING reduced view " +
                 $"({fullMessageHistory.Count} → {reducedView.Count} messages) for LLM context in agent '{agentIntent}'");
 
+            // The model reads the summary and the recent window, while the stored list keeps every message for the record.
             return reducedView;
         }
 
         logger.LogInformation(
             $"{nameof(MorganaChatHistoryProvider)} PROVIDING all {fullMessageHistory.Count} messages (no reducer) for agent '{agentIntent}'");
 
+        // Without a reducer the model reads everything the agent was ever told.
         return fullMessageHistory;
     }
 
-    /// <summary>
-    /// Called AFTER agent invocation to persist new messages.
-    /// Appends only the new turn messages (request + response) to the full history.
-    /// Reduction is never applied to storage.
-    /// </summary>
+    /// <summary>Appends the turn's new messages to the whole history, dating every response message on Morgana's clock.</summary>
     protected override ValueTask StoreChatHistoryAsync(
         InvokedContext context,
         CancellationToken cancellationToken = default)
     {
+        // The history the turn joins, saved with the agent's session on its row of the record.
         MorganaHistoryState historyState = sessionState.GetOrInitializeState(context.Session);
 
         // The base class filters context.RequestMessages to exclude messages already in chat history,
@@ -152,9 +121,10 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         // unstamped: the history orders turns by it and a client catching up after a disconnection
         // compares it with the timestamps of the replies it was delivered.
         int responseStartIndex = context.RequestMessages?.Count() ?? 0;
-        for (int i = responseStartIndex; i < newMessages.Count; i++)
-            newMessages[i].CreatedAt = DateTimeOffset.UtcNow;
+        for (int messageIndex = responseStartIndex; messageIndex < newMessages.Count; messageIndex++)
+            newMessages[messageIndex].CreatedAt = DateTimeOffset.UtcNow;
 
+        // Request before response, in the order the model will read them back.
         historyState.Messages.AddRange(newMessages);
         sessionState.SaveState(context.Session, historyState);
 
@@ -170,16 +140,10 @@ public class MorganaChatHistoryProvider : ChatHistoryProvider
         return ValueTask.CompletedTask;
     }
 
-    /// <summary>
-    /// Per-session state stored inside <see cref="AgentSession"/> via <see cref="ProviderSessionState{T}"/>.
-    /// Serialized and restored automatically by the framework as part of session persistence.
-    /// </summary>
+    /// <summary>One session's whole history, saved and restored with the session.</summary>
     public sealed class MorganaHistoryState
     {
-        /// <summary>
-        /// Complete conversation message list for this session.
-        /// Never modified by the reducer — the reducer operates only on a temporary copy.
-        /// </summary>
+        /// <summary>Every message the agent was told and wrote, in order; the reducer never shortens it.</summary>
         [JsonPropertyName("messages")]
         public List<ChatMessage> Messages { get; set; } = [];
     }

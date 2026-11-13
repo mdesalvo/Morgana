@@ -1,5 +1,4 @@
 using System.Collections.Immutable;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.Logging;
@@ -8,17 +7,14 @@ using Morgana.AI.Interfaces;
 namespace Morgana.AI.Providers;
 
 /// <summary>
-/// Per-agent singleton managing session-level conversation variables. Shared variables trigger OnSharedContextUpdate
-/// callback for cross-agent persistence in conversation-scoped shared_context registry (first-write-wins merge).
-/// Storage: ProviderSessionState&lt;MorganaContextState&gt; → AgentSession (auto-serialized by framework).
+/// Holds one agent's context variables in its session and declares the held ones to the model on every turn.
+/// A write to a shared variable is also handed to <see cref="OnSharedContextUpdate"/>, which files it in the conversation's <c>shared_context</c>.
 /// </summary>
 public class MorganaAIContextProvider : AIContextProvider
 {
     /// <summary>
-    /// Reserved keys the framework writes into the same dictionary to carry a turn's presentation
-    /// decisions (drained by <c>MorganaAgent</c> at the end of every turn) and its peer-consultation
-    /// bookkeeping (see <c>MorganaAgentAdapter</c>). They are never declared to the model: naming a
-    /// stale one would invite the next turn to re-read a card already rendered and consumed.
+    /// The framework's own keys, written into the same variables to carry a turn's presentation and consultation bookkeeping.
+    /// They are never declared to the model: naming a stale one would invite the next turn to re-read a card already rendered.
     /// </summary>
     private static readonly ImmutableHashSet<string> EphemeralVariableNames =
         [
@@ -31,86 +27,58 @@ public class MorganaAIContextProvider : AIContextProvider
             Constants.ContextKeys.QuarantinedTools
         ];
 
-    /// <summary>Logger for provider-level diagnostics.</summary>
+    /// <summary>Writes the variable access lines.</summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Assembles the per-turn declaration naming the variables this session holds. Returns
-    /// <c>null</c> when nothing should be injected — no variables held, or no template declared by
-    /// the prompt layer — in which case behaviour is unchanged.
-    /// </summary>
-    private readonly IPromptComposerService? promptComposerService;
+    /// <summary>Composes the per-turn held-context declaration and the landing declaration from the framework's injections.</summary>
+    private readonly IPromptComposerService promptComposerService;
 
-    /// <summary>
-    /// Names of variables subject to cross-agent persistence in the conversation-scoped
-    /// <c>shared_context</c> registry. Derived from tool definitions (Scope="context",
-    /// Shared=true) at construction time.
-    /// </summary>
+    /// <summary>The variables that a tool parameter declares as shared, whose writes reach the conversation's <c>shared_context</c>.</summary>
     private readonly ImmutableHashSet<string> sharedVariableNames;
 
-    /// <summary>
-    /// Manages storage and retrieval of <see cref="MorganaContextState"/> within <see cref="AgentSession"/>.
-    /// </summary>
+    /// <summary>Keeps the <see cref="MorganaContextState"/> inside each session, so it is saved and restored with it.</summary>
     private readonly ProviderSessionState<MorganaContextState> sessionState;
 
     /// <summary>
-    /// Invoked when a shared variable is written. Wired by MorganaAgent to persist the value
-    /// into the conversation-scoped <c>shared_context</c> registry, where every agent of the
-    /// conversation can hydrate it at the start of its next turn. Awaited by the writing tool
-    /// call, so the persisted write completes before the turn issues its next tool call.
+    /// Files a shared variable's value in the conversation's <c>shared_context</c>, where every agent reads it at its next turn.
+    /// The writing tool call awaits it, so the value is on record before the turn issues its next tool call.
     /// </summary>
     public Func<string, object, Task>? OnSharedContextUpdate { get; set; }
 
-    /// <summary>
-    /// Keys used by the framework to store and retrieve this provider's state within <see cref="AgentSession"/>.
-    /// </summary>
+    /// <summary>The key this provider's state is kept under in the session.</summary>
     public override IReadOnlyList<string> StateKeys => [ nameof(MorganaAIContextProvider) ];
 
-    /// <summary>
-    /// Initializes a new singleton instance of <see cref="MorganaAIContextProvider"/>.
-    /// </summary>
-    /// <param name="logger">Logger for context operation diagnostics.</param>
-    /// <param name="sharedVariableNames">
-    /// Names of variables that should be persisted into the conversation-scoped
-    /// <c>shared_context</c> registry when set. Typically extracted from tool definitions where
-    /// Scope="context" and Shared=true.
-    /// </param>
-    /// <param name="jsonSerializerOptions">
-    /// JSON serialization options for state persistence.
-    /// Defaults to <c>AgentAbstractionsJsonUtilities.DefaultOptions</c>.
-    /// </param>
-    /// <param name="promptComposerService">
-    /// Composes the per-turn held-context declaration. Left null,
-    /// <see cref="ProvideAIContextAsync"/> injects nothing.
-    /// </param>
+    /// <summary>Binds the provider to its composer and to the variables that the agent's tools declare as shared.</summary>
+    /// <param name="logger">Writes the variable access lines.</param>
+    /// <param name="promptComposerService">Composes the per-turn declarations.</param>
+    /// <param name="sharedVariableNames">The context parameters that a tool declares as shared; none when omitted.</param>
     public MorganaAIContextProvider(
         ILogger logger,
-        IEnumerable<string>? sharedVariableNames = null,
-        JsonSerializerOptions? jsonSerializerOptions = null,
-        IPromptComposerService? promptComposerService = null)
+        IPromptComposerService promptComposerService,
+        IEnumerable<string>? sharedVariableNames = null)
     {
         this.logger = logger;
-        this.sharedVariableNames = [.. sharedVariableNames ?? []];
         this.promptComposerService = promptComposerService;
+        this.sharedVariableNames = [.. sharedVariableNames ?? []];
 
+        // The state lives in the session under this provider's key, serialized as Microsoft.Agents.AI serializes the rest of the session.
         sessionState = new ProviderSessionState<MorganaContextState>(
             stateInitializer: _ => new MorganaContextState(),
             stateKey: StateKeys[0],
-            jsonSerializerOptions: jsonSerializerOptions ?? AgentAbstractionsJsonUtilities.DefaultOptions);
+            jsonSerializerOptions: AgentAbstractionsJsonUtilities.DefaultOptions);
     }
 
     // =========================================================================
     // Agent Context
     // =========================================================================
 
-    /// <summary>
-    /// Retrieves a variable from the session's conversation context.
-    /// Returns <c>null</c> if the variable has not been set.
-    /// </summary>
+    /// <summary>Reads a variable from the session's context; <c>null</c> when it is not held.</summary>
     public object? GetVariable(AgentSession session, string variableName)
     {
+        // A session read for the first time starts with no variables.
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
 
+        // The tool tells a hit from a miss by a value coming back.
         if (contextState.Variables.TryGetValue(variableName, out object? value))
         {
             logger.LogInformation("{MorganaAiContextProviderName} GET '{VariableName}' = '{Value}'", nameof(MorganaAIContextProvider), variableName, value);
@@ -118,45 +86,44 @@ public class MorganaAIContextProvider : AIContextProvider
         }
 
         logger.LogInformation("{MorganaAiContextProviderName} MISS '{VariableName}'", nameof(MorganaAIContextProvider), variableName);
+
+        // The miss the tool turns into the line telling the model the variable is not in context.
         return null;
     }
 
     /// <summary>
     /// Reads the value of one of the framework's own context keys; <c>null</c> when the session does not hold it.
+    /// It writes no access line, since the agent and the consultation guards ask it on every turn.
     /// </summary>
-    /// <remarks>Read without the per-variable access line: the agent and the consultation adapter ask it on every turn.</remarks>
     public object? GetFrameworkKeyValue(AgentSession session, string frameworkKey)
         => sessionState.GetOrInitializeState(session).Variables.GetValueOrDefault(frameworkKey);
 
-    /// <summary>
-    /// Writes a variable to the session's conversation context.
-    /// If the variable is declared as shared, <see cref="OnSharedContextUpdate"/> is invoked
-    /// to persist the value into the conversation-scoped <c>shared_context</c> registry where
-    /// other agents can hydrate it on their next turn.
-    /// </summary>
+    /// <summary>Writes a variable to the session's context, handing a shared one to <see cref="OnSharedContextUpdate"/> as well.</summary>
     public async Task SetVariableAsync(AgentSession session, string variableName, object variableValue)
     {
+        // The value replaces any earlier one in this agent's own context and the session keeps it.
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
         contextState.Variables[variableName] = variableValue;
         sessionState.SaveState(session, contextState);
 
+        // Only a variable that a tool parameter declares as shared travels to the other agents.
         bool isShared = sharedVariableNames.Contains(variableName);
 
         logger.LogInformation(
             "{MorganaAiContextProviderName} SET {Private} '{VariableName}' = '{VariableValue}'", nameof(MorganaAIContextProvider), isShared ? "SHARED" : "PRIVATE", variableName, variableValue);
 
+        // A shared write is filed in the registry before the tool call returns.
         if (isShared && OnSharedContextUpdate is not null)
             await OnSharedContextUpdate(variableName, variableValue);
     }
 
-    /// <summary>
-    /// Removes a variable from the session's conversation context.
-    /// Used to discard ephemeral data (e.g. quick replies, rich cards) after they have been consumed.
-    /// </summary>
+    /// <summary>Removes a variable from the session's context, as the agent drops the turn's ephemeral keys once it has read them.</summary>
     public void DropVariable(AgentSession session, string variableName)
     {
+        // The ephemeral keys live among the variables, so dropping one removes it from the same store.
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
 
+        // The session is saved only when there was something to remove.
         if (contextState.Variables.Remove(variableName))
         {
             sessionState.SaveState(session, contextState);
@@ -164,32 +131,36 @@ public class MorganaAIContextProvider : AIContextProvider
         }
     }
 
-    /// <summary>
-    /// Merges shared context variables received from a sibling agent.
-    /// Applies first-write-wins: variables already present in local context are not overwritten.
-    /// </summary>
+    /// <summary>Merges the conversation's shared variables into the session's context, first write winning: a variable already held keeps its value.</summary>
     public void MergeSharedContext(AgentSession session, Dictionary<string, object> sharedContext)
     {
+        // The variables this agent already holds, which the registry never overwrites.
         MorganaContextState contextState = sessionState.GetOrInitializeState(session);
+
+        // Whether any variable was taken, so the session is saved only when it changed.
         bool changed = false;
 
-        foreach (KeyValuePair<string, object> kvp in sharedContext)
+        // Each shared variable is taken only where this agent does not hold it yet.
+        foreach (KeyValuePair<string, object> sharedVariable in sharedContext)
         {
-            if (!contextState.Variables.TryGetValue(kvp.Key, out object? existing))
+            // Absent here, the registry's value is taken: this is how a customerCode given to Billing reaches Contract.
+            if (!contextState.Variables.TryGetValue(sharedVariable.Key, out object? existing))
             {
-                contextState.Variables[kvp.Key] = kvp.Value;
+                contextState.Variables[sharedVariable.Key] = sharedVariable.Value;
                 changed = true;
 
                 logger.LogInformation(
-                    "{MorganaAiContextProviderName} MERGED shared context '{KvpKey}' = '{KvpValue}'", nameof(MorganaAIContextProvider), kvp.Key, kvp.Value);
+                    "{MorganaAiContextProviderName} MERGED shared context '{KvpKey}' = '{KvpValue}'", nameof(MorganaAIContextProvider), sharedVariable.Key, sharedVariable.Value);
             }
             else
             {
+                // A variable the agent already holds keeps its own value.
                 logger.LogInformation(
-                    "{MorganaAiContextProviderName} IGNORED shared context '{KvpKey}' (already set to '{Existing}')", nameof(MorganaAIContextProvider), kvp.Key, existing);
+                    "{MorganaAiContextProviderName} IGNORED shared context '{KvpKey}' (already set to '{Existing}')", nameof(MorganaAIContextProvider), sharedVariable.Key, existing);
             }
         }
 
+        // Saved only when something was taken, since every turn merges and most merge nothing.
         if (changed)
             sessionState.SaveState(session, contextState);
     }
@@ -199,18 +170,14 @@ public class MorganaAIContextProvider : AIContextProvider
     // =========================================================================
 
     /// <summary>
-    /// Per-turn injection: hands the model the context variables the session holds, name and value,
-    /// ordinal-sorted. Critical for agents activated mid-conversation on empty per-agent history:
-    /// hydrated shared variables from registry are invisible in history. Empty session → no injection.
-    /// A landing turn also carries the landing declaration, for that run alone and never in the history.
+    /// Hands the model, for this run alone, the variables the session holds and, on a landing turn, the landing declaration.
+    /// An agent activated mid-conversation has an empty history, so a variable hydrated from the registry would otherwise be invisible to it.
     /// </summary>
     protected override async ValueTask<AIContext> ProvideAIContextAsync(
         InvokingContext context,
         CancellationToken cancellationToken = default)
     {
-        if (promptComposerService is null)
-            return new AIContext();
-
+        // Read on every run, after the turn's merge of the shared registry, so the declaration names what was just hydrated.
         MorganaContextState contextState = sessionState.GetOrInitializeState(context.Session);
 
         // The landing declaration, only on the turn the user has just chosen this agent.
@@ -218,22 +185,22 @@ public class MorganaAIContextProvider : AIContextProvider
             ? await promptComposerService.ComposeLandingDeclarationAsync()
             : null;
 
-        // Strip the framework's own ephemeral keys (turn_ending, quick_replies, rich_card) —
-        // they are not inputs to resolve, never something the model should be told it "holds". The
-        // SortedDictionary keeps keys in ordinal order so the declaration text is byte-identical
-        // across turns whenever the held set itself doesn't change (keeps the composed prompt stable).
+        // The framework's own keys are machinery, never something the model holds. Ordinal order keeps the
+        // declaration byte-identical across turns while the held set does not change.
         SortedDictionary<string, object> heldVariables = new SortedDictionary<string, object>(
             contextState.Variables
-                .Where(kvp => !EphemeralVariableNames.Contains(kvp.Key))
-                .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                .Where(variable => !EphemeralVariableNames.Contains(variable.Key))
+                .ToDictionary(variable => variable.Key, variable => variable.Value),
             StringComparer.Ordinal);
 
+        // Null when nothing is held or the framework declares no template.
         string? declaration = await promptComposerService.ComposeHeldContextDeclarationAsync(heldVariables);
 
         // Neither a held value nor a landing: the agent's own instructions are all the model reads.
         if (declaration is null && landingDeclaration is null)
             return new AIContext();
 
+        // The declared names are logged where the PromptHarness reads them.
         if (declaration is not null)
             logger.LogInformation(
                 Constants.ObservableLogs.DeclaredContext,
@@ -251,27 +218,14 @@ public class MorganaAIContextProvider : AIContextProvider
             _ => Constants.Markers.DynamicInstructions + landingDeclaration
         };
 
+        // Instructions added to this run only, never to the session's history.
         return new AIContext { Instructions = perTurnInstructions };
     }
 
-    /// <summary>
-    /// Called AFTER each agent invocation. Override to inspect response messages and apply context updates.
-    /// </summary>
-    protected override ValueTask StoreAIContextAsync(
-        InvokedContext context,
-        CancellationToken cancellationToken = default)
-    {
-        // Reserved for future use: extract state from response messages and persist via sessionState.SaveState.
-        return ValueTask.CompletedTask;
-    }
-
-    /// <summary>
-    /// Per-session state stored inside <see cref="AgentSession"/> via <see cref="ProviderSessionState{T}"/>.
-    /// Serialized and restored automatically by the framework as part of session persistence.
-    /// </summary>
+    /// <summary>One session's context variables, saved and restored with the session.</summary>
     public sealed class MorganaContextState
     {
-        /// <summary>Conversation variables for this session (e.g. customerCode, invoiceId).</summary>
+        /// <summary>The session's variables by name, the framework's own keys among them.</summary>
         [JsonPropertyName("variables")]
         public Dictionary<string, object> Variables { get; set; } = [];
     }

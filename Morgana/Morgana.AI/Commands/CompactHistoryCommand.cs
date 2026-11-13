@@ -9,10 +9,9 @@ using Morgana.Contracts;
 namespace Morgana.AI.Commands;
 
 /// <summary>
-/// <c>/compact</c>: folds the history of the agent the conversation is with into a summary, so the next
-/// turn that agent serves starts from the summary instead of the whole transcript. Nothing leaves the
-/// record — a fold moves where an agent's window opens, it does not delete messages — which is why it asks
-/// for no confirmation.
+/// <c>/compact</c>: folds the history of the agent the conversation is with into a summary its next turn starts from.
+/// Nothing leaves the record, since a fold moves where an agent's window opens without deleting a message,
+/// which is why the command asks for no confirmation.
 /// </summary>
 public sealed class CompactHistoryCommand : ICommand
 {
@@ -93,6 +92,7 @@ public sealed class CompactHistoryCommand : ICommand
             // what the user watches advance is therefore attributed to whoever is being summarized
             await SendProgressAsync(conversationId, invocationId, $"summarizing what {agent} carries", completed: 1);
 
+            // The one call to a model the command makes, the whole of the wait the second frame announced
             int foldedMessages = await FoldAgentHistoryAsync(conversationId, agent, cancellationToken);
 
             // An agent still holding a history short enough to read whole folds nothing, which is an answer in
@@ -118,10 +118,7 @@ public sealed class CompactHistoryCommand : ICommand
         }
     }
 
-    /// <summary>
-    /// Folds everything but the recent window of <paramref name="agent"/>'s history and writes it back,
-    /// answering how many messages the summary now stands for; zero when there was nothing behind that window.
-    /// </summary>
+    /// <summary>Folds everything but the recent window of <paramref name="agent"/>'s history and writes it back, answering how many messages the summary now stands for.</summary>
     private async Task<int> FoldAgentHistoryAsync(string conversationId, string agent, CancellationToken cancellationToken)
     {
         // The history is taken from the record, which is what an agent reads itself back from: the fold is
@@ -168,12 +165,12 @@ public sealed class CompactHistoryCommand : ICommand
     }
 
     /// <summary>
-    /// The client the fold is paid on: the tier the agent itself declares, so summarizing costs what that
-    /// agent costs, metered like every other call to a model — a saving that spent tokens off the books
-    /// would leave the conversation's budget claiming more than it has.
+    /// The client the fold is paid on: the tier the agent itself declares, metered like every other call to a model.
+    /// A saving that spent tokens off the books would leave the conversation's budget claiming more than it has.
     /// </summary>
     private IChatClient MeteredChatClientOf(string agent, string conversationId)
     {
+        // Summarizing costs what the agent costs, on the tier its [RequiresLLMTier] declares
         Records.LLMTier tier = agentRegistryService.ResolveAgentFromIntent(agent)
             ?.GetCustomAttributes(typeof(RequiresLLMTierAttribute), inherit: false)
             .OfType<RequiresLLMTierAttribute>()
@@ -205,8 +202,8 @@ public sealed class CompactHistoryCommand : ICommand
         });
 
     /// <summary>
-    /// Sends the finished frame carrying the command's outcome, whatever the fold came to: the widget comes off
-    /// the screen and the outcome takes its place in one delivery, so no bar is left standing on work nobody is doing.
+    /// Sends the finished frame carrying the command's outcome, whatever the fold came to.
+    /// The widget comes off the screen and the outcome takes its place in one delivery, so no bar is left standing on work nobody is doing.
     /// </summary>
     private Task SendOutcomeAsync(string conversationId, string? invocationId, string outcome) =>
         channelService.SendMessageAsync(new ChannelMessage
