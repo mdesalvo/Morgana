@@ -8,18 +8,13 @@ using OpenAI;
 namespace Morgana.AI.LanguageModels.OpenAI;
 
 /// <summary>
-/// OpenAI provider.<br/>
-/// Supports GPT models via the OpenAI Responses API (gpt-6-luna, gpt-6-sol, gpt-6-astra, ...)
+/// The OpenAI provider, serving GPT models such as gpt-6-luna, gpt-6-sol and gpt-6-astra through the Responses API on a tier's ApiKey.
+/// Its models.json carries the standard prices for prompts up to 272,000 tokens, the cache write being the 30-minute write where OpenAI bills one and plain input elsewhere.
 /// </summary>
-/// <remarks>
-/// Requires ApiKey on the tier's connection. The embedded models.json carries OpenAI's standard processing prices for
-/// prompts up to 272,000 tokens: its cache write is the 30-minute write where OpenAI bills one and plain input elsewhere.
-/// </remarks>
-/// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
+/// <param name="loggerFactory">Writes the attempt lines of <see cref="AttemptLoggingHandler"/>; <c>null</c> writes nothing.</param>
 public class OpenAILanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<OpenAITierConnection>
 {
-    /// <inheritdoc />
-    // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
+    /// <summary>The name a tier writes in its Provider key, which stays the same whatever the class is called.</summary>
     public override string Provider => "OpenAI";
 
     /// <inheritdoc />
@@ -31,11 +26,12 @@ public class OpenAILanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
     {
         // A throttled call is retried a bounded number of times. NetworkTimeout bounds the wait for the
         // headers and each wait between two reads of the body; a streamed body that it cuts is not retried.
+        // The pipeline's NetworkTimeout bounds each attempt, so the HTTP client that writes the attempt lines
+        // sets none of its own: its default 100 seconds would cut first.
         OpenAIClientOptions clientOptions = new OpenAIClientOptions
         {
             RetryPolicy = new ClientRetryPolicy(connection.MaxRetries),
             NetworkTimeout = TimeSpan.FromSeconds(connection.TimeoutSeconds),
-            // The pipeline's NetworkTimeout still bounds each attempt, so the HTTP client sets none of its own (its default 100 s would cut first).
             Transport = new HttpClientPipelineTransport(
                 AttemptLoggingHandler.CreateHttpClient(loggerFactory?.CreateLogger<OpenAILanguageModel>(), Provider, Timeout.InfiniteTimeSpan))
         };
@@ -52,10 +48,10 @@ public class OpenAILanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
     }
 }
 
-/// <summary>How a tier reaches OpenAI.</summary>
+/// <summary>How a tier reaches OpenAI, bound from the tier's Connection with the shared Reliability laid under it.</summary>
 /// <param name="ApiKey">Credential of the OpenAI account.</param>
 /// <param name="MaxRetries">Retries of a refused call.</param>
-/// <param name="TimeoutSeconds">Ceiling of one attempt's wait for the response headers and of each wait between two reads of its body; a streamed body cut by it is not retried.</param>
+/// <param name="TimeoutSeconds">How long one attempt waits for the response headers and between two reads of its body; a streamed body cut by it is not retried.</param>
 public record OpenAITierConnection(
     string? ApiKey = null,
     int MaxRetries = 2,

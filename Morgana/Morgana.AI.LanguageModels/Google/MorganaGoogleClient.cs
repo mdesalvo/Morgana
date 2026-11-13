@@ -5,11 +5,9 @@ namespace Morgana.AI.LanguageModels.Google;
 
 /// <summary>
 /// Decorator over the Gemini <see cref="IChatClient"/> that reports usage as Microsoft.Extensions.AI defines it.
+/// Gemini counts the thinking apart from the answer and the SDK copies that split, while <see cref="UsageDetails.OutputTokenCount"/>
+/// must include the reasoning tokens, which Gemini bills as output.
 /// </summary>
-/// <remarks>
-/// Gemini counts the model's thinking apart from its answer and the SDK copies that split as it is, while
-/// <see cref="UsageDetails.OutputTokenCount"/> must include the reasoning tokens: Gemini bills them as output.
-/// </remarks>
 /// <param name="innerClient">The SDK's chat client of one tier.</param>
 internal sealed class MorganaGoogleClient(IChatClient innerClient) : DelegatingChatClient(innerClient)
 {
@@ -33,6 +31,7 @@ internal sealed class MorganaGoogleClient(IChatClient innerClient) : DelegatingC
         ChatOptions? chatOptions = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // Each update passes through as it arrives, so correcting the usage never delays the stream the user watches.
         await foreach (ChatResponseUpdate chatResponseUpdate in base.GetStreamingResponseAsync(chatMessages, chatOptions, cancellationToken))
         {
             // A stream reports its usage in the update that closes it, which is corrected before it travels on.

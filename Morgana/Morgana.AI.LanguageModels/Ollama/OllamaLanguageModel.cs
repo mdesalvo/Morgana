@@ -11,33 +11,22 @@ using System.Text.Json.Serialization;
 namespace Morgana.AI.LanguageModels.Ollama;
 
 /// <summary>
-/// Ollama provider.<br/>
-/// Supports local models and the cloud models that ollama.com hosts via Ollama interface (gpt-oss:20b, gemma4 ...).
+/// The Ollama provider, serving local models on a daemon such as http://localhost:11434 and the cloud models of ollama.com, whose key a call there carries.
+/// Its models.json carries ollama.com's peak prices under the names ollama.com answers to, cache write and any unlisted cache read at the input price;
+/// OllamaSharp reports no cached prompt tokens. A daemon's cloud name (gemma4:cloud, gpt-oss:120b-cloud) is priced under its catalogue name, while a
+/// daemon's name without the cloud suffix is a local model whose tier declares its own Pricing.
+/// AdditionalProperties:num_ctx, 65536 when absent, holds prompt and answer together, so it must exceed MaxOutputTokens by the longest prompt the tier's agents read.
 /// </summary>
-/// <remarks>
-/// Requires Endpoint on the tier's connection. A local daemon (e.g., http://localhost:11434) bills the cloud models to
-/// the account it signed in with; https://ollama.com bills the account of the ApiKey that it also requires. Choose a model
-/// with solid function calling support (e.g., gpt-oss:20b, phi4-mini) because Morgana relies heavily on tool calling.
-/// Before starting Morgana, verify that a local model is already loaded via "ollama ps". The embedded models.json
-/// carries ollama.com's peak prices for its cloud models under the names that ollama.com answers to, cache write at the
-/// input price since ollama.com bills none. A model that the pricing page lists without a cached input price reads its
-/// cache at the input price. OllamaSharp reports no cached prompt tokens, so a cached prompt is charged at the input
-/// price. A cloud model written for a daemon (gemma4:cloud, gpt-oss:120b-cloud) is priced under its catalogue name on
-/// either endpoint. On a daemon a name without the cloud suffix is a local model, never priced from the catalogue: its
-/// tier declares its own Pricing.
-/// The tier's Options may set AdditionalProperties:num_ctx, the window Morgana asks for on every call (65536 when absent): it holds the prompt and the answer together, so it must exceed the tier's MaxOutputTokens by the longest prompt that the tier's agents read.
-/// </remarks>
-/// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
+/// <param name="loggerFactory">Writes the attempt lines of <see cref="AttemptLoggingHandler"/>; <c>null</c> writes nothing.</param>
 public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<OllamaTierConnection>
 {
-    /// <inheritdoc />
-    // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
+    /// <summary>The name a tier writes in its Provider key, which stays the same whatever the class is called.</summary>
     public override string Provider => "Ollama";
 
-    // The window a tier asks for when it declares none, since Ollama's own default is small and silently cuts the start of a long prompt.
+    /// <summary>The num_ctx a tier asks for when it declares none, since Ollama's own default is small and silently cuts the start of a long prompt.</summary>
     private const int DefaultContextLength = 65536;
 
-    // The type of every option that OllamaSharp sends inside a request's options, read from the library's own model so it follows the library.
+    /// <summary>The type of every option OllamaSharp sends inside a request's options, read from the library's own model so it follows the library.</summary>
     private static readonly Dictionary<string, Type> RequestOptionTypes =
         typeof(RequestOptions).GetProperties()
         .Where(property => property.GetCustomAttribute<JsonPropertyNameAttribute>() is not null)
@@ -46,13 +35,13 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
             property => Nullable.GetUnderlyingType(property.PropertyType) ?? property.PropertyType,
             StringComparer.Ordinal);
 
-    // Host of Ollama's own service: the one endpoint that bills an account and so demands its key.
+    /// <summary>The host of Ollama's own service: the one endpoint that bills an account and so demands its key.</summary>
     private const string CloudHost = "ollama.com";
 
-    // The tag that names a cloud model with no size of its own, as in gemma4:cloud.
+    /// <summary>The tag that names a cloud model with no size of its own, as in gemma4:cloud.</summary>
     private const string CloudTag = ":cloud";
 
-    // The suffix that turns a size tag into a cloud model, as in gpt-oss:120b-cloud.
+    /// <summary>The suffix that turns a size tag into a cloud model, as in gpt-oss:120b-cloud.</summary>
     private const string CloudTagSuffix = "-cloud";
 
     /// <summary>Tells whether an endpoint is Ollama's own cloud service.</summary>
@@ -200,10 +189,10 @@ public class OllamaLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
     }
 }
 
-/// <summary>How a tier reaches Ollama.</summary>
+/// <summary>How a tier reaches Ollama, bound from the tier's Connection; it carries no MaxRetries since the client makes no retry of its own.</summary>
 /// <param name="Endpoint">Address of the Ollama service.</param>
 /// <param name="ApiKey">Credential of the ollama.com account that pays for the cloud models; required and sent only when <paramref name="Endpoint"/> is ollama.com.</param>
-/// <param name="TimeoutSeconds">Ceiling of one call: of its whole response when it is not streamed, of the wait for the response headers when it is.</param>
+/// <param name="TimeoutSeconds">How long one call may take: its whole response when it is not streamed, the wait for the response headers when it is.</param>
 public record OllamaTierConnection(
     string? Endpoint = null,
     string? ApiKey = null,

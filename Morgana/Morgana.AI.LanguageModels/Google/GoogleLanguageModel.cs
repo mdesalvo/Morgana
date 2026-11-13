@@ -7,20 +7,14 @@ using Morgana.AI.Abstractions;
 namespace Morgana.AI.LanguageModels.Google;
 
 /// <summary>
-/// Google provider.<br/>
-/// Supports Gemini models through the Gemini API (gemini-3.5-flash-lite, gemini-3.8-flash, gemini-4-argon, ...)
+/// The Google provider, serving Gemini models such as gemini-3.5-flash-lite, gemini-3.8-flash and gemini-4-argon through the Gemini API on a tier's ApiKey.
+/// Its models.json carries the standard prices for prompts up to 200,000 tokens, a cache write at the input price since Gemini bills it as plain input.
+/// It keeps the base's IsContentFilterRefusal: Gemini reports a blocked prompt or answer inside the response, never as an exception.
 /// </summary>
-/// <remarks>
-/// Requires ApiKey on the tier's connection. The embedded models.json carries Google's standard processing prices for
-/// prompts up to 200,000 tokens, the ones in force once each promotion ends: Gemini bills a cache write as plain input,
-/// so the write price equals the input price. Gemini reports a blocked prompt or answer inside the response, so none of
-/// its refusals reaches the framework as an exception.
-/// </remarks>
-/// <param name="loggerFactory">Optional logger factory for the <see cref="AttemptLoggingHandler"/> that writes one line per attempt on the wire; <c>null</c> writes nothing.</param>
+/// <param name="loggerFactory">Writes the attempt lines of <see cref="AttemptLoggingHandler"/>; <c>null</c> writes nothing.</param>
 public class GoogleLanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<GoogleTierConnection>
 {
-    /// <inheritdoc />
-    // The name a tier writes in its Provider key: it must stay stable whatever the class is called.
+    /// <summary>The name a tier writes in its Provider key, which stays the same whatever the class is called.</summary>
     public override string Provider => "Google";
 
     /// <inheritdoc />
@@ -53,10 +47,10 @@ public class GoogleLanguageModel(ILoggerFactory? loggerFactory = null) : Morgana
     }
 }
 
-/// <summary>How a tier reaches Google's Gemini API.</summary>
+/// <summary>How a tier reaches Google's Gemini API, bound from the tier's Connection with the shared Reliability laid under it.</summary>
 /// <param name="ApiKey">Credential of the Gemini API project.</param>
 /// <param name="MaxRetries">Retries of a refused call.</param>
-/// <param name="TimeoutSeconds">Ceiling of one attempt's wait for the response headers; the body that follows is not bounded by it.</param>
+/// <param name="TimeoutSeconds">How long one attempt waits for the response headers; the body that follows is not bounded by it.</param>
 public record GoogleTierConnection(
     string? ApiKey = null,
     int MaxRetries = 2,

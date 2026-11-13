@@ -5,10 +5,9 @@ namespace Morgana.AI.LanguageModels.Ollama;
 
 /// <summary>
 /// Ends a call that its caller stops at once, whatever OllamaSharp's reader is waiting on.
-/// </summary>
-/// <remarks>
 /// OllamaSharp reads a streamed answer without the caller's token and ends it quietly when it sees it cancelled.
-/// </remarks>
+/// </summary>
+/// <param name="innerClient">The OllamaSharp client of one tier.</param>
 internal sealed class MorganaOllamaClient(IChatClient innerClient) : DelegatingChatClient(innerClient)
 {
     /// <inheritdoc />

@@ -7,20 +7,18 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace Morgana.AI.LanguageModels.Anthropic;
 
 /// <summary>
-/// Defensive decorator over the AnthropicClient <see cref="IChatClient"/> that diagnoses and, when
-/// strictly necessary, normalizes the message list immediately before the HTTP call.
+/// Decorator over the Anthropic <see cref="IChatClient"/> that ends every request on a role Claude accepts and marks the system prompt for caching.
+/// Since Claude 4.6 a request may not end on an assistant message (no prefill): a trailing system or assistant message with text is kept as a user one,
+/// the way the SDK already sends a tool result, while a trailing assistant message without text is dropped.
 /// </summary>
-/// <remarks>
-/// Claude 4.6+ enforces constraint: requests must end with user message, not assistant (no "prefill").
-/// This guard normalizes message sequences: User/Tool roles→forward unchanged; System→rewrite to User
-/// (preserves summarization prompts appended as trailing system messages); Assistant with TextContent→rewrite
-/// to User (preserves model's own prior text); Assistant without TextContent→strip (no semantic payload).
-/// Mirrors the strategy Anthropic SDK already uses for Tool messages (translates to user role with tool_result).
-/// </remarks>
 internal sealed class MorganaAnthropicClient : DelegatingChatClient
 {
+    /// <summary>Writes the role trail at Debug and every structural repair at Warning, so a malformed request upstream leaves a trace.</summary>
     private readonly ILogger logger;
 
+    /// <summary>Wraps the SDK adapter of one tier.</summary>
+    /// <param name="innerClient">The SDK's chat client of the tier.</param>
+    /// <param name="loggerFactory">Writes the repairs; <c>null</c> silences them while the repairs still apply.</param>
     public MorganaAnthropicClient(IChatClient innerClient, ILoggerFactory? loggerFactory)
         : base(innerClient)
     {
@@ -34,9 +32,11 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         ChatOptions? chatOptions = null,
         CancellationToken cancellationToken = default)
     {
+        // The request Claude receives ends on a role it accepts and carries the cache marker on its stable prefix.
         List<ChatMessage> normalizedChatMessages = NormalizeForAnthropic(chatMessages);
         (normalizedChatMessages, chatOptions) = MarkLeadingSystemForCache(normalizedChatMessages, chatOptions);
 
+        // The whole usage arrives with the answer, so the cache writes it reports can tag the span of this call.
         ChatResponse chatResponse = await base.GetResponseAsync(normalizedChatMessages, chatOptions, cancellationToken);
         EmitCacheWriteTag(chatResponse.Usage);
         return chatResponse;
@@ -48,29 +48,29 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         ChatOptions? chatOptions = null,
         CancellationToken cancellationToken = default)
     {
+        // The same repairs as an answer that is not streamed, applied before the first chunk is asked for.
         List<ChatMessage> normalizedChatMessages = NormalizeForAnthropic(chatMessages);
         (normalizedChatMessages, chatOptions) = MarkLeadingSystemForCache(normalizedChatMessages, chatOptions);
 
-        // Streaming forwards chunks straight through — we do NOT inspect them. Cache-related
-        // observability for the streaming path is provided by MEAI's OpenTelemetryChatClient
-        // upstream, which already aggregates cache_read.input_tokens across the stream.
-        // Our custom cache_creation tag (see EmitCacheCreationTag) only applies to the
-        // non-streaming path, where ChatResponse.Usage is delivered atomically.
+        // The chunks pass untouched: a stream has no single final usage to read the cache writes from, while
+        // MEAI's OpenTelemetryChatClient above already aggregates the cache reads across it.
         return base.GetStreamingResponseAsync(normalizedChatMessages, chatOptions, cancellationToken);
     }
 
     /// <summary>
-    /// Inspects the outbound message list and, if it does not end with a user-acceptable role,
-    /// rewrites or strips the trailing chatMessages until it does. Diagnostic logs are always
-    /// emitted at <c>Debug</c>; structural fixes are logged at <c>Warning</c>.
+    /// Returns a copy of the message list that ends on a role Claude accepts, rewriting or dropping the trailing messages that do not.
+    /// The role trail is logged at Debug on every call and each repair at Warning.
     /// </summary>
     private List<ChatMessage> NormalizeForAnthropic(IEnumerable<ChatMessage> chatMessages)
     {
+        // A copy, since the caller's list is the agent's history and must stay as it was.
         List<ChatMessage> chatMessagesList = [.. chatMessages];
 
+        // An empty request has no trailing role to repair; the SDK reports it.
         if (chatMessagesList.Count == 0)
             return chatMessagesList;
 
+        // The last eight roles show how the request ends, computed only when someone reads them.
         if (logger.IsEnabled(LogLevel.Debug))
         {
             string lastEightRoles = string.Join(" → ", chatMessagesList.TakeLast(8).Select(m => m.Role.Value));
@@ -78,67 +78,55 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
                 "Anthropic.MorganaAnthropicClient: outbound message count={Count}, last-8 role trail: {Trail}", chatMessagesList.Count, lastEightRoles);
         }
 
-        // Trailing user / tool chatMessages are valid for Claude 4.6+:
-        // - User: standard end of a turn.
-        // - Tool: translated by the Anthropic SDK into a user message with tool_result content blocks.
+        // A user message ends an ordinary turn and a tool message reaches Claude as a user message carrying tool_result blocks.
         if (IsAcceptableTrailingRole(chatMessagesList[^1].Role))
             return chatMessagesList;
 
-        // Trailing assistant / system chatMessages are not valid for Claude 4.6+
-        //   1) System    — typically the SummarizingChatReducer's summarization prompt
-        //                  appended in trailing position. The MEAI→Anthropic adapter only
-        //                  hoists *leading* system chatMessages to the top-level system param,
-        //                  so a trailing system would be lost; we rewrite the role to user
-        //                  and preserve the instruction (semantically equivalent for an
-        //                  instruction-style prompt).
-        //   2) Assistant — the prefill artifact. If the message carries TextContent blocks,
-        //                  rewrite the role to user keeping only the text (mirroring the
-        //                  SDK's tool→user(tool_result) trick): zero context loss. If the
-        //                  message has no text at all (tool-only with missing results, or
-        //                  whitespace), strip — there is no semantic payload to preserve.
+        // Anything else at the end is refused by Claude, so the whole role trail is logged before the repair.
         string fullListOfRoles = string.Join(" → ", chatMessagesList.Select(m => m.Role.Value));
         logger.LogWarning(
             "Anthropic.MorganaAnthropicClient: trailing message has role={Role}, " +
             "which Claude 4.6+ rejects in trailing position (no-prefill constraint). " +
             "Full role trail: {FullTrail}", chatMessagesList[^1].Role.Value, fullListOfRoles);
 
-        int original = chatMessagesList.Count;
+        // The count before the repair, reported if the repair leaves nothing.
+        int originalCount = chatMessagesList.Count;
+
+        // The trailing messages are repaired one at a time until the request ends on an accepted role.
         while (chatMessagesList.Count > 0 && !IsAcceptableTrailingRole(chatMessagesList[^1].Role))
         {
-            ChatMessage trailing = chatMessagesList[^1];
-            string textPreview = Truncate(trailing.Text, 120);
+            // What the warnings show of the message being repaired.
+            ChatMessage trailingMessage = chatMessagesList[^1];
+            string textPreview = Truncate(trailingMessage.Text, 120);
             string contentTypes = string.Join(",",
-                trailing.Contents.Select(c => c.GetType().Name));
-            int contentCount = trailing.Contents.Count;
+                trailingMessage.Contents.Select(c => c.GetType().Name));
+            int contentCount = trailingMessage.Contents.Count;
 
-            // Trailing "system" message is rewritten into a "user" message: same payload,
-            // role swapped. We DO NOT mutate the source — the framework or callers may still
-            // hold a reference to it and expect it untouched. Replacing the slot in `list`
-            // with a clone keeps the contract local to this method.
-            if (trailing.Role == ChatRole.System)
+            // No Morgana caller ends on a system message, the reducer included, but the adapter hoists only leading ones
+            // and would lose a trailing one: its instruction is kept as a user message, on a clone since the history holds the original.
+            if (trailingMessage.Role == ChatRole.System)
             {
-                chatMessagesList[^1] = CloneAsUser(trailing, trailing.Contents);
+                chatMessagesList[^1] = CloneAsUser(trailingMessage, trailingMessage.Contents);
                 logger.LogWarning(
                     "Anthropic.MorganaAnthropicClient: rewrote trailing system message to user " +
                     "[content-types=[{ContentTypes}], text-preview=\"{TextPreview}\"] — " +
-                    "trailing system is the SummarizingChatReducer pattern; " +
-                    "MEAI's Anthropic adapter only hoists leading system chatMessages",
+                    "MEAI's Anthropic adapter only hoists leading system messages",
                     contentTypes, textPreview);
                 break;
             }
 
-            // Trailing "assistant" message: rewrite to "user" if there is text content to preserve,
-            // otherwise strip. Same non-mutating clone strategy as the system branch.
-            if (trailing.Role == ChatRole.Assistant)
+            // A trailing assistant message is the prefill Claude refuses: its text, if any, is kept as a user message.
+            if (trailingMessage.Role == ChatRole.Assistant)
             {
+                // Only the text carries meaning for the next answer; a tool call without its result would be refused on its own.
                 List<AIContent> textContents =
                 [
-                    .. trailing.Contents.OfType<TextContent>()
+                    .. trailingMessage.Contents.OfType<TextContent>()
                 ];
 
+                // Nothing to keep, so the message is dropped and the next one is examined.
                 if (textContents.Count == 0)
                 {
-                    // No semantic payload (tool-only or whitespace) — strip.
                     logger.LogWarning(
                         "Anthropic.MorganaAnthropicClient: stripping trailing assistant with no TextContent " +
                         "[content-types=[{ContentTypes}]] — pure prefill artifact, nothing to preserve",
@@ -147,7 +135,8 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
                     continue;
                 }
 
-                chatMessagesList[^1] = CloneAsUser(trailing, textContents);
+                // The model's own text reaches Claude as a user message, on a clone since the history holds the original.
+                chatMessagesList[^1] = CloneAsUser(trailingMessage, textContents);
                 logger.LogWarning(
                     "Anthropic.MorganaAnthropicClient: rewrote trailing assistant to user " +
                     "(kept {KeptCount}/{OriginalCount} content blocks: TextContent only) " +
@@ -156,118 +145,109 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
                 break;
             }
 
-            // Unknown role we don't have a strategy for — strip with explicit warning.
+            // A role with no repair of its own cannot be sent last, so it is dropped with a warning naming it.
             logger.LogWarning(
                 "Anthropic.MorganaAnthropicClient: stripping trailing message with unhandled role " +
                 "[role={Role}, content-types=[{ContentTypes}], text-preview=\"{TextPreview}\"]",
-                trailing.Role.Value, contentTypes, textPreview);
+                trailingMessage.Role.Value, contentTypes, textPreview);
             chatMessagesList.RemoveAt(chatMessagesList.Count - 1);
         }
 
-        // Defensive: if normalization stripped everything, surface the anomaly. Forwarding
-        // an empty list to the SDK would fail with a less informative error downstream.
+        // A repair that left nothing means a malformed request upstream, reported here where its cause is still visible.
         if (chatMessagesList.Count == 0)
         {
             logger.LogError(
                 "Anthropic.MorganaAnthropicClient: normalization stripped every message ({Original} → 0). " +
                 "The HTTP call will likely fail; this indicates an upstream malformed request.",
-                original);
+                originalCount);
         }
 
+        // The request as Claude will accept it.
         return chatMessagesList;
     }
 
     /// <summary>
-    /// Applies the Anthropic ephemeral prompt cache marker (1h TTL) to the system prefix of the
-    /// outbound request. Two paths, detailed inline: <c>ChatOptions.Instructions</c> (the agent
-    /// path — promoted to a leading System message) and an already-leading System
-    /// <see cref="ChatMessage"/> (Guard/Classifier/Presenter/ChannelAdapter). No-op on content
-    /// below Anthropic's cacheable-size floor — harmless, not worth special-casing.
+    /// Marks the stable system prefix of the request for Anthropic's 1-hour prompt cache, either from the agent's instructions or from a leading system message.
+    /// A prefix below Anthropic's cacheable size is simply not cached, which costs nothing.
     /// </summary>
     private static (List<ChatMessage> ChatMessages, ChatOptions? ChatOptions) MarkLeadingSystemForCache(
         List<ChatMessage> chatMessages,
         ChatOptions? chatOptions)
     {
-        // PATH 1 — Instructions on chatOptions: the Microsoft.Agents.AI agent path.
-        // Promote to a leading system ChatMessage with cache marker, clear Instructions on a
-        // clone to avoid the API receiving the same prefix twice.
+        // An agent's run carries its prompt in the options' instructions: it becomes a leading system message carrying the marker.
+        // The instructions are cleared on a clone so that Claude does not receive the prefix twice.
         if (!string.IsNullOrEmpty(chatOptions?.Instructions))
         {
             ChatOptions clonedChatOptions = chatOptions.Clone();
             clonedChatOptions.Instructions = null;
 
-            // The per-turn held-context declaration (marked with Constants.Markers.DynamicInstructions) rides at
-            // the tail of Instructions. Split it off so only the stable framework+domain prefix is
-            // cached — otherwise every turn's declaration change would bust the whole prompt's cache.
+            // The per-turn tail opens with Constants.Markers.DynamicInstructions: only what precedes it is cached,
+            // otherwise every turn's held-context declaration would invalidate the whole prompt's cache.
             int markerIndex = chatOptions.Instructions.IndexOf(
                 Constants.Markers.DynamicInstructions, StringComparison.Ordinal);
 
-            // No marker means no held-context declaration was injected this turn (empty session) —
-            // the whole string is the static prefix, same as before this split existed.
+            // Without a marker the turn carries no per-turn tail and the whole prompt is the stable prefix.
             string staticPrefix = markerIndex < 0 ? chatOptions.Instructions : chatOptions.Instructions[..markerIndex];
             TextContent staticContent = new TextContent(staticPrefix).WithCacheControl(Ttl.Ttl1h);
             List<AIContent> systemContents = [staticContent];
 
+            // The tail rides as a second block without a marker: Anthropic caches up to the marked block and reads the rest fresh.
             if (markerIndex >= 0)
             {
-                // Deliberately no cache_control here: Anthropic caches everything up to and including
-                // a marked block, so a second, unmarked block just rides along uncached — exactly what
-                // we want for text that changes every turn.
                 string dynamicTail = chatOptions.Instructions[(markerIndex + Constants.Markers.DynamicInstructions.Length)..];
                 systemContents.Add(new TextContent(dynamicTail));
             }
 
+            // The system message opens the request, where the adapter hoists it to Claude's system parameter.
             chatMessages.Insert(0, new ChatMessage(ChatRole.System, systemContents));
 
+            // The request without instructions, which now live in the leading system message.
             return (chatMessages, clonedChatOptions);
         }
 
-        // PATH 2 — chatOptions.Instructions was empty, so this isn't an Microsoft.Agents.AI agent
-        // call: the caller (Guard, Classifier, Presenter, ChannelAdapter via
-        // ILanguageModelService.CompleteWithSystemPromptAsync) put its system prompt directly in chatMessages
-        // instead. Find the run of leading System messages — walk from the start and stop at the
-        // first non-System message, since a System message appearing later (e.g. a mid-conversation
-        // summarization note) is not part of the prefix and must never be marked.
-        int lastSystemIdx = -1;
-        for (int i = 0; i < chatMessages.Count; i++)
+        // A framework actor's call through CompleteWithSystemPromptAsync carries its prompt as leading system messages instead.
+        // Only the leading run is the prefix: a system message appearing later is never marked.
+        int lastSystemIndex = -1;
+        for (int messageIndex = 0; messageIndex < chatMessages.Count; messageIndex++)
         {
-            if (chatMessages[i].Role == ChatRole.System)
-                lastSystemIdx = i;
+            // The run ends at the first message that is not a system one.
+            if (chatMessages[messageIndex].Role == ChatRole.System)
+                lastSystemIndex = messageIndex;
             else
                 break;
         }
-        // No leading System message at all — nothing to cache, leave the request untouched.
-        if (lastSystemIdx < 0)
+
+        // A request with no leading system message has no prefix to cache.
+        if (lastSystemIndex < 0)
             return (chatMessages, chatOptions);
 
-        // Mark the LAST TextContent of the LAST leading System message: callers may append multiple
-        // system messages (e.g. base prompt + a later addendum) and Anthropic's cache breakpoint
-        // covers everything up to and including the marked block — placing it last covers the whole
-        // leading run in one shot.
-        TextContent? lastText = chatMessages[lastSystemIdx].Contents.OfType<TextContent>().LastOrDefault();
-        if (lastText is null)
+        // The marker goes on the last text of the last leading system message, since the cache covers everything up to the marked block.
+        TextContent? lastTextContent = chatMessages[lastSystemIndex].Contents.OfType<TextContent>().LastOrDefault();
+
+        // A system message without text has nothing to mark.
+        if (lastTextContent is null)
             return (chatMessages, chatOptions);
 
-        lastText.WithCacheControl(Ttl.Ttl1h);
+        // The marker is set on the content in place: the caller built these messages for this one call.
+        lastTextContent.WithCacheControl(Ttl.Ttl1h);
 
+        // The request with its prefix marked.
         return (chatMessages, chatOptions);
     }
 
     /// <summary>
-    /// Reads the Anthropic-specific cache-creation token count from the response usage and emits it
-    /// as a span tag. Complements MEAI's built-in cache_read tag, which has no counterpart for writes.
-    /// Non-streaming path only — see inline comments for why and for the tag naming.
+    /// Tags the span of a call with the prompt tokens it wrote into the cache, which MEAI's own cache_read tag has no counterpart for.
+    /// It runs for an answer that is not streamed only, since a stream has no single final usage to read.
     /// </summary>
     private static void EmitCacheWriteTag(UsageDetails? usageDetails)
     {
-        // Called only from GetResponseAsync: the streaming path forwards chunks untouched and cache
-        // observability there comes from MEAI's own OpenTelemetryChatClient aggregating cache_read
-        // across the stream — there is no single final UsageDetails to read a cache-write count from.
+        // A usage without extra counts reports no cache write.
         if (usageDetails?.AdditionalCounts is null)
             return;
 
-        Activity? current = Activity.Current;
-        if (current is null)
+        // Outside a trace there is no span to tag.
+        Activity? currentActivity = Activity.Current;
+        if (currentActivity is null)
             return;
 
         // The same count that the dust ledger prices, so the tag and the charge never disagree on the cache writes.
@@ -275,17 +255,11 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
         if (!usageDetails.AdditionalCounts.TryGetValue(Constants.UsageCounts.CacheCreationInputTokens, out long cacheCreationTokens))
             return;
 
-        // No OTel semantic convention exists for the write side (only cache_read is
-        // standardised) — "cache_write" is our own choice, picked for symmetry with MEAI's tag.
-        current.SetTag("gen_ai.usage.cache_write.input_tokens", cacheCreationTokens);
+        // OpenTelemetry standardises only the cache read: the write's name mirrors MEAI's tag for it.
+        currentActivity.SetTag("gen_ai.usage.cache_write.input_tokens", cacheCreationTokens);
     }
 
-    /// <summary>
-    /// Builds a new <see cref="ChatMessage"/> with role <see cref="ChatRole.User"/> from a
-    /// given chat message, preserving its identifying metadata (author, timestamp, message id,
-    /// additional properties). The supplied <paramref name="contents"/> are copied into a
-    /// fresh list so the returned message does not share state with the chatMessage.
-    /// </summary>
+    /// <summary>A user message carrying <paramref name="contents"/> and the author, date, id and properties of <paramref name="chatMessage"/>, sharing no list with it.</summary>
     private static ChatMessage CloneAsUser(ChatMessage chatMessage, IEnumerable<AIContent> contents) =>
         new ChatMessage(ChatRole.User, [.. contents])
         {
@@ -295,9 +269,11 @@ internal sealed class MorganaAnthropicClient : DelegatingChatClient
             AdditionalProperties = chatMessage.AdditionalProperties
         };
 
+    /// <summary>Whether Claude accepts a request ending on <paramref name="role"/>: a user message or a tool result, which reaches it as one.</summary>
     private static bool IsAcceptableTrailingRole(ChatRole role) =>
         role == ChatRole.User || role == ChatRole.Tool;
 
+    /// <summary>The first <paramref name="max"/> characters of a text for a log line, with an ellipsis when cut.</summary>
     private static string Truncate(string? s, int max) =>
         string.IsNullOrEmpty(s) ? "" : s.Length <= max ? s : s[..max] + "…";
 }

@@ -9,10 +9,8 @@ namespace Morgana.AI.LanguageModels.OpenAI;
 
 /// <summary>
 /// Decorator over the OpenAI Responses <see cref="IChatClient"/> that keeps the history with Morgana and reports the cache writes.
-/// </summary>
-/// <remarks>
 /// Microsoft.Extensions.AI maps neither the tokens written into the prompt cache nor the absence of storage, so this client states both.
-/// </remarks>
+/// </summary>
 /// <param name="innerClient">The Responses chat client of one tier.</param>
 internal sealed class MorganaOpenAIClient(IChatClient innerClient) : DelegatingChatClient(innerClient)
 {
@@ -29,6 +27,7 @@ internal sealed class MorganaOpenAIClient(IChatClient innerClient) : DelegatingC
         if (chatResponse.RawRepresentation is ResponseResult responseResult)
             ReportCacheWrites(chatResponse.Usage, responseResult);
 
+        // The answer goes up with every share of its prompt counted where the dust ledger prices it.
         return chatResponse;
     }
 
@@ -38,6 +37,7 @@ internal sealed class MorganaOpenAIClient(IChatClient innerClient) : DelegatingC
         ChatOptions? chatOptions = null,
         [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // Each update passes through as it arrives, on the same options that keep the history with Morgana.
         await foreach (ChatResponseUpdate chatResponseUpdate in base.GetStreamingResponseAsync(chatMessages, ForResponses(chatOptions), cancellationToken))
         {
             // A stream reports its usage in the update that completes the response: its cache writes are added before it travels on.
@@ -66,6 +66,7 @@ internal sealed class MorganaOpenAIClient(IChatClient innerClient) : DelegatingC
         Func<IChatClient, object?>? callerFactory = chatOptions?.RawRepresentationFactory;
         forwardedOptions.RawRepresentationFactory = chatClient =>
         {
+            // The caller's own request options, when its factory built some, receive the two settings below instead of being replaced.
             CreateResponseOptions responseOptions = callerFactory?.Invoke(chatClient) as CreateResponseOptions ?? new CreateResponseOptions();
 
             // Left at the server default, the service would keep the history and Microsoft.Agents.AI would take it for the conversation's own.
