@@ -12,6 +12,7 @@ namespace Morgana.AI.LanguageModels.Ollama;
 
 /// <summary>
 /// The Ollama provider, serving local models on a daemon such as http://localhost:11434 and the cloud models of ollama.com, whose key a call there carries.
+/// A daemon bills the cloud models to the account it signed in with, while https://ollama.com bills the account of the ApiKey it requires.
 /// Its models.json carries ollama.com's peak prices under the names ollama.com answers to, cache write and any unlisted cache read at the input price;
 /// OllamaSharp reports no cached prompt tokens. A daemon's cloud name (gemma4:cloud, gpt-oss:120b-cloud) is priced under its catalogue name, while a
 /// daemon's name without the cloud suffix is a local model whose tier declares its own Pricing.
