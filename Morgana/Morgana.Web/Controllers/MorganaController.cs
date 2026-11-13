@@ -13,9 +13,9 @@ using Morgana.Web.Filters;
 namespace Morgana.Web.Controllers;
 
 /// <summary>
-/// REST API for conversation lifecycle (start/end/resume/message/history) and message routing to actor system.
-/// Integrates with SignalR for real-time bidirectional communication; OTel turn Activity boundary.
-/// Validates channel metadata at start; authentication, known conversation and limits are filters.
+/// REST API of the conversation: start, end, resume, message, history and the health probe.
+/// Authentication, the known-conversation check and the limits are MVC filters, run in the Order each action gives them;
+/// the answers to a message reach the user over the channel, never in the HTTP reply.
 /// </summary>
 [ApiController]
 [Route("api/morgana")]
@@ -23,21 +23,31 @@ namespace Morgana.Web.Controllers;
 [TypeFilter<FailureResponseFilter>]
 public class MorganaController : ControllerBase
 {
+    /// <summary>Holds the conversations' actors, reached by name from the conversation id.</summary>
     private readonly ActorSystem actorSystem;
+
+    /// <summary>Records each call and each refusal.</summary>
     private readonly ILogger logger;
+
+    /// <summary>Tells whether the deliveryMode a channel announces is served by a registered transport.</summary>
     private readonly IChannelServiceFactory channelServiceFactory;
+
+    /// <summary>Settles the handshake on record before start answers.</summary>
     private readonly IChannelMetadataStore channelMetadataStore;
+
+    /// <summary>The record: whether a conversation exists, its active agent and its transcript.</summary>
     private readonly IConversationPersistenceService conversationPersistenceService;
+
+    /// <summary>The gauge a resuming or catching-up client redraws.</summary>
     private readonly IDustLimitService dustLimitService;
+
+    /// <summary>The lockout text a resumed conversation with no dust left is handed.</summary>
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
     /// <summary>Seconds that every channel is told to wait on a silent turn.</summary>
     private readonly int replyTimeoutSeconds;
 
-    /// <summary>
-    /// Initializes controller with actor system, persistence, dust budget and channel factory.
-    /// Validates channel metadata handshake and delivery mode at conversation start.
-    /// </summary>
+    /// <summary>Binds the controller to the actor system, the record and the channel services.</summary>
     public MorganaController(
         ActorSystem actorSystem,
         ILogger logger,
@@ -60,11 +70,8 @@ public class MorganaController : ControllerBase
         replyTimeoutSeconds = (int)Records.TurnWaits.From(configuration).Channel.TotalSeconds;
     }
 
-    /// <summary>
-    /// Starts a new conversation: settles its handshake on record, then creates the
-    /// ConversationManagerActor and triggers presentation generation.
-    /// </summary>
-    /// <param name="request">Request containing the conversation ID to start</param>
+    /// <summary>Starts a new conversation: settles its handshake on record, then creates its manager, which has Morgana present herself.</summary>
+    /// <param name="request">The conversation id the channel minted and its handshake.</param>
     /// <returns>
     /// 202 Accepted once the conversation exists on record: a message sent right after is served.
     /// 400 Bad Request if the ID is not a 32-digit GUID or the channel metadata is incomplete.
@@ -88,9 +95,8 @@ public class MorganaController : ControllerBase
             });
         }
 
-        // Morgana refuses to host a conversation for a channel that does not announce
-        // its identity, its capability budget AND a delivery mode that matches a concrete
-        // transport registered in DI.
+        // Morgana refuses to host a conversation for a channel that does not announce its identity, its
+        // capabilities and a delivery mode that a registered transport serves: nothing could reach it.
         if (request.ChannelMetadata is null
             || request.ChannelMetadata.Coordinates is null
             || string.IsNullOrWhiteSpace(request.ChannelMetadata.Coordinates.ChannelName)
@@ -107,11 +113,9 @@ public class MorganaController : ControllerBase
             });
         }
 
-        // Webhook-specific addressing gate: the push-style transport cannot route outbound
-        // traffic without a reachable callback URL, so a handshake declaring deliveryMode=webhook
-        // without an absolute http(s) URL is rejected here.
-        // The scheme is required too: on Unix a bare path such as "/hook" parses as an absolute file URI,
-        // which nothing can POST to. Other transports (e.g: signalr) leave CallbackUrl null: no requirement applies to them.
+        // A webhook channel is reached only at its callback, so a handshake declaring deliveryMode=webhook without an
+        // absolute http(s) URL is refused here. The scheme is checked too: on Unix a bare path such as "/hook" parses
+        // as an absolute file URI, which nothing can POST to. Other transports leave CallbackUrl null.
         string normalisedDeliveryMode = request.ChannelMetadata.Coordinates.DeliveryMode.Trim().ToLowerInvariant();
         if (normalisedDeliveryMode == Constants.DeliveryModes.Webhook
              && !(Uri.TryCreate(request.ChannelMetadata.Coordinates.CallbackUrl, UriKind.Absolute, out Uri? callbackUri)
@@ -143,22 +147,23 @@ public class MorganaController : ControllerBase
         // learns it started: a message it sends straight away finds it, on this process or any other.
         await channelMetadataStore.RegisterChannelMetadataAsync(request.ConversationId, request.ChannelMetadata);
 
+        // The manager is the conversation's entry point, created under the name every later call reaches it by.
         IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
             Constants.Actors.Manager, request.ConversationId);
 
+        // The welcome is generated and sent over the channel while start has already answered.
         manager.Tell(new Records.CreateConversation(request.ConversationId));
 
         logger.LogInformation("Conversation creation queued: {RequestConversationId}", request.ConversationId);
 
+        // 202: the conversation exists on record, while its welcome is still on the way over the channel.
         return Accepted(new StartConversationResponse(
             ConversationId: request.ConversationId,
             Message: "Conversation creation started"));
     }
 
-    /// <summary>
-    /// Ends an existing conversation by stopping the ConversationManagerActor and its child actors.
-    /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation to end</param>
+    /// <summary>Ends a conversation by stopping its manager, which stops every actor beneath it.</summary>
+    /// <param name="conversationId">The conversation to end.</param>
     /// <returns>
     /// 200 OK on successful termination, also when no actor of the conversation is running.
     /// 404 Not Found if the conversation was never started.
@@ -183,17 +188,16 @@ public class MorganaController : ControllerBase
     }
 
     /// <summary>
-    /// Resumes an existing conversation for a client coming back to it: reports what it needs to
-    /// redraw its state. Read-only: the conversation's actors come back with its next message.
+    /// Reports to a client coming back to a conversation what it needs to redraw; read-only, since the actors come back with the next message.
+    /// An unknown id, from stale client storage or a wiped deployment, is a 404 on which Cauldron starts anew.
     /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation to resume</param>
+    /// <param name="conversationId">The conversation to resume.</param>
     /// <returns>
     /// 202 Accepted with conversation details and the active agent on record.
     /// 404 Not Found if the conversation was never started.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpPost("conversation/{conversationId}/resume")]
-    // An unknown id (stale client storage, wiped deployment) is a 404: Cauldron falls back to starting anew
     [TypeFilter<KnownConversationFilter>(Order = 1)]
     public async Task<IActionResult> ResumeConversationAsync([FromRoute] string conversationId)
     {
@@ -211,14 +215,13 @@ public class MorganaController : ControllerBase
         // The gauge as the client last saw it, so it is redrawn immediately on resume
         double? dustLevel = await dustLimitService.GetRemainingLevelAsync(conversationId);
 
-        // If the resumed conversation is already dust-dead, hand the client the
-        // canonical terminal message so that a page refresh can re-surface the
-        // lockout banner up front, instead of letting the user rediscover it by
-        // firing a message that is instantly rejected.
+        // A conversation with no dust left hands the client its lockout text, so a refreshed page shows the
+        // lockout up front instead of letting the user rediscover it with a message that is refused at once.
         string? dustExhaustedMessage = dustLevel is <= 0.0
             ? dustLimitingOptions.ErrorMessage
             : null;
 
+        // Everything a client redraws: the active agent's name, the gauge, the wait on a silent turn and the lockout.
         return Accepted(new ResumeConversationResponse(
             ConversationId: conversationId,
             Resumed: true,
@@ -228,17 +231,16 @@ public class MorganaController : ControllerBase
     }
 
     /// <summary>
-    /// Retrieves the complete conversation history for a given conversation ID.
-    /// Returns all messages chronologically ordered across all participating agents.
+    /// Returns the conversation's transcript across every participant, in chronological order.
+    /// A started conversation with nothing said yet is an empty transcript, never one that does not exist.
     /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation</param>
+    /// <param name="conversationId">The conversation whose transcript is read.</param>
     /// <returns>
     /// 200 OK with a ConversationHistoryResponse wrapping the MorganaChatMessage array, empty while nobody has spoken.
     /// 404 Not Found if the conversation was never started.
     /// 500 Internal Server Error on failure.
     /// </returns>
     [HttpGet("conversation/{conversationId}/history")]
-    // A started conversation with nothing said yet is an empty transcript, never one that does not exist
     [TypeFilter<KnownConversationFilter>(Order = 1)]
     public async Task<IActionResult> GetConversationHistoryAsync([FromRoute] string conversationId)
     {
@@ -258,61 +260,65 @@ public class MorganaController : ControllerBase
     }
 
     /// <summary>
-    /// Sends a user message to the conversation for processing by the actor pipeline.
-    /// Opens a morgana.turn OTel Activity and propagates its context into the actor system.
-    /// The response will be delivered asynchronously via SignalR.
+    /// Hands a user's message to the conversation's pipeline, whose answer reaches the user over the channel.
+    /// A message only continues a conversation that was started and opens none; the limits come after that check.
     /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation the message continues</param>
-    /// <param name="request">Request carrying the message text and its optional metadata</param>
+    /// <param name="conversationId">The conversation the message continues.</param>
+    /// <param name="request">The message's text.</param>
     /// <returns>
     /// 202 Accepted immediately after message is queued.
     /// 404 Not Found if the conversation was never started.
+    /// 429 Too Many Requests past the rate limit or once the dust budget is spent.
     /// 500 Internal Server Error on failure to queue message.
     /// </returns>
     [HttpPost("conversation/{conversationId}/message")]
-    // A message only continues a conversation that was started: it opens none
     [TypeFilter<KnownConversationFilter>(Order = 1)]
     [TypeFilter<ConversationLimitsFilter>(Order = 2)]
     public async Task<IActionResult> SendMessageAsync([FromRoute] string conversationId, [FromBody] SendMessageRequest request)
     {
         logger.LogInformation("Sending message to conversation {ConversationId}", conversationId);
 
-        // Capture the HTTP span context so the supervisor can link its turn span back to it.
-        // The turn span itself is created and managed by ConversationSupervisorActor,
-        // which keeps it open for the full pipeline duration (guard → classifier → agent).
-        ActivityContext httpContext = Activity.Current?.Context ?? default;
+        // The HTTP span's context, which the supervisor links its turn span to: the turn outlives this request,
+        // since the supervisor keeps its span open for the whole pipeline.
+        ActivityContext httpSpanContext = Activity.Current?.Context ?? default;
 
+        // A conversation whose actors stopped gets its manager back here, as does one that a restarted process never raised.
         IActorRef manager = await actorSystem.GetOrCreateActorAsync<ConversationManagerActor>(
             Constants.Actors.Manager, conversationId);
 
+        // The caller is the one the channel's token proved, never one the body claims.
         manager.Tell(new Records.UserMessage(
             conversationId,
             request.Text,
             DateTime.UtcNow,
-            httpContext,           // passed as ActivityLink to turn span in supervisor
+            httpSpanContext,
             HttpContext.Items[ChannelAuthenticationFilter.CallerIdItemKey] as string
         ));
 
         logger.LogInformation("Message sent to conversation {ConversationId}", conversationId);
 
+        // 202 before any answer exists: the pipeline runs on and its answer travels over the channel's transport.
         return Accepted(new
         {
             conversationId,
             message = "Message processing started",
-            note = "Response will be sent via SignalR"
+            note = "Response will be sent over the channel"
         });
     }
 
     /// <summary>
-    /// Health check endpoint for monitoring the conversation service and actor system status.
+    /// Answers the liveness probe from the actor system's state, without a token.
+    /// The probe is asked by infrastructure that holds no channel key, which is why it alone is anonymous.
     /// </summary>
-    /// <returns>503 KO with health failure information<br/>200 OK with health status information</returns>
+    /// <returns>200 OK while the actor system runs, 503 Service Unavailable once it has terminated.</returns>
     [HttpGet("health")]
     [AllowAnonymous]
     public IActionResult Health()
     {
+        // A terminated actor system serves no conversation, whatever the web host still answers.
         bool actorSystemAlive = !actorSystem.WhenTerminated.IsCompleted;
 
+        // The orchestrator wants a restart: no turn can run.
         if (!actorSystemAlive)
             return StatusCode(503, new
             {
@@ -322,6 +328,7 @@ public class MorganaController : ControllerBase
                 uptime = actorSystem.Uptime
             });
 
+        // Alive, with the uptime an operator reads to spot a restart loop.
         return Ok(new
         {
             status = "healthy",

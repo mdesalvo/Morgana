@@ -29,6 +29,7 @@ public sealed class KnownConversationFilter(
             return;
         }
 
+        // On record: whatever runs next, gate or action, may now name the conversation's database.
         await next();
     }
 }

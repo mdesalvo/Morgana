@@ -3,56 +3,47 @@ using Microsoft.AspNetCore.SignalR;
 namespace Morgana.Web.Hubs;
 
 /// <summary>
-/// SignalR hub for real-time bidirectional communication between clients and actor system.
-/// Implements group-based routing (one group per conversation) so clients join to receive messages.
-/// Provides connection lifecycle hooks to track client connections and disconnections.
+/// The SignalR hub through which a channel joins the group of a conversation, one group per conversation id.
+/// Morgana pushes to the group, never to a connection, so every client that joined a conversation receives its messages.
 /// </summary>
 public class MorganaHub : Hub
 {
+    /// <summary>Records connections and the groups they join and leave.</summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Initializes a new instance of the MorganaHub.
-    /// </summary>
-    /// <param name="logger">Logger instance for connection tracking and diagnostics</param>
+    /// <summary>Binds the hub to its logger.</summary>
+    /// <param name="logger">Records connections and groups.</param>
     public MorganaHub(ILogger logger)
     {
         this.logger = logger;
     }
 
     /// <summary>
-    /// Adds current connection to conversation group for message delivery.
-    /// Multiple clients can join same conversation; all receive group messages.
+    /// Adds the connection to the conversation's group, which a channel must do before it calls <c>POST api/morgana/conversation/start</c>.
+    /// The welcome is sent the moment the conversation starts and SignalR discards a send to an empty group without a trace;
+    /// the channel mints the id, so joining first is always possible.
     /// </summary>
-    /// <remarks>
-    /// <strong>Call this BEFORE <c>POST api/morgana/conversation/start</c>.</strong> The channel mints the
-    /// conversation id and a group is just a string key, so joining first is always possible; it is also
-    /// the only ordering that works: the presentation is sent the moment the conversation starts and
-    /// SignalR discards a group send with no members without a trace.
-    /// </remarks>
     public async Task JoinConversation(string conversationId)
     {
+        // The group is the conversation id, the key every push of this conversation is addressed to.
         await Groups.AddToGroupAsync(Context.ConnectionId, conversationId);
 
         logger.LogInformation("Client {ContextConnectionId} joined conversation {ConversationId}", Context.ConnectionId, conversationId);
     }
 
     /// <summary>
-    /// Removes current connection from conversation group.
-    /// Client stops receiving messages for this conversation.
-    /// Useful for navigation without full disconnect (groups auto-cleanup on disconnect).
+    /// Removes the connection from the conversation's group, as Cauldron does when it moves to another conversation on the same connection.
+    /// A connection that closes leaves its groups by itself.
     /// </summary>
     public async Task LeaveConversation(string conversationId)
     {
+        // The connection stays open for the conversation the channel moves to, but no longer hears this one.
         await Groups.RemoveFromGroupAsync(Context.ConnectionId, conversationId);
 
         logger.LogInformation("Client {ContextConnectionId} left conversation {ConversationId}", Context.ConnectionId, conversationId);
     }
 
-    /// <summary>
-    /// Lifecycle hook called when a client establishes a SignalR connection.
-    /// Logs connection for diagnostics. Client can then invoke hub methods (JoinConversation, LeaveConversation).
-    /// </summary>
+    /// <summary>Records a new connection, which receives nothing until it joins a conversation's group.</summary>
     public override async Task OnConnectedAsync()
     {
         logger.LogInformation("Client connected: {ContextConnectionId}", Context.ConnectionId);
@@ -60,9 +51,8 @@ public class MorganaHub : Hub
     }
 
     /// <summary>
-    /// Lifecycle hook called when a client disconnects from the SignalR hub (graceful or unexpected).
-    /// SignalR automatically removes the connection from all groups; no manual cleanup needed.
-    /// Logs disconnection for diagnostics; exception param indicates unexpected disconnect (network failure, timeout, etc.).
+    /// Records a closed connection, which SignalR has already removed from every group.
+    /// A message pushed meanwhile is lost to it, which the client repairs from the history when it comes back.
     /// </summary>
     public override async Task OnDisconnectedAsync(Exception? exception)
     {

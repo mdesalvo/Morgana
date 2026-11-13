@@ -9,22 +9,13 @@ using Morgana.Web.Filters;
 namespace Morgana.Web.Extensions;
 
 /// <summary>
-/// Publishes this installation's agents over A2A: the hosted agents before the container is built,
-/// the endpoints and cards after.
+/// Publishes this installation's agents over A2A: the hosted agents before the container is built, the endpoints and cards after.
+/// The chain is Microsoft's: Morgana contributes the hosted agent and its session store, which reconcile A2A's one long-lived agent
+/// per name with Morgana's per-conversation actors.
 /// </summary>
-/// <remarks>
-/// The chain is Microsoft's; Morgana contributes the hosted agent and its session store, both
-/// reconciling one mismatch: A2A expects a long-lived agent per name, Morgana's are per-conversation
-/// actors. The halves straddle <c>builder.Build()</c>, which is why they are named at all.
-/// </remarks>
 public static class A2APublicationExtensions
 {
-    /// <summary>
-    /// Registers one hosted agent and A2A server per published intent.
-    /// </summary>
-    /// <remarks>
-    /// An empty list registers nothing, which is what peer consultation switched off passes.
-    /// </remarks>
+    /// <summary>Registers one hosted agent and A2A server per published intent; an empty list, which consultation switched off passes, registers nothing.</summary>
     /// <param name="builder">Host builder, before its container is built.</param>
     /// <param name="publishedIntents">Agents to publish, already decided by the caller.</param>
     /// <returns>The same builder, for chaining.</returns>
@@ -46,11 +37,12 @@ public static class A2APublicationExtensions
         // because an issuer spans every conversation it opens.
         builder.Services.AddSingleton<IPeerAdmissionService, SQLitePeerAdmissionService>();
 
+        // Each published intent gets its own agent, session store and server, all under the intent's name.
         foreach (string publishedIntent in publishedIntents)
         {
             builder.Services
                 // One hosted agent per intent: it resolves the very actor the router would have reached and asks it a consultation.
-                // Registered by intent name because that is the name an inboundA2A request arrives under.
+                // Registered by intent name because that is the name an inbound A2A request arrives under.
                 .AddAIAgent(
                     publishedIntent,
                     (serviceProvider, agentName) => new MorganaHostedAgent(
@@ -68,7 +60,7 @@ public static class A2APublicationExtensions
                         serviceProvider.GetRequiredService<ILogger>()))
 
                 // The session store is where a request's A2A context id becomes a Morgana conversation.
-                // Not isolation-key scoped: the context id IS the partition here and Morgana's own
+                // Not isolation-key scoped: the context id is the partition here and Morgana's own
                 // per-conversation database already isolates everything the conversation owns.
                 .WithSessionStore(
                     (serviceProvider, agentName) => new MorganaHostedAgentSessionStore(
@@ -92,12 +84,9 @@ public static class A2APublicationExtensions
     }
 
     /// <summary>
-    /// Maps one JSON-RPC endpoint and one well-known agent card per published agent and arranges for
-    /// the cards to learn the address Kestrel ends up binding.
+    /// Maps one JSON-RPC endpoint and one well-known agent card per published agent, the cards learning the address Kestrel ends up binding.
+    /// It runs on the built application, since it resolves the directory that projects the cards.
     /// </summary>
-    /// <remarks>
-    /// Runs on the built application, since it resolves the directory that projects the cards.
-    /// </remarks>
     /// <param name="app">The built application, before it starts serving.</param>
     /// <param name="publishedIntents">The same agents handed to <see cref="AddMorganaA2A"/>.</param>
     public static async Task MapMorganaA2AAsync(this WebApplication app, IReadOnlyCollection<string> publishedIntents)

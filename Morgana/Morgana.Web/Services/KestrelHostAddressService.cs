@@ -5,21 +5,10 @@ using Morgana.AI.Interfaces;
 namespace Morgana.Web.Services;
 
 /// <summary>
-/// <see cref="IHostAddressService"/> reading the address Kestrel actually bound, so nothing has to
-/// declare the application's own URL. Answers <c>null</c> until the server has bound.
+/// Reports where this installation is reached: the declared <c>Morgana:AgentToAgent:PublicUrl</c>, otherwise the address Kestrel bound; null before it binds.
+/// A wildcard binding becomes loopback on the same port, since an agent calling an agent of the same instance never leaves the machine,
+/// while a deployment behind an ingress or a published container port declares its public address, which the binding cannot know.
 /// </summary>
-/// <remarks>
-/// <para>A wildcard binding (<c>http://+:8080</c>, <c>0.0.0.0</c>, <c>[::]</c>) names no dialable host
-/// and is answered with loopback on the same port — right for what this address serves: an agent
-/// calling an agent of the same instance never leaves the machine.</para>
-///
-/// <para>An instance reached through something that terminates the connection in front of it — an
-/// ingress, a reverse proxy, a published container port — is the one case the binding cannot answer
-/// for: what it bound is not where a peer reaches it and a card naming the binding is refused by
-/// every consumer, which requires an advertised interface to be the origin the card was fetched from.
-/// Such a deployment declares that address as <c>Morgana:AgentToAgent:PublicUrl</c> and it is
-/// preferred here over anything the server reports.</para>
-/// </remarks>
 public class KestrelHostAddressService : IHostAddressService
 {
     /// <summary>Where a peer reaches this installation, when something in front of it terminates the connection.</summary>
@@ -34,13 +23,13 @@ public class KestrelHostAddressService : IHostAddressService
     /// <summary>Read for the address a deployment declares itself reachable at from outside.</summary>
     private readonly IConfiguration configuration;
 
-    /// <summary>Logger for address-resolution diagnostics.</summary>
+    /// <summary>Records a wildcard binding answered with loopback.</summary>
     private readonly ILogger<KestrelHostAddressService> logger;
 
     /// <summary>Builds the service over the server whose bindings it reports.</summary>
     /// <param name="server">The running web server.</param>
     /// <param name="configuration">Application configuration, read for a declared public address.</param>
-    /// <param name="logger">Logger for address-resolution diagnostics.</param>
+    /// <param name="logger">Records a wildcard binding answered with loopback.</param>
     public KestrelHostAddressService(IServer server, IConfiguration configuration, ILogger<KestrelHostAddressService> logger)
     {
         this.server = server;
@@ -71,26 +60,28 @@ public class KestrelHostAddressService : IHostAddressService
         string boundAddress = boundAddresses.FirstOrDefault(address => address.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
                               ?? boundAddresses.First();
 
+        // What the server reported, made callable: a wildcard host is no address a caller can dial.
         return ToDialableAddress(boundAddress);
     }
 
-    /// <summary>
-    /// Turns a bound address into one that can actually be called, replacing a wildcard host with
-    /// the loopback interface and dropping any trailing separator.
-    /// </summary>
+    /// <summary>Turns a bound address into one that can be called, replacing a wildcard host with loopback and dropping any trailing separator.</summary>
     /// <param name="boundAddress">Address as the server reports it.</param>
     private string ToDialableAddress(string boundAddress)
     {
+        // The agent path is appended after a single separator, so the base carries none of its own.
         string trimmedAddress = boundAddress.TrimEnd('/');
 
+        // A named host is already what a caller dials, as is anything that does not parse as a URI.
         if (!Uri.TryCreate(trimmedAddress, UriKind.Absolute, out Uri? parsedAddress)
              || !WildcardHosts.Contains(parsedAddress.Host, StringComparer.OrdinalIgnoreCase))
             return trimmedAddress;
 
+        // The same scheme and port on loopback, where the wildcard binding also listens.
         string loopbackAddress = $"{parsedAddress.Scheme}://127.0.0.1:{parsedAddress.Port}";
 
         logger.LogInformation("Server bound to the wildcard address {BoundAddress}; agents will reach each other over {LoopbackAddress}", trimmedAddress, loopbackAddress);
 
+        // The address the cards advertise and the ring calls.
         return loopbackAddress;
     }
 }

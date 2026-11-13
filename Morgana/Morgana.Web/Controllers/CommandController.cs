@@ -5,8 +5,10 @@ using Morgana.Web.Filters;
 
 namespace Morgana.Web.Controllers;
 
-/// <summary>REST API for the commands this installation publishes: their catalogue and their execution.</summary>
-// A command works on the conversation's record with its own services: nothing here reaches the actor system
+/// <summary>
+/// REST API for the commands this installation publishes: their catalogue and their execution.
+/// A command works on the conversation's record with its own services, so nothing here reaches the actor system.
+/// </summary>
 [ApiController]
 [Route("api/morgana")]
 [TypeFilter<ChannelAuthenticationFilter>]
@@ -24,10 +26,14 @@ public class CommandController(
         return Ok(new CommandCatalogResponse(commandRegistryService.GetCatalog()));
     }
 
-    /// <summary>Runs a published command on a conversation; its outcome reaches the user over the channel.</summary>
-    /// <param name="conversationId">Unique identifier of the conversation the command acts on</param>
-    /// <param name="request">Request naming the command, its options and whether the user confirmed it</param>
-    /// <param name="cancellationToken">The request's own abort: a channel that stops waiting on a command stops the command too</param>
+    /// <summary>
+    /// Runs a published command on a conversation; its outcome reaches the user over the channel.
+    /// The command is admitted before the limits, so a request the channel got wrong never costs the user,
+    /// then meets the limits a message meets, since a command fired by the user may spend tokens.
+    /// </summary>
+    /// <param name="conversationId">The conversation the command acts on.</param>
+    /// <param name="request">The command's name, its options and whether the user confirmed it.</param>
+    /// <param name="cancellationToken">The request's own abort: a channel that stops waiting on a command stops the command too.</param>
     /// <returns>
     /// 202 Accepted once the command has run.
     /// 400 Bad Request on an unknown name, options the command does not take, a missing confirmation or no agent to act on.
@@ -37,9 +43,7 @@ public class CommandController(
     /// </returns>
     [HttpPost("conversation/{conversationId}/command")]
     [TypeFilter<KnownConversationFilter>(Order = 1)]
-    // Admitted before the limits, so a request the channel got wrong never costs the user
     [TypeFilter<CommandAdmissionFilter>(Order = 2)]
-    // A command fired by the user may spend tokens: it meets the limits a message meets
     [TypeFilter<ConversationLimitsFilter>(Order = 3)]
     public async Task<IActionResult> ExecuteCommandAsync(
         [FromRoute] string conversationId,
@@ -57,6 +61,7 @@ public class CommandController(
         // the form would have sent it: the values a command reads never depend on who called it
         await command.ExecuteAsync(conversationId, request.InvocationId, command.Descriptor.ApplyDefaults(request.Options), cancellationToken);
 
+        // 202 once the command has run: its outcome already went to the user as the command's finished frame.
         return Accepted(new { conversationId, command = command.Descriptor.Name });
     }
 }

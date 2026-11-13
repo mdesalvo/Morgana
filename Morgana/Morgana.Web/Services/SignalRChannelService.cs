@@ -6,45 +6,28 @@ using Morgana.Web.Hubs;
 namespace Morgana.Web.Services;
 
 /// <summary>
-/// SignalR implementation of IChannelService for Cauldron web UI with full expressive capabilities
-/// (rich cards, quick replies, streaming, markdown). Routes messages to SignalR groups by conversation ID
-/// via "ReceiveMessage" and "ReceiveStreamChunk" events, enabling multi-user scenarios (monitoring, collaboration).
+/// The transport of deliveryMode <c>signalr</c>: pushes a conversation's messages and stream chunks to its group on <see cref="MorganaHub"/>.
+/// A push to a group nobody joined is lost without a trace, which is why a channel joins before it starts the conversation.
 /// </summary>
 public class SignalRChannelService : IChannelService
 {
-    /// <summary>
-    /// SignalR hub context used to push messages to connected clients. Messages are routed
-    /// to groups named after the conversation id, so every client that joined that group
-    /// (via <c>MorganaHub.JoinConversation</c>) receives the payload through the
-    /// "ReceiveMessage" / "ReceiveStreamChunk" events.
-    /// </summary>
+    /// <summary>Pushes to the group named after the conversation id, which every client of that conversation joined.</summary>
     private readonly IHubContext<MorganaHub> hubContext;
 
-    /// <summary>
-    /// Logger for diagnostic output. Emits informational entries on successful sends and
-    /// error entries when the underlying SignalR dispatch fails.
-    /// </summary>
+    /// <summary>Records every message pushed and every chunk that failed.</summary>
     private readonly ILogger logger;
 
-    /// <summary>
-    /// Initializes a new instance of the SignalRChannelService.
-    /// </summary>
-    /// <param name="hubContext">SignalR hub context for sending messages to clients</param>
-    /// <param name="logger">Logger instance for message delivery diagnostics</param>
+    /// <summary>Binds the transport to the hub it pushes through.</summary>
+    /// <param name="hubContext">The hub's context, which reaches its groups from outside a hub call.</param>
+    /// <param name="logger">Records the pushes.</param>
     public SignalRChannelService(IHubContext<MorganaHub> hubContext, ILogger logger)
     {
         this.hubContext = hubContext;
         this.logger = logger;
     }
 
-    /// <summary>
-    /// Publishes a <see cref="ChannelMessage"/> to the SignalR group matching
-    /// <see cref="ChannelMessage.ConversationId"/> via the "ReceiveMessage" event.
-    /// The DTO is forwarded as-is and serialized by SignalR's JSON pipeline; the wire
-    /// format stays compatible with Cauldron's client-side <c>SignalRMessage</c> schema.
-    /// </summary>
-    /// <param name="channelMessage">The fully-formed channel message to deliver.</param>
-    /// <returns>Task representing the async send operation</returns>
+    /// <summary>Pushes the message whole, as the <c>ReceiveMessage</c> event, to the conversation's group.</summary>
+    /// <param name="channelMessage">The message, already fitted to the channel.</param>
     public async Task SendMessageAsync(ChannelMessage channelMessage)
     {
         logger.LogInformation(
@@ -59,38 +42,22 @@ public class SignalRChannelService : IChannelService
     }
 
     /// <summary>
-    /// Sends a streaming chunk to a conversation group via SignalR for progressive response rendering.
-    /// Optimized for high-frequency streaming with minimal overhead (no logging, fire-and-forget).
+    /// Pushes a piece of an answer as it streams, the bare text as the <c>ReceiveStreamChunk</c> event, to the conversation's group.
+    /// A successful chunk is not logged, since a turn sends hundreds; the whole answer follows as a <c>ReceiveMessage</c>.
     /// </summary>
-    /// <param name="conversationId">Unique identifier of the conversation (SignalR group name)</param>
-    /// <param name="chunkText">Partial response text to append to the current message</param>
-    /// <returns>Task representing the async send operation</returns>
-    /// <remarks>
-    /// <para><strong>Streaming Protocol:</strong></para>
-    /// <para>Sends chunks via "ReceiveStreamChunk" SignalR event with minimal payload:</para>
-    /// <code>
-    /// {
-    ///   "text": "chunk content here"
-    /// }
-    /// </code>
-    /// <para><strong>No Logging:</strong></para>
-    /// <para>Intentionally omits logging to avoid spamming logs with hundreds of partial text fragments.
-    /// Only errors are logged if chunk delivery fails.</para>
-    /// <para><strong>Client Expectations:</strong></para>
-    /// <para>Clients should buffer chunks and append them to the current message being displayed.
-    /// The final complete message arrives via the standard "ReceiveMessage" event with full metadata.</para>
-    /// </remarks>
+    /// <param name="conversationId">The conversation, which names the group.</param>
+    /// <param name="chunkText">The text to append to the answer being drawn.</param>
     public async Task SendStreamChunkAsync(string conversationId, string chunkText)
     {
         try
         {
-            // Send chunk with minimal payload (just the text)
+            // The text alone: the client appends it to the answer it is drawing, which the final message then replaces.
             await hubContext.Clients.Group(conversationId)
                 .SendAsync("ReceiveStreamChunk", chunkText);
         }
         catch (Exception ex)
         {
-            // Log errors but don't propagate - continue streaming
+            // A lost chunk costs only the progressive reveal, so the turn streams on and the final message still arrives.
             logger.LogError(ex, "Failed to send stream chunk to conversation {ConversationId}", conversationId);
         }
     }

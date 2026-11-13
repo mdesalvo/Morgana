@@ -51,8 +51,10 @@ public sealed class ConversationLimitsFilter(
         {
             logger.LogWarning("Dust budget exhausted for conversation {ConversationId}", conversationId);
 
+            // The user reads the lockout over the channel, as for the rate limit, while the 429 below is for the client.
             await channelService.SendMessageAsync(RefusalOf(context, conversationId, dustLimitingOptions.Value.ErrorMessage, ChannelMessageTypes.Error, ChannelErrorReasons.DustBudgetExhausted));
 
+            // No Retry-After: a spent budget never comes back and the user has to start a new conversation.
             context.Result = new ObjectResult(new
             {
                 error = "Dust budget exhausted",
@@ -61,13 +63,14 @@ public sealed class ConversationLimitsFilter(
             return;
         }
 
+        // Within both limits: the call may start work on the conversation.
         await next();
     }
 
     /// <summary>
-    /// The message telling the user why the call was refused. A refused message is a notice in the conversation
-    /// of <paramref name="messageType"/>; a refused command is that command's outcome, delivered as its finished
-    /// frame, since a command leaves no line in the conversation.
+    /// The message telling the user why the call was refused.
+    /// A refused message is a notice of <paramref name="messageType"/> in the conversation, while a refused command is
+    /// that command's outcome, delivered as its finished frame, since a command leaves no line in the conversation.
     /// </summary>
     private ChannelMessage RefusalOf(ActionExecutingContext context, string conversationId, string text, string messageType, string errorReason)
     {
@@ -76,6 +79,7 @@ public sealed class ConversationLimitsFilter(
             ? new CommandProgress(commandRequest.Name, "refused", 0, 1, Finished: true, commandRequest.InvocationId)
             : null;
 
+        // From Morgana, since a limit is hers to enforce and to explain.
         return new ChannelMessage
         {
             ConversationId = conversationId,
