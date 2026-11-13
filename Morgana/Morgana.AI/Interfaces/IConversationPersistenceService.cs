@@ -1,6 +1,5 @@
 using System.Text.Json;
 using Microsoft.Agents.AI;
-using Morgana.AI.Providers;
 using Morgana.Contracts;
 
 namespace Morgana.AI.Interfaces;

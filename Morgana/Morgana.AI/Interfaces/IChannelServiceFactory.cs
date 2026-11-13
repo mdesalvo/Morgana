@@ -1,5 +1,3 @@
-using Morgana.Contracts;
-
 namespace Morgana.AI.Interfaces;
 
 /// <summary>

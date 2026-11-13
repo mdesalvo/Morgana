@@ -8,7 +8,6 @@ using Microsoft.Agents.AI.A2A;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Morgana.AI.Abstractions;
 using Morgana.AI.Attributes;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
