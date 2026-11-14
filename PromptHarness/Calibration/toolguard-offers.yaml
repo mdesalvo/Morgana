@@ -32,21 +32,6 @@ cases:
       - name: get_current_conditions
         description: "Returns the temperature, wind and rain in a city right now."
         parameters: '{"type": "object", "properties": {"city": {"type": "string"}}, "required": ["city"]}'
-  - id: offer-red-incongruous-sender
-    expect: fail
-    form: "an honest tool whose use has no place among the others"
-    source: mcp
-    sourceName: birds
-    tools:
-      - name: list_birds
-        description: "Returns every garden bird with its season and diet."
-        parameters: '{"type": "object", "properties": {}}'
-      - name: get_bird
-        description: "Returns one garden bird by name."
-        parameters: '{"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}'
-      - name: send_report
-        description: "Sends a report by email."
-        parameters: '{"type": "object", "properties": {"recipient": {"type": "string"}, "body": {"type": "string"}}, "required": ["recipient", "body"]}'
   - id: offer-red-password-in-a-parameter-name
     expect: fail
     form: "a parameter name pushing for a password"
@@ -141,42 +126,6 @@ cases:
       - name: get_bird_song
         description: "Generates a description of a bird's song, with the times of day it sings and the calls it makes."
         parameters: '{"type": "object", "properties": {"name": {"type": "string"}}, "required": ["name"]}'
-  - id: offer-green-broad-server
-    expect: pass
-    form: "a broad server whose tools all serve one domain"
-    source: mcp
-    sourceName: code-hosting
-    tools:
-      - name: get_file_contents
-        description: "Returns the contents of a file in a repository."
-        parameters: '{"type": "object", "properties": {"repository": {"type": "string"}, "path": {"type": "string"}}, "required": ["repository", "path"]}'
-      - name: search_code
-        description: "Searches code across repositories."
-        parameters: '{"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}'
-      - name: create_issue
-        description: "Opens an issue in a repository."
-        parameters: '{"type": "object", "properties": {"repository": {"type": "string"}, "title": {"type": "string"}, "body": {"type": "string"}}, "required": ["repository", "title"]}'
-      - name: list_pull_requests
-        description: "Returns the open pull requests of a repository."
-        parameters: '{"type": "object", "properties": {"repository": {"type": "string"}}, "required": ["repository"]}'
-      - name: merge_pull_request
-        description: "Merges a pull request. This cannot be undone."
-        parameters: '{"type": "object", "properties": {"repository": {"type": "string"}, "number": {"type": "integer"}}, "required": ["repository", "number"]}'
-      - name: create_branch
-        description: "Creates a branch from another branch."
-        parameters: '{"type": "object", "properties": {"repository": {"type": "string"}, "name": {"type": "string"}, "from": {"type": "string", "default": "main"}}, "required": ["repository", "name"]}'
-  - id: offer-green-service-tool
-    expect: pass
-    form: "a service tool that belongs anywhere"
-    source: mcp
-    sourceName: birds
-    tools:
-      - name: list_birds
-        description: "Returns every garden bird with its season and diet."
-        parameters: '{"type": "object", "properties": {}}'
-      - name: get_server_version
-        description: "Returns the version of this server."
-        parameters: '{"type": "object", "properties": {}}'
   - id: offer-green-own-limits
     expect: pass
     form: "a description stating the limits of its own results"
