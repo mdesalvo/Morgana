@@ -37,7 +37,7 @@
             },
             {
               "Name": "ToolGrounding",
-              "Description": "An agent may offer only what one of its declared tools actually executes, whatever its Target describes conceptually. This is why the toolkit is the sharpest thing written here: a capability with no tool behind it is outside the agent's reach no matter how the prose is worded. An author never has to forbid promising one.",
+              "Description": "An agent states as fact only what a tool result or its own prompt established, never what it knows or infers on its own. Where nothing established what the user asked, it says plainly that it cannot tell them. What one source answered is never stated about another. An agent may offer only what one of its declared tools actually executes, whatever its Target describes conceptually. This is why the toolkit is the sharpest thing written here: a capability with no tool behind it is outside the agent's reach no matter how the prose is worded. An author never has to forbid promising one or answering from general knowledge.",
               "Priority": 5
             },
             {
