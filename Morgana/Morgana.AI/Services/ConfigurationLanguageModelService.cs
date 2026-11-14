@@ -2,6 +2,7 @@ using System.Globalization;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Morgana.AI.Abstractions;
 using Morgana.AI.ChatClients;
 using Morgana.AI.Interfaces;
@@ -25,6 +26,9 @@ public class ConfigurationLanguageModelService : ILanguageModelService
 
     /// <summary>Instruments each tier's client with the <c>gen_ai.*</c> telemetry; a host that passes none serves its tiers without it.</summary>
     private readonly ILoggerFactory? loggerFactory;
+
+    /// <summary>Records why a framework call failed, which the error answer returned in its place never says.</summary>
+    private readonly ILogger logger;
 
     /// <summary>
     /// Charges the framework's own calls, wired after construction by <see cref="EnableDustAccounting"/>; null on a host that never wires it.
@@ -63,6 +67,9 @@ public class ConfigurationLanguageModelService : ILanguageModelService
     {
         this.configuration = configuration;
         this.loggerFactory = loggerFactory;
+
+        // A host that passes no logger factory still gets its failed calls answered, only without the record of why.
+        logger = loggerFactory?.CreateLogger<ConfigurationLanguageModelService>() ?? NullLogger<ConfigurationLanguageModelService>.Instance;
 
         // The error answers are ready before the first call to a model.
         morganaPrompt = promptResolverService.ResolveAsync(Constants.Morgana).GetAwaiter().GetResult();
@@ -373,8 +380,10 @@ public class ConfigurationLanguageModelService : ILanguageModelService
             // and the classifier, the presenter and the channel adapter fall back on their own.
             throw;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            logger.LogError(ex, "ConfigurationLanguageModelService: the {Tier} tier failed a framework call for conversation {ConversationId}", FrameworkTier, conversationId);
+
             // Any other failure answers with the error that the Morgana prompt words for a model that could not be reached.
             List<Records.ErrorAnswer> errorAnswers = morganaPrompt.GetAdditionalProperty<List<Records.ErrorAnswer>>(Constants.PromptProperties.ErrorAnswers);
             return errorAnswers.FirstOrDefault(errorAnswer => string.Equals(errorAnswer.Name, Constants.ErrorAnswers.LLMServiceError, StringComparison.OrdinalIgnoreCase))!.Content;
