@@ -4,7 +4,7 @@
       "Name": "almanac",
       "Description": "questions about the gardening calendar (when to prune a plant), about the plants the nursery sells (their habit, flowering season and care), about the weather a garden faces this week (frost, soil temperature), about the seeds the seed merchant sells and about the plants two nurseries nearby keep: hedging plants at the Hedgerow nursery and fruit trees at the Quince orchard",
       "Label": "📅 Almanac",
-      "DefaultValue": "When should I prune my roses?"
+      "DefaultValue": "What can you tell me from the almanac?"
     }
   ],
   "Agents": [
