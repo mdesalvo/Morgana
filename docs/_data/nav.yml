@@ -2,6 +2,7 @@
   pages:
     - { title: Meet Morgana, url: / }
     - { title: Summon me in five minutes, url: /try/ }
+    - { title: My words, url: /glossary/ }
 - group: My six pillars
   pages:
     - { title: "🎭 Actors", url: /actors/ }
@@ -21,4 +22,3 @@
   pages:
     - { title: "⚗️ Alembic", url: /alembic/ }
     - { title: "🧪 PromptHarness", url: /prompt-harness/ }
-    - { title: My words, url: /glossary/ }

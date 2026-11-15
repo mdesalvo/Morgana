@@ -7,9 +7,9 @@ lede: "I am Morgana, a good witch who answers your customers for you. In this ma
 <div class="hero">
   <div class="frontispiece">
     <img src="{{ '/assets/images/brand/banner.jpg' | relative_url }}" alt="Morgana, the good witch, before her cauldron">
-    <div class="aura"><span class="glow"></span><span class="ring"></span><span class="ring two"></span><img class="face" src="{{ '/assets/images/brand/morgana.jpg' | relative_url }}" alt=""><span class="sparkle s1"></span><span class="sparkle s2"></span><span class="sparkle s3"></span><span class="sparkle s4"></span><span class="sparkle s5"></span><span class="sparkle s6"></span></div>
+    <div class="aura"><span class="glow"></span><span class="ring"></span><span class="ring two"></span><picture class="face"><source srcset="{{ '/assets/images/brand/morgana.jpg' | relative_url }}" media="(prefers-reduced-motion: reduce)"><img src="{{ '/assets/images/brand/morgana-animated.webp' | relative_url }}" alt=""></picture><span class="sparkle s1"></span><span class="sparkle s2"></span><span class="sparkle s3"></span><span class="sparkle s4"></span><span class="sparkle s5"></span><span class="sparkle s6"></span></div>
   </div>
-  <h1>Welcome to my <em>grimoire</em></h1>
+  <h1>Welcome to my <em>spellbook</em></h1>
   <p>I am Morgana. I speak to your customers through a coven of specialised witches. You write what each of them knows, in plain words. I take care of all the rest of the magic.</p>
   <div class="btns">
     <a class="btn primary" href="{{ '/try/' | relative_url }}">Summon me in five minutes</a>
@@ -18,13 +18,11 @@ lede: "I am Morgana, a good witch who answers your customers for you. In this ma
   </div>
 </div>
 
-<div class="motto">A magical witch assistant equipped with an enchanted grimoire powered by AI, yet shaped by you: <strong>your agents, your prompts, your tools</strong>…woven into her spells.</div>
-
 ## Who I am
 
 I am a **good witch**. I am on the side of whoever is talking to me: I am kind, I say plainly what I can and cannot do and I never pretend.
 
-My magic comes from AI. My grimoire, though, is **written by you, for you**. Each of its tomes is one of your agents: a few paragraphs about one corner of your world and the spells it may cast on your systems. I bring the craft. You bring the knowledge.
+My magic comes from AI. My spellbook, though, is **written by you, for you**. Each of its tomes is one of your agents: a few paragraphs about one corner of your world and the spells it may cast on your systems. I bring the craft and I weave **your agents, your prompts, your tools** into my spells. You bring the knowledge.
 
 Every witch of my coven speaks with my voice. In the little shop I carry with me, the witch who keeps the accounts is formal and exact with money, while the one who explains the contracts is patient and reassuring. Both of them are me.
 
@@ -55,7 +53,7 @@ I never travel alone. Each of my companions carries a name from my craft.
 <a class="card" href="{{ '/prompt-harness/' | relative_url }}"><span class="kind">Testing</span><h3>PromptHarness</h3><p>My proving ground, where I test that my spells still work as written.</p></a>
 </div>
 
-## How to read my grimoire
+## How to read my spellbook
 
 It has three parts. Open the one you need.
 

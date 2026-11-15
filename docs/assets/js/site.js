@@ -1,19 +1,36 @@
 (function () {
-  // The brew behind the page: a handful of bubbles with random size, place, pace and sway, fewer on a phone.
+  // The brew behind the page: a few wisps of smoke and a scatter of glowing motes, each with its own place, size,
+  // pace and drift so nothing moves in step. Fewer on a phone, where the brew sits behind the text.
   var brew = document.querySelector('.brew');
   if (brew && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-    var count = window.innerWidth < 640 ? 7 : 14;
-    for (var n = 0; n < count; n++) {
-      var b = document.createElement('i');
-      var size = 8 + Math.random() * 26;
-      b.style.width = b.style.height = size + 'px';
-      b.style.left = (Math.random() * 100) + '%';
-      b.style.animationDuration = (16 + Math.random() * 22) + 's';
-      b.style.animationDelay = (-Math.random() * 30) + 's';
-      b.style.setProperty('--sway', ((Math.random() - .5) * 80) + 'px');
-      if (Math.random() < .3) { b.className = 'pink'; }
-      brew.appendChild(b);
+    var phone = window.innerWidth < 640;
+    var light = matchMedia('(prefers-color-scheme: light)').matches;
+    function scatter(kind, count, make) {
+      for (var n = 0; n < count; n++) {
+        var el = document.createElement('i');
+        el.className = kind + (Math.random() < .35 ? ' pink' : '');
+        el.style.left = (Math.random() * 100) + '%';
+        make(el);
+        brew.appendChild(el);
+      }
     }
+    scatter('smoke', phone ? 3 : 6, function (el) {
+      var size = 28 + Math.random() * 22;
+      el.style.width = size + 'vmax';
+      el.style.height = (size * 1.3) + 'vmax';
+      el.style.marginLeft = (-size / 2) + 'vmax';
+      el.style.animationDuration = (40 + Math.random() * 30) + 's';
+      el.style.animationDelay = (-Math.random() * 60) + 's';
+      el.style.setProperty('--drift', ((Math.random() - .5) * 24) + 'vw');
+      el.style.setProperty('--peak', String((light ? .18 : .32) + Math.random() * .12));
+    });
+    scatter('mote', phone ? 8 : 18, function (el) {
+      var size = 2 + Math.random() * 3;
+      el.style.width = el.style.height = size + 'px';
+      el.style.animationDuration = (18 + Math.random() * 20) + 's, ' + (2 + Math.random() * 3) + 's';
+      el.style.animationDelay = (-Math.random() * 30) + 's, ' + (-Math.random() * 4) + 's';
+      el.style.setProperty('--drift', ((Math.random() - .5) * 120) + 'px');
+    });
   }
 
   // The menu: a drawer below 1000px, closed by the shade, by Escape or by choosing a page.

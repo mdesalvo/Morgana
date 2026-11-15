@@ -1,13 +1,13 @@
 ---
 title: My words
 permalink: /glossary/
-eyebrow: My companions
+eyebrow: Welcome
 lede: I speak in the words of my craft, but every one of them has a plain technical name. Here they are side by side.
 ---
 
 | My word | The technical name | What it is |
 |---|---|---|
-| **My grimoire** | The Morgana framework | Everything I am, plus the tomes you write |
+| **My spellbook** | The Morgana framework | Everything I am, plus the tomes you write |
 | **A witch** of my **coven** | An agent | A specialist in one subject of your world. [Agents]({{ '/agents/' | relative_url }}) |
 | **A subject** | An intent | Something your customers ask about. Each has one witch |
 | **A tome** | The agent's prompt in `agents.json` | Her five chapters of words. [Prompts]({{ '/prompts/' | relative_url }}) |

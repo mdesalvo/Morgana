@@ -141,7 +141,7 @@ a:hover { color: var(--pink); }
 /* ── Reading column ────────────────────────────────────── */
 
 main {
-  max-width: 820px; margin: 0 auto;
+  max-width: 1240px; margin: 0 auto;
   padding-block: 28px 40px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -154,7 +154,7 @@ main {
   margin: 6px 0 10px; text-wrap: balance;
 }
 .tagline { margin: 0 0 14px; font: italic 18px/1.45 var(--display); color: var(--violet); }
-.lede { margin: 0; font-size: 18.5px; line-height: 1.6; color: var(--soft); max-width: 62ch; }
+.lede { margin: 0; font-size: 18.5px; line-height: 1.6; color: var(--soft); max-width: 90ch; }
 .banner { display: block; width: 100%; border-radius: 10px; margin: 0 0 30px; box-shadow: var(--shadow); }
 
 /* ── Prose ─────────────────────────────────────────────── */
@@ -163,7 +163,7 @@ main {
 .prose h2 { font: 400 clamp(26px, 5.6vw, 32px)/1.2 var(--display); margin: 52px 0 12px; text-wrap: balance; }
 .prose h3 { font-size: 18px; line-height: 1.35; margin: 30px 0 8px; }
 .prose p, .prose ul, .prose ol { margin: 0 0 16px; }
-.prose p, .prose li { max-width: 68ch; }
+.prose p, .prose li { max-width: 100ch; }
 .prose ul, .prose ol { padding-left: 1.3em; }
 .prose li { margin: 4px 0; }
 .prose li::marker { color: var(--faint); }
@@ -213,14 +213,6 @@ main {
 .prose blockquote.tip { background: var(--tip-bg); border-color: var(--tip); }
 .prose blockquote.warn { background: var(--warn-bg); border-color: var(--warn); }
 
-/* The motto, set like an inscription. */
-.motto {
-  margin: 10px 0 34px; padding: 4px 0 4px 22px;
-  font: italic clamp(21px, 4.6vw, 27px)/1.45 var(--display);
-  color: var(--ink); border-left: 3px solid var(--pink);
-}
-.motto strong { color: var(--violet); font-weight: 400; }
-
 /* Cards: only where a block is a door to somewhere else. */
 .cards { display: grid; grid-template-columns: 1fr; gap: 12px; margin: 0 0 26px; }
 .card {
@@ -240,6 +232,8 @@ div.card { background: none; }
 /* Screenshots. */
 .shot { margin: 0 0 26px; }
 .shot img { display: block; width: 100%; cursor: zoom-in; border-radius: 8px; border: 1px solid var(--line); box-shadow: var(--shadow); background: #000; }
+/* A portrait screenshot keeps a phone-like width instead of filling the column. */
+.shot.narrow { max-width: 420px; }
 .shot figcaption { margin-top: 8px; font-size: 14px; line-height: 1.5; color: var(--faint); }
 .shots { display: grid; grid-template-columns: 1fr; gap: 4px 18px; }
 
@@ -274,10 +268,11 @@ div.card { background: none; }
 /* Home: the banner is the frontispiece, Morgana's aura rises over its lower edge. */
 .hero { margin-bottom: 8px; }
 .frontispiece { position: relative; margin: 0 0 64px; }
-.frontispiece > img { display: block; width: 100%; border-radius: 10px; box-shadow: var(--shadow); }
+/* On a wide column the banner would grow taller than the screen, so it is capped and cropped around Morgana and her book. */
+.frontispiece > img { display: block; width: 100%; max-height: min(460px, 52vh); object-fit: cover; object-position: 50% 45%; border-radius: 10px; box-shadow: var(--shadow); }
 .frontispiece .aura { position: absolute; left: 22px; bottom: -54px; }
 .hero h1 em { font-style: italic; color: var(--violet); }
-.hero p { font-size: 19px; color: var(--soft); max-width: 60ch; margin: 0 0 22px; }
+.hero p { font-size: 19px; color: var(--soft); max-width: 80ch; margin: 0 0 22px; }
 .btns { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 34px; }
 .btn {
   display: inline-block; padding: 10px 18px; border-radius: 8px;
@@ -321,7 +316,9 @@ div.card { background: none; }
 
 /* Cauldron's avatar while Morgana answers: glow, two expanding rings and six floating sparkles. */
 .aura { position: relative; width: 120px; height: 120px; display: grid; place-items: center; }
-.aura .face { position: relative; z-index: 2; width: 100px; height: 100px; border-radius: 50%; border: 3px solid var(--violet-strong); animation: avatarPulse 2.4s ease-in-out infinite; }
+.aura .face { display: block; position: relative; z-index: 2; width: 100px; height: 100px; border-radius: 50%; border: 3px solid var(--violet-strong); animation: avatarPulse 2.4s ease-in-out infinite; }
+/* Cauldron's animated face is taller than wide, so it is cropped to the circle around her face. */
+.aura .face img { display: block; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; object-position: 50% 20%; }
 .aura .glow { position: absolute; inset: 6px; border-radius: 50%; background: radial-gradient(circle, rgba(167, 139, 250, .55), transparent 70%); animation: glowPulse 2.4s ease-in-out infinite; }
 .aura .ring { position: absolute; top: 50%; left: 50%; width: 116px; height: 116px; transform: translate(-50%, -50%); opacity: 0; border: 2px solid rgba(167, 139, 250, .8); border-radius: 50%; animation: ringExpand 3s ease-out infinite; }
 .aura .ring.two { animation-delay: -1.5s; border-color: rgba(236, 72, 153, .7); }
@@ -355,21 +352,39 @@ div.card { background: none; }
   100% { opacity: 0; transform: translate(0, -40px) scale(.3) rotate(360deg); }
 }
 
-/* The brew: a few bubbles rising slowly behind every page, faint enough never to compete with the words. */
+/* The brew: mystic smoke curling up from below and a few glowing motes rising through it, both faint enough
+   never to compete with the words. The smoke is blurred once and only ever moved, which keeps it cheap to animate. */
 .brew { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; }
-.brew i {
-  position: absolute; bottom: -40px; border-radius: 50%;
-  background: radial-gradient(circle at 32% 30%, rgba(255, 255, 255, .45), rgba(167, 139, 250, .22) 45%, rgba(139, 92, 246, .06) 70%);
-  border: 1px solid rgba(167, 139, 250, .22);
-  animation: rise linear infinite;
+.brew .smoke {
+  position: absolute; bottom: -30vh; border-radius: 50%;
+  filter: blur(48px); opacity: 0;
+  background: radial-gradient(closest-side, rgba(139, 92, 246, .55), rgba(139, 92, 246, .18) 55%, transparent);
+  animation: curl ease-in-out infinite;
 }
-.brew i.pink { background: radial-gradient(circle at 32% 30%, rgba(255, 255, 255, .4), rgba(244, 114, 182, .2) 45%, rgba(236, 72, 153, .06) 70%); border-color: rgba(244, 114, 182, .2); }
-@keyframes rise {
-  0% { transform: translate(0, 0) scale(.6); opacity: 0; }
-  10% { opacity: 1; }
-  50% { transform: translate(var(--sway), -55vh) scale(1); }
-  90% { opacity: .8; }
-  100% { transform: translate(0, -112vh) scale(1.1); opacity: 0; }
+.brew .smoke.pink { background: radial-gradient(closest-side, rgba(236, 72, 153, .45), rgba(236, 72, 153, .14) 55%, transparent); }
+@keyframes curl {
+  0% { transform: translate(0, 0) scale(.7, .9) rotate(0deg); opacity: 0; }
+  20% { opacity: var(--peak); }
+  55% { transform: translate(var(--drift), -55vh) scale(1.15, 1.35) rotate(25deg); opacity: calc(var(--peak) * .8); }
+  100% { transform: translate(calc(var(--drift) * -.5), -115vh) scale(1.5, 1.8) rotate(50deg); opacity: 0; }
+}
+.brew .mote {
+  position: absolute; bottom: -10px; width: 4px; height: 4px; border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, #e9d5ff 55%, transparent 100%);
+  box-shadow: 0 0 6px 1px rgba(255, 255, 255, .7), 0 0 14px 4px rgba(167, 139, 250, .55);
+  animation: mote linear infinite, twinkle ease-in-out infinite;
+}
+.brew .mote.pink { box-shadow: 0 0 6px 1px rgba(255, 255, 255, .7), 0 0 14px 4px rgba(244, 114, 182, .55); }
+@keyframes mote {
+  0% { transform: translate(0, 0); }
+  50% { transform: translate(var(--drift), -55vh); }
+  100% { transform: translate(calc(var(--drift) * -.6), -110vh); }
+}
+@keyframes twinkle { 0%, 100% { opacity: .15; } 50% { opacity: .95; } }
+
+/* In the light theme the smoke is a breath, the motes keep their glow. */
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) .brew .smoke { filter: blur(56px); }
 }
 
 /* ── Wider screens ─────────────────────────────────────── */
@@ -382,8 +397,8 @@ div.card { background: none; }
 
 @media (min-width: 640px) {
   main { padding-block: 40px 48px; }
-  /* The reading column veils the brew, so bubbles play in the margins and never under a sentence. */
-  main { background: linear-gradient(to right, transparent, var(--night) 24px, var(--night) calc(100% - 24px), transparent); }
+  /* The reading column veils the brew, so smoke and motes play in the margins and never under a sentence. */
+  main { background: linear-gradient(to right, transparent, color-mix(in srgb, var(--night) 80%, transparent) 60px, color-mix(in srgb, var(--night) 80%, transparent) calc(100% - 60px), transparent); }
   .cards { grid-template-columns: 1fr 1fr; gap: 14px; }
   .cards.three { grid-template-columns: repeat(3, 1fr); }
   .shots.two { grid-template-columns: 1fr 1fr; }
@@ -396,8 +411,16 @@ div.card { background: none; }
   .menu { display: none; }
   .side { transform: none; width: var(--side-w); padding-top: 24px; }
   .shade { display: none; }
-  main { margin-left: calc(var(--side-w) + max(0px, (100vw - var(--side-w) - 900px) / 2)); margin-right: 0; padding-left: 56px; padding-right: 56px; max-width: 900px; }
+  /* The column takes the whole width beside the index, up to a ceiling that keeps lines readable on very wide screens. */
+  main { margin-left: calc(var(--side-w) + max(0px, (100vw - var(--side-w) - 1240px) / 2)); margin-right: 0; padding-left: 48px; padding-right: 48px; max-width: 1240px; }
   body { font-size: 17px; }
+}
+
+@media (min-width: 1300px) {
+  /* On a wide column the same turn on three mirrors sits side by side and a pair of terminal shots shares the row. */
+  .shots { grid-template-columns: 1fr 1fr; }
+  .shots.three { grid-template-columns: repeat(3, 1fr); }
+  .cards { grid-template-columns: repeat(3, 1fr); }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -14,7 +14,7 @@ When a mirror opens a conversation, it tells me what it can show: cards or not, 
 
 My witches write one answer. Every mirror gets the version it can show.
 
-<div class="shots">
+<div class="shots three">
 {% include shot.html src="cauldron/invoice-card.jpg" caption="Cauldron: the invoice as a card with buttons" %}
 {% include shot.html src="grimoire/invoices.jpg" caption="Grimoire: the same card drawn in a terminal" %}
 {% include shot.html src="rune/turn.jpg" caption="Rune: the same answer in plain words, within 500 characters" %}
@@ -28,12 +28,14 @@ Cauldron is my home: a chat page with every enchantment switched on. Answers app
 {% include shot.html src="cauldron/loader.jpg" caption="While I wake up, Cauldron shows one of my little spells" %}
 {% include shot.html src="cauldron/invoices.jpg" caption="Buttons offer the next step. The text box waits while they are shown" %}
 {% include shot.html src="cauldron/order.jpg" caption="An order is confirmed with the same card and buttons" %}
-{% include shot.html src="cauldron/widget.jpg" caption="My charm: Cauldron inside any website" %}
+{% include shot.html src="cauldron/agent-landing.jpg" caption="A witch takes the conversation. The header says who is speaking" %}
 </div>
 
 ### Hang my charm on your website
 
 You need not send customers to Cauldron's own page. Cauldron offers a **charm**, a widget in code: a small floating button that opens my real chat on top of any page. Hanging it takes one line in your site's HTML:
+
+{% include shot.html src="cauldron/widget.jpg" caption="My charm opened on a shop's page: my real chat, cards and dust gauge included" narrow=true %}
 
 ```html
 <script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>

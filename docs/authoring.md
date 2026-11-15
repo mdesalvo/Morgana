@@ -8,7 +8,7 @@ lede: How you replace my little shop with your own world. You can write your tom
 
 ## What you are writing
 
-Your world enters my grimoire as a **plugin**: a small .NET library I read when I wake up. It holds everything from the previous chapters and nothing else:
+Your world enters my spellbook as a **plugin**: a small .NET library I read when I wake up. It holds everything from the previous chapters and nothing else:
 
 ```text
 MyDomain/

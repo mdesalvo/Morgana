@@ -4,7 +4,7 @@ permalink: /alembic/
 banner: brand/alembic-banner.jpg
 eyebrow: My companions
 tagline: Yours the shape, mine the spells
-lede: "My alembic is the still where your experts' knowledge becomes new tomes for my grimoire. Nobody writes a prompt by hand: I ask the questions and I distil the answers."
+lede: "My alembic is the still where your experts' knowledge becomes new tomes for my spellbook. Nobody writes a prompt by hand: I ask the questions and I distil the answers."
 ---
 
 ## What my still does
