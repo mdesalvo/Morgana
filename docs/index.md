@@ -1,142 +1,69 @@
 ---
-title: Welcome
+title: Meet Morgana
 permalink: /
-description: Morgana is a multi-agent conversational AI framework for .NET. This is its manual.
+lede: "I am Morgana, a good witch who answers your customers for you. In this manual I reveal my secrets: my familiars, my coven, my tomes, my spells and the magic dust I spend."
 ---
 
 <div class="hero">
-  <div class="eyebrow">Conversational AI framework · .NET 10 · Akka.NET · Microsoft.Agents.AI</div>
-  <h1>Agents are <em>prose</em>,<br>not code.</h1>
-  <p>Morgana orchestrates specialized AI agents that classify, route and resolve what your users ask. You write the domain in plain language. She brings the actors, the guard rails, the memory and every channel.</p>
+  <div class="frontispiece">
+    <img src="{{ '/assets/images/brand/banner.jpg' | relative_url }}" alt="Morgana, the good witch, before her cauldron">
+    <div class="aura"><span class="glow"></span><span class="ring"></span><span class="ring two"></span><img class="face" src="{{ '/assets/images/brand/morgana.jpg' | relative_url }}" alt=""><span class="sparkle s1"></span><span class="sparkle s2"></span><span class="sparkle s3"></span><span class="sparkle s4"></span><span class="sparkle s5"></span><span class="sparkle s6"></span></div>
+  </div>
+  <h1>Welcome to my <em>grimoire</em></h1>
+  <p>I am Morgana. I speak to your customers through a coven of specialised witches. You write what each of them knows, in plain words. I take care of all the rest of the magic.</p>
   <div class="btns">
-    <a class="btn primary" href="{{ '/quick-start/' | relative_url }}">Run it in five minutes</a>
-    <a class="btn" href="{{ '/morgana/' | relative_url }}">Read the manual</a>
-    <a class="btn" href="https://github.com/mdesalvo/Morgana">Source on GitHub</a>
+    <a class="btn primary" href="{{ '/try/' | relative_url }}">Summon me in five minutes</a>
+    <a class="btn" href="{{ '/actors/' | relative_url }}">Learn my secrets</a>
+    <a class="btn" href="{{ '/install/' | relative_url }}">Install me</a>
   </div>
 </div>
 
-<img class="banner" src="{{ '/assets/images/brand/banner.jpg' | relative_url }}" alt="Morgana">
+<div class="motto">A magical witch assistant equipped with an enchanted grimoire powered by AI, yet shaped by you: <strong>your agents, your prompts, your tools</strong>…woven into her spells.</div>
 
-## A good witch, with books written by you
+## Who I am
 
-<figure class="motto">
-  <blockquote>A magical witch assistant equipped with an enchanted grimoire powered by AI, yet shaped by you: <strong>your agents, your prompts, your tools</strong>…woven into her spells.</blockquote>
-</figure>
+I am a **good witch**. I am on the side of whoever is talking to me: I am kind, I say plainly what I can and cannot do and I never pretend.
 
-This is not a slogan stretched over a framework. It is how Morgana is built. She impersonates a **good witch** who is on the side of the person talking to her. Her grimoire is enchanted by AI but its pages are **written by you and for you**: the agents that answer, the prose that gives each one its voice and the tools that let them act all come from your business. She supplies the craft of magic. You supply what she knows.
+My magic comes from AI. My grimoire, though, is **written by you, for you**. Each of its tomes is one of your agents: a few paragraphs about one corner of your world and the spells it may cast on your systems. I bring the craft. You bring the knowledge.
 
-Morgana herself speaks through every agent. Billing is a formal witch who keeps the accounts book and Contract is a patient one who reads the scrolls. Each one is recognisably her and each one is specialised for the work in front of her.
+Every witch of my coven speaks with my voice. In the little shop I carry with me, the witch who keeps the accounts is formal and exact with money, while the one who explains the contracts is patient and reassuring. Both of them are me.
 
-## What you get
+## What I do for you
 
-Morgana is a backend that sits between your users and your language models. A user writes in a browser or in a terminal. A hierarchy of actors checks the message against your policies and works out what it is about. The right agent then answers it, with its own tools and the memory of the conversation so far.
+A customer writes to me from a browser or a terminal. Before any witch of my coven reads the message, I:
 
-You bring a domain. Morgana brings everything else.
+1. **check it** against my rules, so abuse and trickery stop at my door
+2. **understand what it is about**, so it reaches the witch who knows the subject
+3. **remember the conversation**, so nobody is asked the same thing twice
+4. **shape my answer to the mirror** the customer is looking into, from a rich web page to 500 characters of plain text
+5. **watch the cost**, spending a measured amount of magic dust in every conversation
 
-<div class="cards two" markdown="1">
-<div class="card" markdown="1">
-<span class="icon">🎭</span>
+You write none of that. You write your tomes.
 
-### Resilient by design
-One actor hierarchy per conversation. Guard, classifier and router are separate workers that fail and recover on their own.
-</div>
-<div class="card" markdown="1">
-<span class="icon">📝</span>
+{% include shot.html src="cauldron/welcome.jpg" caption="I greet a customer of my example shop with a button for each thing I can help with" %}
 
-### Declarative agents
-An agent is a block of prose in JSON plus a thin class of tool contracts. Tuning one means editing sentences.
-</div>
-<div class="card" markdown="1">
-<span class="icon">🛡️</span>
+## My family
 
-### Guarded on every door
-User messages, tool results and partner questions are inspected before an agent reads them. Every guard fails closed.
-</div>
-<div class="card" markdown="1">
-<span class="icon">📡</span>
-
-### Every surface
-A browser widget and two terminals ship ready. Morgana adapts each answer to what the channel can actually render.
-</div>
-</div>
-
-## The ecosystem
-
-Six pieces make up the project. One is the framework and the other five orbit it.
+I never travel alone. Each of my companions carries a name from my craft.
 
 <div class="cards">
-<a class="card" href="{{ '/morgana/' | relative_url }}">
-<span class="icon">🔮</span>
-<h3>Morgana</h3>
-<p>The framework and its backend. Actors, agents, prompts, context and the rules that keep them honest.</p>
-<span class="tag">The core</span>
-</a>
-<a class="card" href="{{ '/channels/cauldron/' | relative_url }}">
-<span class="icon">🌐</span>
-<h3>Cauldron</h3>
-<p>The browser channel. Streaming, rich cards, quick replies and an embeddable chat widget.</p>
-<span class="tag">Channel · rich web</span>
-</a>
-<a class="card" href="{{ '/channels/grimoire/' | relative_url }}">
-<span class="icon">📟</span>
-<h3>Grimoire</h3>
-<p>The full Morgana experience inside a terminal. Markdown, bordered cards and arrow-key replies.</p>
-<span class="tag">Channel · rich terminal</span>
-</a>
-<a class="card" href="{{ '/channels/rune/' | relative_url }}">
-<span class="icon">📜</span>
-<h3>Rune</h3>
-<p>The deliberately poor terminal. Plain text and 500 characters, so degradation is tested on every turn.</p>
-<span class="tag">Channel · poor terminal</span>
-</a>
-<a class="card" href="{{ '/alembic/' | relative_url }}">
-<span class="icon">⚗️</span>
-<h3>Alembic</h3>
-<p>The authoring workbench. An AI-led interview distils a domain expert's knowledge into a buildable plugin.</p>
-<span class="tag">Authoring</span>
-</a>
-<a class="card" href="{{ '/prompt-harness/' | relative_url }}">
-<span class="icon">🧪</span>
-<h3>PromptHarness</h3>
-<p>The live non-regression suite. It measures whether the model still does what the prompt says.</p>
-<span class="tag">Quality</span>
-</a>
+<a class="card" href="{{ '/actors/' | relative_url }}"><span class="kind">The framework</span><h3>Morgana</h3><p>Me: the framework and the server where my coven works.</p></a>
+<a class="card" href="{{ '/channels/#cauldron' | relative_url }}"><span class="kind">Browser mirror</span><h3>Cauldron</h3><p>My mirror in the browser, with a little charm you can hang on any website.</p></a>
+<a class="card" href="{{ '/channels/#grimoire' | relative_url }}"><span class="kind">Terminal mirror</span><h3>Grimoire</h3><p>The same rich mirror, inside a terminal.</p></a>
+<a class="card" href="{{ '/channels/#rune' | relative_url }}"><span class="kind">Plain mirror</span><h3>Rune</h3><p>A humble mirror of plain text, proof that I adapt to any surface.</p></a>
+<a class="card" href="{{ '/alembic/' | relative_url }}"><span class="kind">Authoring</span><h3>Alembic</h3><p>My still. It interviews your experts and distils their knowledge into new tomes.</p></a>
+<a class="card" href="{{ '/prompt-harness/' | relative_url }}"><span class="kind">Testing</span><h3>PromptHarness</h3><p>My proving ground, where I test that my spells still work as written.</p></a>
 </div>
 
-<pre class="mermaid">
-graph LR
-  EXP["Domain expert"] -->|interview| ALE["Alembic"]
-  ALE -->|"agents.json + C# plugin"| MOR
-  DEV["Developer"] -->|"plugin DLL"| MOR
-  subgraph MOR["Morgana"]
-    direction TB
-    ACT["Actors"] --> AGT["Agents"]
-  end
-  USR["User"] --> CH["Cauldron · Grimoire · Rune"]
-  CH <-->|"REST + SignalR or webhook"| MOR
-  MOR <-->|prompts| LLM["Language models"]
-  MOR <-.->|tools| MCP["MCP servers"]
-  MOR <-.->|A2A| PEER["Partner Morgana"]
-  HAR["PromptHarness"] -.->|measures| MOR
-</pre>
+## How to read my grimoire
 
-## Where to start
+It has three parts. Open the one you need.
 
-<div class="cards two">
-<a class="card" href="{{ '/quick-start/' | relative_url }}">
-<h3>I want to see it working</h3>
-<p>Start the stack with Docker and talk to the example shop in your browser or terminal.</p>
-</a>
-<a class="card" href="{{ '/morgana/pillars/' | relative_url }}">
-<h3>I want to understand it</h3>
-<p>The six pillars explain what Morgana is made of and why each part is shaped the way it is.</p>
-</a>
-<a class="card" href="{{ '/morgana/configuration/' | relative_url }}">
-<h3>I am deploying it</h3>
-<p>What ships configured and what only you can decide: keys, models, limits, partners and channels.</p>
-</a>
-<a class="card" href="{{ '/morgana/configuration/domain/' | relative_url }}">
-<h3>I am building my domain</h3>
-<p>Intents, agent prose, tools, MCP servers and colleagues. By hand or through Alembic.</p>
-</a>
+<div class="cards three">
+<a class="card" href="{{ '/try/' | relative_url }}"><h3>See me</h3><p>Summon me with Docker and talk to my example shop.</p><span class="more">Try me →</span></a>
+<a class="card" href="{{ '/actors/' | relative_url }}"><h3>Understand me</h3><p>My six pillars, the same ones the README names, one chapter each.</p><span class="more">My pillars →</span></a>
+<a class="card" href="{{ '/install/' | relative_url }}"><h3>Install me</h3><p>What I bring already brewed and the few choices that are yours alone.</p><span class="more">Your choices →</span></a>
 </div>
+
+> New to my words? The [glossary]({{ '/glossary/' | relative_url }}) puts each of my magic names beside its technical one.
+{: .tip}

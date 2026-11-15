@@ -90,6 +90,8 @@ graph LR
 
 </details>
 
+<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/actors/">the manual</a></i></p>
+
 ### 🤖 Agents
 
 <details>
@@ -151,6 +153,8 @@ A colleague living in the same installation needs nothing configured: that traff
 
 </details>
 
+<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/agents/">the manual</a></i></p>
+
 ### 📝 Prompts
 
 <details>
@@ -173,6 +177,8 @@ Prompts also define **Global Policies** that are automatically composed into age
 
 </details>
 
+<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/prompts/">the manual</a></i></p>
+
 ### 💾 Context
 
 <details>
@@ -185,6 +191,8 @@ Some information, though, is meant to travel. A customer code given to BillingAg
 Conversations survive restarts and agent handoffs without losing this context. Users always see one coherent conversation, even when several specialized agents quietly took turns behind the scenes.
 
 </details>
+
+<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/context/">the manual</a></i></p>
 
 ### 📡 Channels
 
@@ -255,6 +263,8 @@ Reaching Morgana from a browser does not require landing on Cauldron: it publish
 No parameters: it reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat: streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
 </details>
 
+<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/channels/">the manual</a></i></p>
+
 ### ✨ Authoring
 
 <details>
@@ -281,7 +291,9 @@ docker compose --env-file .env --env-file .env.versions --profile authoring up a
 
 </details>
 
-These pillars are argued at length in the [**Morgana manual**](https://mdesalvo.github.io/Morgana/), together with the configuration of a turnkey installation and the one that is yours to make.
+<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/authoring/">the manual</a></i></p>
+
+Morgana tells her own story in [**the manual**](https://mdesalvo.github.io/Morgana/): her six pillars, what she brings already brewed and the few choices that are yours to make.
 
 ---
 

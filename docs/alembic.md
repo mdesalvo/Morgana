@@ -1,141 +1,120 @@
 ---
-title: Alembic
+title: "⚗️ Alembic"
 permalink: /alembic/
 banner: brand/alembic-banner.jpg
-eyebrow: Companion · authoring
-lede: Yours the shape and hers the spells. A functional interview with a domain expert, distilled into a complete and buildable Morgana domain. Nobody writes a prompt by hand.
+eyebrow: My companions
+tagline: Yours the shape, mine the spells
+lede: "My alembic is the still where your experts' knowledge becomes new tomes for my grimoire. Nobody writes a prompt by hand: I ask the questions and I distil the answers."
 ---
 
-<div class="pills"><span class="pill">Blazor Server</span><span class="pill">Fluent UI</span><span class="pill">Port 5005</span><span class="pill ok">No Morgana instance needed</span></div>
+## What my still does
 
-## What it is
+Your experts know their craft: how a refund is handled, what a contract covers, which customer needs what. They do not know how to write words for an AI and they should not have to.
 
-Alembic is the authoring workbench of the project. A domain expert answers questions about their own business in their own words. Alembic turns the answers into **intents, agent prose, tool contracts and working C#**, ready to compile into a Morgana plugin.
+So I interview them. In their own words, one question at a time, I find out which subjects your customers ask about and what each witch must know, do and never do. From the answers I distil a **complete plugin**: subjects, tomes, spells and working C# code, ready for my `plugins/` folder.
 
-Three properties define it:
+Three things to know about my still:
 
-- **It is not a channel.** It never calls a running Morgana and holds no token. Its only dependency is a language model
-- **It is not a filesystem tool.** Configuration arrives as an upload and leaves as a download, so Alembic can live in a cloud or on a laptop
-- **It is itself an agent of Morgana.** Its prompt is layered from an `alembic.json` of the same shape as a domain agent's, over Morgana's own personality. It runs under the same framework as the domains it authors
+- **It needs only an AI model**, not a running Morgana. Your experts can use it whenever they like.
+- **Nothing lives on its disk.** Work arrives as a file you upload and leaves as a file you download, so it runs just as well on a laptop or in a cloud.
+- **It is me, too.** The interviewer is a witch of my own, with a tome written like yours, standing on my own character.
 
-<div class="shots">
-{% include shot.html src="alembic/landing.jpg" caption="Two doors: distil a new domain or resume one" %}
-{% include shot.html src="alembic/interview-map.jpg" caption="The interview opens on the domain: which of the client's processes Morgana will run. The greyed sentence is a worked example for their trade" %}
-{% include shot.html src="alembic/interview-follow-up.jpg" caption="Accepting the proposal reflects it back and asks only what is still missing" %}
+<div class="shots two">
+{% include shot.html src="alembic/landing.jpg" caption="Two doors: distil a new world or take up one already begun" %}
+{% include shot.html src="alembic/interview-map.jpg" caption="The interview opens on the map: which of your processes I will run. The grey sentence is an example from your own trade" %}
 </div>
 
 ## The interview
 
-A domain has two halves: the **intents** customers can ask for and one **agent** per intent. The interview builds them in that order.
+A world has two halves: the **subjects** your customers ask about and one **witch** per subject. I settle them in that order.
 
-<pre class="mermaid">
-graph LR
-  M["Domain mapping<br/>once"] --> T["Target"]
-  T --> P["Personality"]
-  P --> K["Toolkit"]
-  K --> R["Territory"]
-  R --> I["Instructions"]
-  I --> F["Formatting"]
-  F --> A["Acceptance"]
-  A -->|next agent| T
-  A -->|last agent| C["Collaboration<br/>once"]
-  C --> V["Validation"]
-  V --> E["Morganize"]
-</pre>
+<ol class="steps" markdown="1">
+<li markdown="1">
 
-| Step | Runs | Settles |
-|---|---|---|
-| **Domain mapping** | once | Every intent: name, description, label and opening sentence |
-| **Target** | per agent | What the agent does and what it must never do |
-| **Personality** | per agent | Which facet of Morgana this agent is. Offered rather than dictated |
-| **Toolkit** | per agent | The tools with their descriptions and parameters and scopes |
-| **Territory** | per agent | What this desk is characteristically the one to be asked about |
-| **Instructions** | per agent | Behavioural rules, written after the toolkit exists |
-| **Formatting** | per agent | How the agent presents its own tools' output |
-| **Acceptance** | per agent | No question: the agent is read back whole and the client lets it in |
-| **Collaboration** | once | Which agent may consult which, here and at partner installations |
+**The map**, once. Every subject: its name, its description for my diviner, the label of its button and its opening sentence.
 
-<div class="shots">
-{% include shot.html src="alembic/map.jpg" caption="The domain map: each entry becomes one intent and one agent" %}
-{% include shot.html src="alembic/agents.jpg" caption="One agent in hand: its seven moments open on the track and every earlier one can be read" %}
+</li>
+<li markdown="1">
+
+**Each witch, chapter by chapter**: her purpose and its limits, her character (I offer, you choose), her spells with their ingredients, her territory for her sisters, her instructions and how she presents what her spells return.
+
+</li>
+<li markdown="1">
+
+**Her acceptance.** I read the whole witch back to you and you let her into the coven. That decision is yours alone.
+
+</li>
+<li markdown="1">
+
+**The sisters**, once at the end. For each witch, a box for every sister she may ask, here or in a faraway coven.
+
+</li>
+<li markdown="1">
+
+**The checks**, if you want them. Then the archive.
+
+</li>
+</ol>
+
+<div class="shots two">
+{% include shot.html src="alembic/interview-follow-up.jpg" caption="Accepting my proposal: I reflect it back and ask only what is still missing" %}
+{% include shot.html src="alembic/agents.jpg" caption="One witch in the making: each chapter on the track can be opened and read" %}
 </div>
 
-### Principles of the conversation
+My manners during the interview:
 
-- **One question and one step.** An answer advances the step if anything can be written down. The rest is inferred and proposed and corrected rather than asked again. Circling is how an AI-led interview really fails
-- **The map is a choice and not an inventory.** The intents that surface in the conversation make the map
-- **The interviewee is not the agent's audience.** The expert never talks to the agent. Their customers do. Every sentence Alembic writes describes those customers to the agent
-- **The client owns the final word.** Letting an agent into the domain at Acceptance is the one decision that is theirs alone
+- **One question, one step.** Whatever I can write down moves us forward. What I can guess I propose and you correct. Asking the same thing twice is how an interview fails.
+- **The map is a choice, not an inventory.** Only the subjects you actually want me to handle become witches.
+- **Your expert is not the witch's audience.** Your customers are. Every sentence I write describes those customers to the witch, in their words.
 
-## Reading and correcting
+Anything already written can be reopened from the track and read, at no cost. When a witch is wrong, **Update** walks through her chapters again and every chapter that is still right is kept with one press.
 
-Any moment behind the frontier can be opened from the track and read. Reading calls no model and writes nothing. Where an agent is wrong, **Update** reopens it at the Target and walks forward through every section. A section whose ground did not move is settled with one press and kept word for word.
+## The checks
 
-## Colleagues and validation
+Before the archive you may ask me to check the work. There are two kinds:
 
-**Collaboration** is settled once at the end on a form: for each agent a box per colleague it may ask, including agents on partner Morgana installations. A remote colleague becomes `[ConsultsAgent("intent", "partner")]` in the generated code and carries a partner badge. It is taken on trust: the partner's own card is what knows and it is read at the first consultation.
+- **Plain checks** repeat what I verify when I [wake up]({{ '/safety/#when-i-refuse-to-start' | relative_url }}): every subject has a witch, every spell has a description. Each finding leads you back to the chapter to fix.
+- **Checks marked AI** read the witches side by side for what only shows between them, such as two territories that overlap. Each finding comes with a proposed fix you can apply.
 
-**Validation** is chosen and never imposed. Deterministic checks restate the rules Morgana enforces at startup, so their sentence arrives while a fix still costs nothing. Checks badged **AI** read the agents side by side for what only shows between them: overlapping territories and a colleague out of step with the prose that should offer it. A deterministic finding leads back to its section. A judged one carries a written fix you can apply. It advises and never blocks, because a domain expert who disagrees about their own business is usually right.
+The checks advise. They never block, because an expert who disagrees about their own craft is usually right.
 
-<div class="shots">
-{% include shot.html src="alembic/domain.jpg" caption="Collaboration: for each agent a box per colleague it may consult" %}
-{% include shot.html src="alembic/validation.jpg" caption="Validation: checks chosen by the client and never imposed. The AI badge marks a judged one" %}
+<div class="shots two">
+{% include shot.html src="alembic/domain.jpg" caption="The sisters: for each witch, a box for every sister she may ask" %}
+{% include shot.html src="alembic/validation.jpg" caption="The checks you chose. The AI badge marks one I judged" %}
 </div>
 
-## Morganize
+## The archive
 
-The last step is the **Archive** card. It first asks for the technical facts of the code: namespace, class names, the LLM tier of each agent and the MCP servers it reaches. Then the domain distils into **one archive**, because the pieces are only correct together.
+Last, I ask a few technical facts: the namespace, the class names, the AI level of each witch and the MCP servers she borrows from. Then everything is distilled into **one archive**, because the pieces only fit together.
 
-<div class="shots">
-{% include shot.html src="alembic/archive.jpg" caption="The archive card: technical facts first and then one download" %}
-</div>
+{% include shot.html src="alembic/archive.jpg" caption="The archive card: the technical facts first, then one download" %}
 
-| In the archive | Is |
+| Inside | What it is |
 |---|---|
-| `.csproj` and `.slnx` | Referencing `Morgana.AI` and `Morgana.Contracts` pinned to the build Alembic itself runs against |
-| `agents.json` | Embedded as a resource |
-| Generated sources | One pair per agent and per toolkit |
-| A working mock per toolkit | Not a stub: you can talk to your agent on the first run and hear whether the prose is right |
-| A migration report | Unconditional, even for a greenfield domain, so everyone learns to read it before the day it matters |
-| `README.md` · `MIGRATION.md` | The two-halves convention and the interview's own save file |
+| A project and a solution | Ready to build, referencing the same version of me the still runs on |
+| `agents.json` | Your subjects and tomes |
+| Two files per witch and per set of spells | One I write and rewrite, one that is yours forever |
+| A working stand-in for every spell | You can talk to your witches on the first day and hear whether the tomes are right |
+| A migration report | Always included, so your team learns to read it before the day it matters |
 
-### The two halves
+The two files are the key to coming back. The `.g.cs` file is mine: I overwrite it whenever you distil again. The `.cs` file is yours: I write it once with the stand-in and never touch it again. That is where your real integration goes.
 
-Each agent and toolkit is generated as two files so a re-run never clobbers your code.
+## Coming back
 
-| File | Owner | Rule |
-|---|---|---|
-| `AgentX.g.cs` | Alembic | Attributes and constructor and partial signatures. **Always overwritten** |
-| `AgentX.cs` | You | The working mock first and your real integration later. **Written once and never touched again** |
+My import page takes three kinds of file and tells them apart by reading them:
 
-A tool declared in the generated half and forgotten in yours does not compile. That is the point.
+- an `agents.json` of a world already at work
+- an `alembic-draft.json`: an interview left halfway
+- an `alembic.zip`: an archive I wrote before
 
-## Bringing a domain back
+**Save my work** sits beside every card, so a closed tab never costs you an interview.
 
-The import page takes three kinds of file and tells them apart by reading, never by name:
+{% include shot.html src="alembic/import.jpg" caption="What I can do with what you bring back" %}
 
-- `agents.json`: a domain already at work
-- `alembic-draft.json`: a sitting left unfinished
-- `alembic.zip`: an archive Alembic wrote
-
-<div class="shots">
-{% include shot.html src="alembic/import.jpg" caption="The import doors: go over the agents and carry on and validate and morganize" %}
-</div>
-
-**Save my work** sits beside every card and hands over the file at any point, so a closed tab costs nothing.
-
-## Run it
+## Running the still
 
 ```bash
 docker compose --env-file .env --env-file .env.versions --profile authoring up alembic   # http://localhost:5005
-cd Alembic && dotnet run                                                                   # from source
 ```
 
-Alembic reads the same `Morgana:LanguageModels:Tiers` section as Morgana. Inside the repository it shares Morgana.Web's user secrets, so it runs against whatever the working copy is wired to. It does its model work on the **Efficiency** tier and never on Economy: its whole job is writing prose that does not contradict itself. It runs once at onboarding rather than on every turn. That is the wrong place to save.
-
-| Key | Purpose |
-|---|---|
-| `Morgana:LanguageModels:Tiers` | The three tiers, as in Morgana |
-| `Alembic:Work:AutosaveSeconds` | How often the draft is snapshotted as a floor under **Save my work**. Default 30 |
-
-Every interview turn is a paid call, so keep an eye on what the tier costs.
+My still reads the same three AI levels as I do and works on **Efficiency**. Its whole job is writing words that never contradict each other, so it is no place to save. It runs once per world rather than on every customer's turn, but each interview step is a paid AI call.
