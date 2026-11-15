@@ -19,7 +19,6 @@
 
     <!-- Version Information -->
     <VersionPrefix>1.0.0</VersionPrefix>
-    <VersionSuffix>beta2</VersionSuffix>
     <AssemblyVersion>$(VersionPrefix)</AssemblyVersion>
     <FileVersion>$(VersionPrefix)</FileVersion>
 

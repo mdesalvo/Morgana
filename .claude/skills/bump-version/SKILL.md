@@ -27,32 +27,39 @@ For production hotfixes, activated when the user says:
 ## Procedure
 
 1. **Extract current version** from `<repo root>/Morgana/Directory.Build.props`
-   - It is split in `<VersionPrefix>X.Y.Z</VersionPrefix>` and `<VersionSuffix>betaN</VersionSuffix>`
-   - The full version is `X.Y.Z-betaN`. `AssemblyVersion` and `FileVersion` stay `$(VersionPrefix)`, because an assembly version cannot carry a suffix
+   - It is `<VersionPrefix>X.Y.Z</VersionPrefix>`, with no `VersionSuffix`: since 1.0.0 Morgana ships stable versions only
+   - `AssemblyVersion` and `FileVersion` stay `$(VersionPrefix)` and are never touched
 
-2. **Increment the version**
-   - **Default behavior (new development cycle)**: increment the beta number (N), prefix untouched
-     - 1.0.0-betaN → 1.0.0-beta(N+1)
-     - Example: 1.0.0-beta1 → 1.0.0-beta2
-   - **Hotfix behavior**: append a patch counter to the suffix
-     - 1.0.0-betaN → 1.0.0-betaN.1
-     - Example: 1.0.0-beta1 → 1.0.0-beta1.1
-   - Leaving beta (1.0.0 final) is the user's decision, never this skill's: then `VersionSuffix` is removed
+2. **Increment the version** following Semantic Versioning
+   - **Default behavior (new development cycle)**: increment the minor number and reset the patch number
+     - X.Y.Z → X.(Y+1).0
+     - Examples: 1.0.0 → 1.1.0, 1.1.2 → 1.2.0
+   - **Hotfix behavior**: increment the patch number
+     - X.Y.Z → X.Y.(Z+1)
+     - Example: 1.1.0 → 1.1.1
+   - A major increment (X+1.0.0) is the user's decision, never this skill's: it happens only when the user names the major version
+   - Never add a `VersionSuffix`, unless the user explicitly asks for a prerelease
 
-3. **Update all version files** in the following paths:
-   - `<repo root>/Morgana/Directory.Build.props`
-   - `<repo root>/Channels/Cauldron/Directory.Build.props`
-   - `<repo root>/Channels/Rune/Directory.Build.props`
-   - `<repo root>/Channels/Grimoire/Directory.Build.props`
-   - `<repo root>/Examples/Examples.csproj`
-   - `<repo root>/PromptHarness/PromptHarness.csproj`
-   - `<repo root>/PromptHarness/Plugins/FederationPlugin/FederationPlugin.csproj`
-   - `<repo root>/Alembic/Directory.Build.props`
+3. **Update all version files**: every `.props` and `.csproj` file under `<repo root>` (excluding `bin/` and `obj/`) that declares `<VersionPrefix>`
+   - Find them by searching, never from a remembered list: a project added since the last bump must not be missed
+   - At the time of writing they are:
+     - `<repo root>/Morgana/Directory.Build.props`
+     - `<repo root>/Channels/Cauldron/Directory.Build.props`
+     - `<repo root>/Channels/Rune/Directory.Build.props`
+     - `<repo root>/Channels/Grimoire/Directory.Build.props`
+     - `<repo root>/Examples/Examples.csproj`
+     - `<repo root>/Examples/GardeningMCP/GardeningMCP.csproj`
+     - `<repo root>/PromptHarness/PromptHarness.csproj`
+     - `<repo root>/PromptHarness/Plugins/FederationPlugin/FederationPlugin.csproj`
+     - `<repo root>/PromptHarness/Plugins/PoisonedPlugin/PoisonedPlugin.csproj`
+     - `<repo root>/PromptHarness/Plugins/UnlabelledIntentPlugin/UnlabelledIntentPlugin.csproj`
+     - `<repo root>/Alembic/Directory.Build.props`
+   - Every file gets the same version: a file found on a different version is reported to the user and aligned
 
 4. **Add new section in CHANGELOG.md**
    - Read `<repo root>/CHANGELOG.md`
    - Insert a new section right after the header and preamble
-   - **For normal version bumps** (beta number increment):
+   - **For new development cycles** (minor increment):
    ```
    ## [X.Y.Z] - UNDER DEVELOPMENT
    ### ✨ Added
@@ -66,20 +73,20 @@ For production hotfixes, activated when the user says:
    ### 🚀 Future Enablement
 
    ```
-   - **For hotfixes** (patch counter on the suffix):
+   - **For hotfixes** (patch increment):
    ```
    ## [X.Y.Z] - UNDER DEVELOPMENT
    ### 🐛 Fixed
 
    ```
-   - Replace `X.Y.Z` with the newly calculated full version (e.g. `1.0.0-beta2`)
+   - Replace `X.Y.Z` with the newly calculated version (e.g. `1.1.0`)
 
 5. **Communicate the result** to the user with details of the updated version
 
 ## Notes
 
 - The skill operates idempotently: running it twice does not create duplicates
-- Morgana convention: the beta number counts development cycles, the patch counter on the suffix counts hotfixes
+- Morgana convention: the minor number counts development cycles, the patch number counts hotfixes
 - All solution projects are updated atomically
 - The empty CHANGELOG section is ready to be filled with change details
-- Regular development cycles always drop the hotfix counter (e.g., 1.0.0-beta1.1 → 1.0.0-beta2)
+- Regular development cycles always reset the patch number (e.g., 1.0.3 → 1.1.0)
