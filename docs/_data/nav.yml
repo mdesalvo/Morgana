@@ -1,0 +1,43 @@
+- title: Start
+  items:
+    - { title: Welcome, url: / }
+    - { title: Quick start, url: /quick-start/ }
+    - { title: "Stuck? Start here", url: /help/ }
+    - { title: Glossary, url: /glossary/ }
+- title: Morgana
+  items:
+    - { title: At a glance, url: /morgana/ }
+    - { title: "The six pillars", url: /morgana/pillars/ }
+    - { title: "1 · Actors", url: /morgana/pillars/actors/, child: true }
+    - { title: "2 · Agents", url: /morgana/pillars/agents/, child: true }
+    - { title: "3 · Prompts", url: /morgana/pillars/prompts/, child: true }
+    - { title: "4 · Context", url: /morgana/pillars/context/, child: true }
+    - { title: "5 · Channels", url: /morgana/pillars/channels/, child: true }
+    - { title: "6 · Authoring", url: /morgana/pillars/authoring/, child: true }
+- title: Configuration
+  items:
+    - { title: Two sides of one system, url: /morgana/configuration/ }
+    - { title: "In the box", url: /morgana/configuration/in-the-box/, child: true }
+    - { title: "On your side: deployment", url: /morgana/configuration/deployment/, child: true }
+    - { title: "On your side: your domain", url: /morgana/configuration/domain/, child: true }
+    - { title: "Dust, models and pricing", url: /morgana/configuration/dust-and-models/ }
+    - { title: Full key reference, url: /morgana/configuration/reference/ }
+- title: Operating
+  items:
+    - { title: Guard rails and limits, url: /morgana/operations/guard-rails/ }
+    - { title: Agent to agent, url: /morgana/operations/a2a/ }
+    - { title: Observability, url: /morgana/operations/observability/ }
+    - { title: Startup validation, url: /morgana/operations/startup-validation/ }
+    - { title: Docker, url: /morgana/operations/docker/ }
+- title: Channels
+  items:
+    - { title: The channel matrix, url: /channels/ }
+    - { title: Cauldron, url: /channels/cauldron/, child: true }
+    - { title: Grimoire, url: /channels/grimoire/, child: true }
+    - { title: Rune, url: /channels/rune/, child: true }
+    - { title: Build your own, url: /channels/build-your-own/ }
+- title: Companions
+  items:
+    - { title: Alembic, url: /alembic/ }
+    - { title: PromptHarness, url: /prompt-harness/ }
+    - { title: The Greenhouse example, url: /examples/ }

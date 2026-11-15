@@ -1,3 +1,14 @@
 title: Morgana
 description: Multi-agent, multi-channel conversational AI framework for .NET
-theme: jekyll-theme-cayman
+url: https://mdesalvo.github.io
+markdown: kramdown
+kramdown:
+  input: GFM
+  syntax_highlighter: rouge
+exclude:
+  - README.md
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default

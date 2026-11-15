@@ -1,0 +1,1 @@
+<figure class="shot{% if include.wide %} wide{% endif %}"><img src="{{ include.src | prepend: '/assets/images/' | relative_url }}" alt="{{ include.alt | default: include.caption }}" loading="lazy"><figcaption>{{ include.caption }}</figcaption></figure>
