@@ -12,6 +12,12 @@ Change one sentence in a tome and nothing fails to build. Yet that sentence may 
 
 PromptHarness finds out first. It talks to me exactly like a mirror does, with real conversations against your real AI vendor. Then it checks what happened. Nothing is faked: that is the point.
 
+## Every release of mine is certified
+
+No release of mine leaves the workshop untested. Before it is published, every release passes through my proving ground **on each AI vendor I speak with**, using the `Economy` and `Efficiency` models those vendors offer at that moment. A release is out only once its scenarios hold their thresholds everywhere.
+
+So when you install me with one of my vendors on those two levels, my own rules and the tomes of my example shop have already been proven against the very models you are likely to choose.
+
 ## A scenario
 
 Each conversation to replay is a small YAML file. It says what the customer writes at each turn and what must be true afterwards:

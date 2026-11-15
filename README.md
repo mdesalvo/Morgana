@@ -15,285 +15,24 @@ Morgana is a modern and flexible **conversational AI framework** designed to han
 
 The system is powered by **Microsoft.Agents.AI**, enabling seamless integration with Large Language Models (LLMs) while maintaining strict governance through guard rails and policy enforcement.
 
+<p align="center">
+  <a href="https://mdesalvo.github.io/Morgana/"><b>📖 Read the manual</b></a>: Morgana tells her own story, from her six pillars to the few choices that are yours to make
+</p>
+
 ---
 
 ## Core Philosophy
 
 Morgana **reimagines conversational AI** through 6 foundational pillars that **work in harmony** to deliver an **orchestration framework** that is powerful yet **remarkably simple to configure**.
 
-<p align="center">
-  <a href="#-actors">🎭 Actors</a> |
-  <a href="#-agents">🤖 Agents</a> |
-  <a href="#-prompts">📝 Prompts</a> |
-  <a href="#-context">💾 Context</a> |
-  <a href="#-channels">📡 Channels</a> |
-  <a href="#-authoring">✨ Authoring</a>
-</p>
-
-### 🎭 Actors
-
-<details>
-<summary><i>Resilient multi-channel orchestration through Akka.NET message-driven architecture</i></summary>
-
-Morgana leverages the **actor model** to create a fault-tolerant, scalable orchestration layer. Each conversation is managed by a hierarchy of **specialized actors that collaborate** through asynchronous message passing:
-
-- **ConversationManager**: Stable entry point owning the lifecycle of a single user session
-- **ConversationSupervisor**: Orchestrates the entire conversation flow and coordinates child actors
-- **Guard**: Validates every interaction against business policies and brand guidelines
-- **Classifier**: Analyzes user intent through LLM-powered classification
-- **Router**: Dynamically routes requests to appropriate agents
-
-**Conversation Flow**
-
-```mermaid
-graph LR
-  U@{shape: circle, label: "👤 User"}
-
-  %% Channels (reference clients, out-of-the-box)
-  subgraph Channels["Channels"]
-    CLD@{shape: rounded, label: "🌐 Cauldron"}
-    RUN@{shape: rounded, label: "📟 Grimoire/Rune"}
-  end
-
-  %% Backend boundary
-  subgraph Morgana["Morgana"]
-    CM@{shape: rounded, label: "Manager"}
-    SV@{shape: rounded, label: "Supervisor"}
-
-    G@{shape: rounded, label: "Guard"}
-    C@{shape: rounded, label: "Classifier"}
-    R@{shape: rounded, label: "Router"}
-    MA@{shape: rounded, label: "Agent"}
-  end
-
-  %% User → Channel
-  U -- HTML --> CLD
-  U -- TTY --> RUN
-
-  %% Channel → BE
-  CLD -- SignalR --> CM
-  RUN -- Webhook --> CM
-  CM -- 1. Creates conversation and activates actor --> SV
-
-  %% Internal BE flow
-  SV -- 2. Asks for language compliance --> G
-  SV -- 4. Asks for intent classification --> C
-  SV -- 6. Asks for agent routing --> R
-  R -- 7. Activates agent for intent handling --> MA
-
-  %% External systems
-  G -. 3 Prompts for language compliance .-> LLM@{shape: braces, label: "LLM (Anthropic, Azure OpenAI, Google, Ollama, OpenAI)"}
-  C -. 5 Prompts for intent classification .-> LLM
-  MA -. 8 MCP tool discovery .-> MCP@{shape: das, label: "MCP Server"}
-  MA -. 9 Intent handling .-> LLM
-```
-
-</details>
-
-<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/actors/">the manual</a></i></p>
-
-### 🤖 Agents
-
-<details>
-<summary><i>Declarative specialization with automatic discovery and dynamic capabilities (MCP + A2A)</i></summary>
-
-Agents in Morgana are **domain specialists** that self-register through **declarative attributes**, eliminating manual configuration and enabling true plugin-based extensibility. Each agent inherits from `MorganaAgent` and declares its responsibilities through simple annotations:
-
-```csharp
-[HandlesIntent("billing")]
-[RequiresLLMTier(LLMTier.Efficiency)]
-[ConsultsAgent("inventory")] // A2A agent discovery (local)
-[ConsultsAgent("shipping", "acme")] // A2A agent discovery (partner)
-public class BillingAgent : MorganaAgent { ... }
-
-[HandlesIntent("gardening")]
-[RequiresLLMTier(LLMTier.Economy)]
-[UsesMCPServer("http://localhost:5006/mcp")] // MCP tool discovery
-public class GardeningAgent : MorganaAgent { ... }
-```
-
-At startup, Morgana automatically discovers all agents across configured assemblies and validates bidirectional consistency between declared intents and classifier configuration: **fail-fast guarantees** ensure errors are caught before reaching production.
-
-Agents express their capabilities through **tools**, which can be native implementations (inherited from `MorganaTool`) and also dynamically acquired from external MCP servers:
-
-```csharp
-[ProvidesToolForIntent("billing")]
-public class BillingTool : MorganaTool 
-{
-    public async Task<string> GetInvoices(string customerCode, int count) { ... }
-}
-```
-
-The **MCP integration** permits agents to extend their capabilities by consuming **Model Context Protocol servers**, making external tools indistinguishable from native implementations. This enables rapid prototyping, microservice integration and ecosystem-driven feature development, all without writing a single line of tool implementation code.
-
-The **A2A integration** allows agents to collaborate behind the scenes, consulting their peers on-demand to deliver cross-cutting answers that horizontally cover the entire application domain. This enables seamless agent collaboration, autonomous knowledge sharing and cross-domain reasoning, all without user-facing friction or explicit inter-agent configuration.
-
-```mermaid
-graph LR
-  U@{shape: circle, label: "👤 User"}
-
-  subgraph Here["This Morgana"]
-    B@{shape: rounded, label: "Billing"}
-    I@{shape: rounded, label: "Inventory"}
-  end
-
-  subgraph Acme["Partner: acme"]
-    S@{shape: rounded, label: "Shipping"}
-  end
-
-  U -- one question --> B
-  B -- consult_inventory --> I
-  I -. answer .-> B
-  B -- consult_acme_shipping --> S
-  S -. answer .-> B
-  B -- one answer --> U
-```
-
-A colleague living in the same installation needs nothing configured: that traffic is signed under a key coined at every start. A colleague living in **another Morgana** is one `Morgana:AgentToAgent:Partners[]` entry away, carrying the shared key and one policy per direction (`OutboundPolicy` for the agents consulted there, `InboundPolicy` for the agents reachable from there, with the ceiling on how many conversations that partner may open). Where a colleague runs is a deployment decision and the prose of an agent never says.
-
-</details>
-
-<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/agents/">the manual</a></i></p>
-
-### 📝 Prompts
-
-<details>
-<summary><i>First-class artifacts with layered personality architecture and structured behavioral policies</i></summary>
-
-Prompts are not hardcoded strings in Morgana: they are **versioned, maintainable project artifacts** managed through the `IPromptResolverService`. This separation of concerns enables prompt engineering teams to iterate independently from application logic, supporting A/B testing, localization and behavioral evolution without redeployment.
-
-The system distinguishes between two prompt categories:
-- **System prompts** (`morgana.json`): Define actor behaviors, global policies and orchestration rules
-- **Domain prompts** (`agents.json`): Define agent personalities and instructions, while each tool is described by the `[Description]` attributes on its C# method
-
-A unique characteristic of Morgana is its **Layered Personality System**. Every interaction maintains a consistent global personality (Morgana's core character) while allowing agents to express domain-appropriate specializations:
-
-- **Global Layer**: Defines Morgana's fundamental character, tone and values
-- **Agent Layer**: Adds contextual traits that complement (never contradict) the global personality
-
-For example, BillingAgent might be "a pragmatic and concrete witch" while ContractAgent is "a patient and empathetic witch": both remain recognizably "Morgana" while adapting to domain-specific user needs. This creates vertical consistency across conversations with horizontal variation per expertise area, delivering a **unified brand experience that feels naturally specialized**.
-
-Prompts also define **Global Policies** that are automatically composed into agent instructions, ensuring **system-wide behavioral consistency** without repetition.
-
-</details>
-
-<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/prompts/">the manual</a></i></p>
-
-### 💾 Context
-
-<details>
-<summary><i>Private by default, self-synchronizing where it matters</i></summary>
-
-Every agent in Morgana keeps its own **secure, isolated context**: memories, variables and conversation state that no other agent can see or touch by default. This is what lets a dozen specialized agents work side by side without stepping on each other's toes.
-
-Some information, though, is meant to travel. A customer code given to BillingAgent shouldn't have to be asked again the moment ContractAgent takes over. Morgana handles this with **self-synchronizing shared variables**: information explicitly marked as shared is transparently picked up by any agent that needs it, the instant it needs it (no re-asking the user, no manual wiring between agents).
-
-Conversations survive restarts and agent handoffs without losing this context. Users always see one coherent conversation, even when several specialized agents quietly took turns behind the scenes.
-
-</details>
-
-<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/context/">the manual</a></i></p>
-
-### 📡 Channels
-
-<details>
-<summary><i>One brain, every surface: rich where it can be, plain where it must be</i></summary>
-
-Morgana never asks a channel to keep up: it **adapts to whatever capabilities a channel actually declares**. A rich card, a quick reply, a streamed chunk: each is offered only where the channel says it can render it, gracefully degraded to plain text everywhere else, with nothing lost in translation and nothing crashing in the attempt.
-
-The same conversation, the same agents, the same policies: only the surface changes. A browser gets Cauldron's full HTML experience (sparkle loaders, rich cards, a floating widget). A terminal gets Grimoire's rendered TTY equivalent of the very same turns. Neither channel carries a line of agent logic: they are pure presentation; Morgana is the one that knows, turn by turn, what each of them can take.
-
-<table style="border:none;">
-  <tr>
-    <th colspan=6>Cauldron</th>
-  </tr>
-  <tr>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-SparkleLoader.jpg" alt="Morgana - Sparkle Loader (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Presentation.jpg" alt="Morgana - Presentation (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Chatting.jpg" alt="Morgana - Chatting (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Agent.jpg" alt="Morgana - Agent (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Agent2.jpg" alt="Morgana - Agent2 (Cauldron)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Widget.jpg" alt="Morgana - Widget (Cauldron)"/>
-    </td>
-  </tr>
-  <tr>
-    <th colspan=6>Grimoire</th>
-  </tr>
-  <tr>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-SparkleLoaderGRM.jpg" alt="Morgana - Sparkle Loader (Grimoire)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-PresentationGRM.jpg" alt="Morgana - Presentation (Grimoire)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-ChattingGRM.jpg" alt="Morgana - Chatting (Grimoire)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-AgentGRM.jpg" alt="Morgana - Agent (Grimoire)"/>
-    </td>
-    <td>
-      <img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Grimoire/Assets/Morgana-Agent2GRM.jpg" alt="Morgana - Agent2 (Grimoire)"/>
-    </td>
-    <td>&nbsp;</td>
-  </tr>
-</table>
-</details>
-
-<details>
-<summary><i>Summoning a living chat widget into any hosting page</i></summary>
-
-Reaching Morgana from a browser does not require landing on Cauldron: it publishes a launcher any page can host, whatever built it.
-
-```html
-<script src="https://your-cauldron-host/widget/morgana-widget.js" defer></script>
-```
-
-No parameters: it reads its own `src` to learn which Cauldron to open, so a copied snippet points back at the deployment it came from. Closed, it is a floating pill carrying Morgana's animated face; opened, a sandboxed `<iframe>` running the **real** Cauldron chat: streaming, rich cards, quick replies, dust gauge. A closed shadow root keeps the two stylesheets from reaching each other while the iframe keeps the conversation on Cauldron's own origin, unreadable from the host page. Framing stays closed until a site is listed in `Cauldron:Widget:AllowedEmbedOrigins`.
-</details>
-
-<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/channels/">the manual</a></i></p>
-
-### ✨ Authoring
-
-<details>
-<summary><i>An AI-driven workbench that distils domain expertise into production-ready agents</i></summary>
-
-Morgana recognizes that the hardest part of building agents isn't infrastructure: it's authoring clear, internally-consistent domain prompts and tool contracts. **Alembic** is the authoring workbench that solves this problem by conducting an AI-driven interview with domain experts, distilling their knowledge into a complete, buildable plugin—intents, agent prose, tool contracts and working C#, all ready to drop into production.
-
-Alembic runs standalone (no Morgana instance required), talking only to an LLM, so domain experts can model their business on their own schedule. The interview captures the vocabulary, reasoning patterns and tool interactions unique to each domain, then generates an archive that plugs into Morgana as a plugin DLL.
-
-The result is **prose as a first-class artifact**: agents are authored by people who understand the domain, not engineers guessing at the automation. Changes to behavior flow from changes to the prompt configuration, versioned and auditable like any source code, without requiring recompilation or redeployment cycles.
-
-<details>
-<summary><b>▶️ Running it</b>: <i>a build plus a profile-gated compose service</i></summary>
-
-```bash
-# 🔨 Build it
-dotnet build ./Alembic
-
-# 🧪 Model a domain, at http://localhost:5005
-docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
-```
-
-</details>
-
-</details>
-
-<p align="right"><i>📖 Morgana reveals this pillar in her own words in <a href="https://mdesalvo.github.io/Morgana/authoring/">the manual</a></i></p>
-
-Morgana tells her own story in [**the manual**](https://mdesalvo.github.io/Morgana/): her six pillars, what she brings already brewed and the few choices that are yours to make.
+| | Pillar | In one line |
+|---|---|---|
+| 🎭 | [**Actors**](https://mdesalvo.github.io/Morgana/actors/) | Resilient multi-channel orchestration through Akka.NET message-driven architecture |
+| 🤖 | [**Agents**](https://mdesalvo.github.io/Morgana/agents/) | Declarative specialization with automatic discovery and dynamic capabilities (MCP + A2A) |
+| 📝 | [**Prompts**](https://mdesalvo.github.io/Morgana/prompts/) | First-class artifacts with layered personality architecture and structured behavioral policies |
+| 💾 | [**Context**](https://mdesalvo.github.io/Morgana/context/) | Private by default, self-synchronizing where it matters |
+| 📡 | [**Channels**](https://mdesalvo.github.io/Morgana/channels/) | One brain, every surface: rich where it can be, plain where it must be |
+| ✨ | [**Authoring**](https://mdesalvo.github.io/Morgana/authoring/) | An AI-driven workbench that distils domain expertise into production-ready agents |
 
 ---
 
@@ -350,6 +89,19 @@ docker compose --env-file .env --env-file .env.versions run --rm --service-ports
 
 ```bash
 docker compose --env-file .env --env-file .env.versions run --rm --service-ports --use-aliases rune
+```
+
+</details>
+
+<details>
+<summary><b>⚗️ Alembic</b>: <i>the authoring workbench, which needs no Morgana instance</i></summary>
+
+```bash
+# 🔨 Build it
+dotnet build ./Alembic
+
+# 🧪 Model a domain, at http://localhost:5005
+docker compose --env-file .env --env-file .env.versions --profile authoring up alembic
 ```
 
 </details>

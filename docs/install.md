@@ -64,6 +64,8 @@ LLM_EFFICIENCY_MODEL=claude-sonnet-5-5     # the model's name (on Azure, your de
 
 The same four lines exist for `ECONOMY` and `PERFORMANCE`. The levels may use different vendors: a local Ollama model for `Economy` with a hosted one above it is perfectly fine. Last, `ACTORSYSTEM_TIER` says which level my own chores run on, normally `Economy`.
 
+Every release of mine is [certified on each vendor]({{ '/prompt-harness/#every-release-of-mine-is-certified' | relative_url }}) with the `Economy` and `Efficiency` models of the moment, so those are the safest choices for the two levels most of my coven works on.
+
 All three levels must be filled, even when no witch uses one of them. I never fall back from one level to another, so a witch who needs a strong model never quietly gets a weak one.
 
 > **Must you set prices?** Not when you pick a model from the vendor's list: I already know what it costs. [Models and dust]({{ '/dust/' | relative_url }}) explains the few cases where you must.
