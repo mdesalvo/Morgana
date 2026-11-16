@@ -45,12 +45,12 @@
 
     @if (isReading)
     {
-        <Waiting Text="@(isLearning ? "Working out what your business does, so I do not have to ask you twice…" : "Reading…")" />
+        <Waiting Text="@(isReadingBusiness ? "Working out what your business does, so I do not have to ask you twice…" : "Reading…")" />
     }
 
-    @if (error is not null)
+    @if (readFailure is not null)
     {
-        <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Color="Color.Error" Block="true">I could not read it: @error</FluentText>
+        <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Color="Color.Error" Block="true">I could not read it: @readFailure</FluentText>
     }
 
     @if (Revealed is { } draft)
@@ -62,10 +62,10 @@
             </FluentMessageBar>
         }
 
-        @if (notices.Count > 0)
+        @if (importNotices.Count > 0)
         {
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px" Class="import-news">
-                @foreach (string notice in notices)
+                @foreach (string notice in importNotices)
                 {
                     <FluentMessageBar Intent="MessageBarIntent.Info" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="message-fits">
                         <FluentText Size="TextSize.Size400">@notice</FluentText>
@@ -206,12 +206,12 @@
     /// <summary>
     /// What the import wants the client to know about what it read.
     /// </summary>
-    private IReadOnlyList<string> notices = [];
+    private IReadOnlyList<string> importNotices = [];
 
     /// <summary>
     /// Why the file could not be read, when it could not.
     /// </summary>
-    private string? error;
+    private string? readFailure;
 
     /// <summary>
     /// Whether a file is being read.
@@ -221,7 +221,7 @@
     /// <summary>
     /// Whether the upload is being read for what it says about the client's business.
     /// </summary>
-    private bool isLearning;
+    private bool isReadingBusiness;
 
     /// <summary>
     /// Whether the upload was an archive Alembic built, whose next natural question is whether it still stands.
@@ -323,8 +323,8 @@
     {
         // A new upload clears what the previous one reported and hides the domain until this one arrives whole.
         isReading = true;
-        error = null;
-        notices = [];
+        readFailure = null;
+        importNotices = [];
         arrivedAsArchive = false;
 
         try
@@ -350,7 +350,7 @@
                 // An archive carrying neither file holds no domain to open.
                 if (inner is null)
                 {
-                    error = $"{file.Name} is a zip archive, but I could not find an alembic-draft.json or an agents.json inside it.";
+                    readFailure = $"{file.Name} is a zip archive, but I could not find an alembic-draft.json or an agents.json inside it.";
                     return;
                 }
 
@@ -383,7 +383,7 @@
         // Too large, a broken zip or JSON that is not what it claims: each is told to the client, never a dropped circuit.
         catch (Exception unreadable) when (unreadable is not OperationCanceledException)
         {
-            error = unreadable.Message;
+            readFailure = unreadable.Message;
         }
         finally
         {
@@ -400,8 +400,8 @@
         // The configuration parsed into a Draft, with whatever the importer had to tell the client.
         DraftImportResult result = await DraftImportService.ImportAsync(configuration, fileName);
 
-        notices = result.Notices;
-        error = result.Error;
+        importNotices = result.Notices;
+        readFailure = result.Error;
         SetDraft(result.Draft);
 
         // The finished prose is read once for what it says about the business, so the interview does not ask it again.
@@ -419,7 +419,7 @@
             return;
 
         // The page says it is reading the trade, since the call takes a few seconds.
-        isLearning = true;
+        isReadingBusiness = true;
         StateHasChanged();
 
         try
@@ -429,14 +429,14 @@
 
             // Only a failed reading is worth the client's attention: it changes what the interview will ask them.
             if (reading.Error is { } failure)
-                notices = [.. notices, $"I could not work out what your business does from this file, so I will ask instead: {failure}"];
+                importNotices = [.. importNotices, $"I could not work out what your business does from this file, so I will ask instead: {failure}"];
 
             // The Draft is set again so the facts just written reach every reader of the circuit.
             DraftStateService.Set(draft);
         }
         finally
         {
-            isLearning = false;
+            isReadingBusiness = false;
         }
     }
 
@@ -448,7 +448,7 @@
         // A file shaped like a save file that still does not parse is told as such, not as a bad configuration.
         if (await DraftSerializationService.DeserializeAsync(saveFile) is not { } draft)
         {
-            error = $"{fileName} looks like a sitting of ours, but I could not read it.";
+            readFailure = $"{fileName} looks like a sitting of ours, but I could not read it.";
             return;
         }
 

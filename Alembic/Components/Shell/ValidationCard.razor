@@ -10,29 +10,29 @@
 
 @{
     IReadOnlyList<ValidationFinding> deterministic = DraftValidationService.Validate(Draft);
-    int chosen = rows.Count(row => row.Chosen);
+    int chosen = checkRows.Count(row => row.Chosen);
 }
 
 <section class="open">
     <div class="open-body">
         @* The judged run rewrites every outcome below, so it is waited on where they stand. *@
-        @if (running)
+        @if (isRunningChecks)
         {
             <Waiting Text="Reading your agents side by side, for what only shows between them…" />
         }
         else
         {
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="4px">
-                @foreach (CheckRow row in rows)
+                @foreach (CheckRow row in checkRows)
                 {
                     List<ValidationFinding> own = row.Check is { } check ? [.. deterministic.Where(finding => finding.Check == check)] : [];
-                    List<CoherenceFinding> judged = row.Check is null ? [.. coherence.Where(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))] : [];
+                    List<CoherenceFinding> judged = row.Check is null ? [.. coherenceFindings.Where(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))] : [];
                     int count = own.Count + judged.Count;
-                    bool ranThis = ran.Contains(row.Id);
+                    bool ranThis = ranCheckIds.Contains(row.Id);
                     bool errors = own.Any(finding => finding.Severity == FindingSeverity.Error);
-                    bool isOpen = open.Contains(row.Id);
+                    bool isOpen = expandedCheckIds.Contains(row.Id);
 
-                    @if (row != rows[0])
+                    @if (row != checkRows[0])
                     {
                         <FluentDivider />
                     }
@@ -115,7 +115,7 @@
                                                         You may leave it as it is, but it is worth fixing: @WithNames(finding.Why)
                                                     </FluentText>
 
-                                                    @if (applying == finding)
+                                                    @if (findingBeingApplied == finding)
                                                     {
                                                         <Waiting Text="Rewriting the agents this finding names…" />
                                                     }
@@ -125,10 +125,10 @@
                                                     }
                                                 </ChildContent>
                                                 <ActionsTemplate>
-                                                    @if (applying != finding)
+                                                    @if (findingBeingApplied != finding)
                                                     {
                                                         <FluentButton Appearance="ButtonAppearance.Outline"
-                                                                      Disabled="@(applying is not null)" OnClick="() => ApplyAsync(finding)">
+                                                                      Disabled="@(findingBeingApplied is not null)" OnClick="() => ApplyAsync(finding)">
                                                             Apply the correction
                                                         </FluentButton>
                                                     }
@@ -147,10 +147,10 @@
 
     <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.SpaceBetween" VerticalAlignment="VerticalAlignment.Center" Class="actions">
         <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px" Width="auto">
-            <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Large" Disabled="@(chosen == 0 || running)" OnClick="RunAsync">
+            <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Large" Disabled="@(chosen == 0 || isRunningChecks)" OnClick="RunAsync">
                 Run validation
             </FluentButton>
-            <FluentText Class="muted">@(chosen == 0 ? "choose at least one check" : $"{chosen} of {rows.Count}")</FluentText>
+            <FluentText Class="muted">@(chosen == 0 ? "choose at least one check" : $"{chosen} of {checkRows.Count}")</FluentText>
         </FluentStack>
 
         <FluentStack Orientation="Orientation.Horizontal" HorizontalAlignment="HorizontalAlignment.End" HorizontalGap="9px" Width="auto">
@@ -231,37 +231,37 @@
     /// <summary>
     /// Every check, in the order the client reads them.
     /// </summary>
-    private readonly List<CheckRow> rows = [];
+    private readonly List<CheckRow> checkRows = [];
 
     /// <summary>
     /// The checks the last run carried: only those show outcomes.
     /// </summary>
-    private readonly HashSet<string> ran = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> ranCheckIds = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// The checks open on their findings.
     /// </summary>
-    private readonly HashSet<string> open = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> expandedCheckIds = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// What the model found and the client has not yet corrected.
     /// </summary>
-    private List<CoherenceFinding> coherence = [];
+    private List<CoherenceFinding> coherenceFindings = [];
 
     /// <summary>
     /// Corrections applied this sitting, so a later run tells a fixed finding from one still present.
     /// </summary>
-    private readonly List<ResolvedCoherenceFinding> resolved = [];
+    private readonly List<ResolvedCoherenceFinding> resolvedFindings = [];
 
     /// <summary>
     /// Whether a judged run is on the wire.
     /// </summary>
-    private bool running;
+    private bool isRunningChecks;
 
     /// <summary>
     /// The correction being applied, so only one runs at a time.
     /// </summary>
-    private CoherenceFinding? applying;
+    private CoherenceFinding? findingBeingApplied;
 
     /// <summary>
     /// Lays out the families decided by reading, then the classes the model's own prompt declares.
@@ -270,11 +270,11 @@
     {
         // The families decided by reading come first, keyed by their own name.
         foreach ((ValidationCheck check, string label) in Families)
-            rows.Add(new CheckRow { Id = check.ToString(), Label = label, Check = check });
+            checkRows.Add(new CheckRow { Id = check.ToString(), Label = label, Check = check });
 
         // Then the classes the DomainValidator prompt declares, keyed by the kind the model answers with.
         foreach (CoherenceAspect aspect in CoherenceService.Aspects)
-            rows.Add(new CheckRow { Id = aspect.Id, Label = aspect.Label });
+            checkRows.Add(new CheckRow { Id = aspect.Id, Label = aspect.Label });
     }
 
     /// <summary>
@@ -283,14 +283,14 @@
     private async Task RunAsync()
     {
         // Nothing runs until the client ticks something: a report answering questions nobody asked is a table to sift.
-        List<CheckRow> chosen = [.. rows.Where(row => row.Chosen)];
+        List<CheckRow> chosen = [.. checkRows.Where(row => row.Chosen)];
 
         if (chosen.Count == 0)
             return;
 
         // The families decided by reading run at once, so they show outcomes straight away.
-        ran.Clear();
-        ran.UnionWith(chosen.Where(row => row.Check is not null).Select(row => row.Id));
+        ranCheckIds.Clear();
+        ranCheckIds.UnionWith(chosen.Where(row => row.Check is not null).Select(row => row.Id));
 
         // The judged classes go to the model in one pass, an unselected class never being sent.
         List<string> aspects = [.. chosen.Where(row => row.Check is null).Select(row => row.Id)];
@@ -307,7 +307,7 @@
         else if (aspects.Count > 0)
         {
             // The card shows the model at work, since a judged pass takes a whole answer.
-            running = true;
+            isRunningChecks = true;
             StateHasChanged();
 
             CoherenceReport report;
@@ -315,11 +315,11 @@
             try
             {
                 // The corrections already applied go with it, so a fixed finding is not reported again.
-                report = await CoherenceService.ReviewAsync(Draft, aspects, resolved);
+                report = await CoherenceService.ReviewAsync(Draft, aspects, resolvedFindings);
             }
             finally
             {
-                running = false;
+                isRunningChecks = false;
             }
 
             // A pass that failed is told as a failure and shows no outcome.
@@ -331,35 +331,35 @@
             else
             {
                 // The findings replace the last run's and the judged rows now show outcomes.
-                coherence = [.. report.Findings];
-                ran.UnionWith(aspects);
+                coherenceFindings = [.. report.Findings];
+                ranCheckIds.UnionWith(aspects);
 
                 // A kind outside the classes asked for is kept under its own row rather than dropped.
-                foreach (string kind in coherence.Select(finding => finding.Kind).Distinct(StringComparer.OrdinalIgnoreCase)
-                             .Where(kind => rows.All(row => !string.Equals(row.Id, kind, StringComparison.OrdinalIgnoreCase))))
+                foreach (string kind in coherenceFindings.Select(finding => finding.Kind).Distinct(StringComparer.OrdinalIgnoreCase)
+                             .Where(kind => checkRows.All(row => !string.Equals(row.Id, kind, StringComparison.OrdinalIgnoreCase))))
                 {
                     // Labelled by its kind, the only name the model gave it.
-                    rows.Add(new CheckRow { Id = kind, Label = kind, Chosen = true });
-                    ran.Add(kind);
+                    checkRows.Add(new CheckRow { Id = kind, Label = kind, Chosen = true });
+                    ranCheckIds.Add(kind);
                 }
             }
         }
 
         // What came back with something opens on its own: it is what was asked.
         IReadOnlyList<ValidationFinding> deterministic = DraftValidationService.Validate(Draft);
-        open.Clear();
-        open.UnionWith(rows.Where(row => ran.Contains(row.Id)
+        expandedCheckIds.Clear();
+        expandedCheckIds.UnionWith(checkRows.Where(row => ranCheckIds.Contains(row.Id)
                                          && (row.Check is { } check
                                              ? deterministic.Any(finding => finding.Check == check)
-                                             : coherence.Any(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))))
+                                             : coherenceFindings.Any(finding => string.Equals(finding.Kind, row.Id, StringComparison.OrdinalIgnoreCase))))
                            .Select(row => row.Id));
 
         // What the summary says: how many findings among the checks run, how many checks and whether any stops the domain.
-        int found = deterministic.Count(finding => rows.Any(row => row.Check == finding.Check && ran.Contains(row.Id)))
-                    + coherence.Count(finding => ran.Contains(finding.Kind));
-        int checks = rows.Count(row => ran.Contains(row.Id));
+        int found = deterministic.Count(finding => checkRows.Any(row => row.Check == finding.Check && ranCheckIds.Contains(row.Id)))
+                    + coherenceFindings.Count(finding => ranCheckIds.Contains(finding.Kind));
+        int checks = checkRows.Count(row => ranCheckIds.Contains(row.Id));
         bool blocking = deterministic.Any(finding => finding.Severity == FindingSeverity.Error
-                                                     && rows.Any(row => row.Check == finding.Check && ran.Contains(row.Id)));
+                                                     && checkRows.Any(row => row.Check == finding.Check && ranCheckIds.Contains(row.Id)));
 
         // A refused or failed judged pass already said why, so no summary contradicts it.
         if (!refused && checks > 0)
@@ -374,7 +374,7 @@
     private async Task ApplyAsync(CoherenceFinding finding)
     {
         // One correction at a time: the button of every other finding waits while this one runs.
-        applying = finding;
+        findingBeingApplied = finding;
         CoherenceApplyResult result;
 
         try
@@ -384,7 +384,7 @@
         }
         finally
         {
-            applying = null;
+            findingBeingApplied = null;
         }
 
         // Refreshed even after a declared failure: the applier may have written before it stopped.
@@ -393,8 +393,8 @@
         // An applied finding leaves the list and is remembered, so the next run can tell it fixed.
         if (result.Applied)
         {
-            coherence.Remove(finding);
-            resolved.Add(new ResolvedCoherenceFinding(finding, result.Summary));
+            coherenceFindings.Remove(finding);
+            resolvedFindings.Add(new ResolvedCoherenceFinding(finding, result.Summary));
         }
 
         // The client reads what changed, in the words the applier summarised it in.
@@ -406,11 +406,11 @@
     /// </summary>
     private void SetOpen(CheckRow row, bool expanded)
     {
-        // The open set follows the client's own unfolding, so a later run keeps what they chose to see.
+        // The expanded set follows the client's own unfolding, so a later run keeps what they chose to see.
         if (expanded)
-            open.Add(row.Id);
+            expandedCheckIds.Add(row.Id);
         else
-            open.Remove(row.Id);
+            expandedCheckIds.Remove(row.Id);
     }
 
     /// <summary>

@@ -5,7 +5,7 @@
     The page waits for the palette's theme, so no control is ever seen in Fluent's default colours. The providers
     wait with it: drawn earlier, the dialog overlay's spinner shows bare at the top before Fluent's components are defined.
 *@
-@if (themed)
+@if (isThemeApplied)
 {
     @Body
 
@@ -31,7 +31,7 @@
     /// <summary>
     /// Whether the palette's theme is in place, so the page may be shown.
     /// </summary>
-    private bool themed;
+    private bool isThemeApplied;
 
     /// <summary>
     /// Grows Fluent's colour ramp from the seed, then stands its grounds, text and lines in the palette's room.
@@ -136,7 +136,7 @@
         await ThemeService.SetThemeAsync(theme);
 
         // Only now is the page shown, so it never flashes in Fluent's defaults.
-        themed = true;
+        isThemeApplied = true;
         StateHasChanged();
     }
 }

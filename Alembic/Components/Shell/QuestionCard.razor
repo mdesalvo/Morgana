@@ -35,7 +35,7 @@
                     @foreach (string trait in Traits)
                     {
                         <FluentToggleButton Shape="ButtonShape.Circular"
-                                            Pressed="@picked.Contains(trait)" OnClick="() => Toggle(trait)">@trait</FluentToggleButton>
+                                            Pressed="@pickedTraits.Contains(trait)" OnClick="() => Toggle(trait)">@trait</FluentToggleButton>
                     }
                 </FluentStack>
             }
@@ -165,23 +165,23 @@
     /// <summary>
     /// The last answer sent, offered back when its turn fails instead of asked for again.
     /// </summary>
-    private string sent = string.Empty;
+    private string lastSentAnswer = string.Empty;
 
     /// <summary>
     /// The voice words the client holds lit.
     /// </summary>
-    private readonly HashSet<string> picked = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<string> pickedTraits = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Whether the client touched the cloud this question.
     /// Words lit only because the voice carries them must not travel beside a sentence like "less formal".
     /// </summary>
-    private bool touched;
+    private bool hasClientTouchedTraits;
 
     /// <summary>
     /// The turn the box was last primed for.
     /// </summary>
-    private int primedOn = -1;
+    private int primedTurn = -1;
 
     /// <summary>
     /// Whether the box still reads exactly as the example was written.
@@ -203,21 +203,21 @@
     private string Voice(string typed)
     {
         // A sentence typed beside an untouched cloud is the client's whole answer.
-        if (!touched && typed.Length > 0)
+        if (!hasClientTouchedTraits && typed.Length > 0)
             return string.Empty;
 
         // Words held lit are the client's choice of voice, said in their first person.
-        if (picked.Count > 0)
-            return $"The voice I would want here: {string.Join(", ", picked)}.";
+        if (pickedTraits.Count > 0)
+            return $"The voice I would want here: {string.Join(", ", pickedTraits)}.";
 
         // A cloud the client emptied on purpose says none of the words fits; an untouched empty one says nothing.
-        return touched ? "None of those words is the voice I want." : string.Empty;
+        return hasClientTouchedTraits ? "None of those words is the voice I want." : string.Empty;
     }
 
     /// <summary>
     /// The example the box was last primed with.
     /// </summary>
-    private string primedWith = string.Empty;
+    private string primedExample = string.Empty;
 
     /// <summary>
     /// Primes the box and the cloud once per question; a failed turn gets its answer back.
@@ -225,30 +225,30 @@
     protected override void OnParametersSet()
     {
         // A failed turn gives the client their answer back rather than asking them to type it again.
-        if (Error is not null && answer.Length == 0 && sent.Length > 0)
-            answer = sent;
+        if (Error is not null && answer.Length == 0 && lastSentAnswer.Length > 0)
+            answer = lastSentAnswer;
 
         // The same question still standing: the box keeps what the client wrote.
-        if (Turn == primedOn)
+        if (Turn == primedTurn)
         {
             // A turn can bring an example and leave the question standing: the box takes it unless the client wrote there.
-            if (Prompting != primedWith && (answer.Length == 0 || answer == primedWith))
+            if (Prompting != primedExample && (answer.Length == 0 || answer == primedExample))
                 answer = Prompting;
 
-            primedWith = Prompting;
+            primedExample = Prompting;
             return;
         }
 
         // A new question: the box opens on its example and the cloud on the voice the agent already has.
-        primedOn = Turn;
-        primedWith = Prompting;
+        primedTurn = Turn;
+        primedExample = Prompting;
         answer = Prompting;
-        touched = false;
-        picked.Clear();
+        hasClientTouchedTraits = false;
+        pickedTraits.Clear();
 
         // The words the Personality already carries start lit, so the client is not asked to say them again.
         foreach (string trait in Taken ?? [])
-            picked.Add(trait);
+            pickedTraits.Add(trait);
     }
 
     /// <summary>
@@ -267,11 +267,11 @@
     private void Toggle(string trait)
     {
         // From the first touch the cloud is the client speaking.
-        touched = true;
+        hasClientTouchedTraits = true;
 
         // A lit word goes dark and a dark one lights.
-        if (!picked.Remove(trait))
-            picked.Add(trait);
+        if (!pickedTraits.Remove(trait))
+            pickedTraits.Add(trait);
     }
 
     /// <summary>
@@ -283,10 +283,10 @@
         string said = Said;
 
         // Kept for a turn that fails, then the box and the cloud are cleared for the next question.
-        sent = said;
+        lastSentAnswer = said;
         answer = string.Empty;
-        touched = false;
-        picked.Clear();
+        hasClientTouchedTraits = false;
+        pickedTraits.Clear();
 
         // The shell sends it as the client's turn.
         await OnAnswer.InvokeAsync(said);

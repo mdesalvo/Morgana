@@ -3,6 +3,7 @@
 @inject IDraftValidationService DraftValidationService
 @inject IAssetPackageService AssetPackageService
 @inject ICodeEmitService CodeEmitService
+@inject INamespaceProposalService NamespaceProposalService
 @inject ILogger Logger
 @inject IJSRuntime JS
 
@@ -22,9 +23,16 @@
             <FluentText Class="panel-title">Namespace</FluentText>
             <FluentGrid Spacing="3">
                 <FluentGridItem Xs="4">
-                    <FluentTextInput @bind-Value="rootNamespace" @bind-Value:after="InvalidateAsync" Placeholder="namespace" Width="100%"
-                                     Disabled="running" MessageState="@(NamespaceMessage is null ? null : MessageState.Error)"
-                                     Message="@NamespaceMessage" />
+                    @* The proposal is written into the box like the class names, for the client to read and change. *@
+                    <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="10px">
+                        <FluentTextInput @bind-Value="rootNamespace" @bind-Value:after="InvalidateAsync" Placeholder="namespace" Width="100%"
+                                         Disabled="@(isDistilling || isGeneratingNamespace)" MessageState="@(NamespaceMessage is null ? null : MessageState.Error)"
+                                         Message="@NamespaceMessage" />
+                        @if (isGeneratingNamespace)
+                        {
+                            <FluentSpinner Size="SpinnerSize.Tiny" />
+                        }
+                    </FluentStack>
                 </FluentGridItem>
             </FluentGrid>
         </div>
@@ -57,7 +65,7 @@
                     <FluentGridItem Xs="2">
                         <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
                             <FluentTextInput @bind-Value="agent.Code.AgentClassName" Immediate="true" @onfocusout="InvalidateAsync"
-                                             Placeholder="agent class name" Disabled="running" Width="100%"
+                                             Placeholder="agent class name" Disabled="isDistilling" Width="100%"
                                              MessageState="@IdentifierState(agent.Code.AgentClassName)" />
                             <FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative"
                                          title="Rewritten by Alembic on every distillation">@(agent.Code.AgentClassName ?? "…").g.cs</FluentBadge>
@@ -69,7 +77,7 @@
                         <FluentGridItem Xs="2">
                             <FluentStack Orientation="Orientation.Vertical" VerticalGap="6px">
                                 <FluentTextInput @bind-Value="agent.Code.ToolClassName" Immediate="true" @onfocusout="InvalidateAsync"
-                                                 Placeholder="tool class name" Disabled="running" Width="100%"
+                                                 Placeholder="tool class name" Disabled="isDistilling" Width="100%"
                                                  MessageState="@IdentifierState(agent.Code.ToolClassName)" />
                                 <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="6px" VerticalGap="6px">
                                     <FluentBadge Appearance="BadgeAppearance.Outline" Color="BadgeColor.Informative"
@@ -86,10 +94,10 @@
                     }
 
                     <FluentGridItem Xs="6">
-                        <FluentRadioGroup TValue="Morgana.AI.Records.LLMTier?" Orientation="Orientation.Horizontal" Disabled="running"
+                        <FluentRadioGroup TValue="Morgana.AI.Records.LLMTier?" Orientation="Orientation.Horizontal" Disabled="isDistilling"
                                           @bind-Value="agent.Code.Tier" @bind-Value:after="InvalidateAsync"
-                                          MessageState="@(touched && agent.Code.Tier is null ? MessageState.Error : null)"
-                                          Message="@(touched && agent.Code.Tier is null ? "Pick a tier" : null)">
+                                          MessageState="@(wasGenerationRefused && agent.Code.Tier is null ? MessageState.Error : null)"
+                                          Message="@(wasGenerationRefused && agent.Code.Tier is null ? "Pick a tier" : null)">
                             @foreach (Morgana.AI.Records.LLMTier tier in Tiers)
                             {
                                 <FluentRadio TValue="Morgana.AI.Records.LLMTier?" Value="tier">
@@ -105,15 +113,15 @@
                     {
                         <FluentGridItem Xs="2" />
                         <FluentGridItem Xs="2">
-                            <FluentTextInput @bind-Value="row.Url" @bind-Value:after="() => SyncMcpAsync(agent)"
-                                             Placeholder="MCP server address" Width="100%" Disabled="running"
-                                             MessageState="@(touched && !IsAbsoluteHttpUri(row.Url) ? MessageState.Error : null)"
-                                             Message="@(touched && !IsAbsoluteHttpUri(row.Url) ? "An absolute http(s) address" : null)" />
+                            <FluentTextInput @ref="row.Box" @bind-Value="row.Url" @bind-Value:after="() => SyncMcpAsync(agent)"
+                                             Placeholder="MCP server address" Width="100%" Disabled="isDistilling"
+                                             MessageState="@(wasGenerationRefused && !IsAbsoluteHttpUri(row.Url) ? MessageState.Error : null)"
+                                             Message="@(wasGenerationRefused && !IsAbsoluteHttpUri(row.Url) ? "An absolute http(s) address" : null)" />
                         </FluentGridItem>
                         <FluentGridItem Xs="8">
                             <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="12px">
                                 <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" Title="Open a session with this server and list its tools"
-                                              Disabled="@(running || row.Trying || !IsAbsoluteHttpUri(row.Url))" OnClick="() => TryMcpAsync(row)">⇄ Try</FluentButton>
+                                              Disabled="@(isDistilling || row.Trying || !IsAbsoluteHttpUri(row.Url))" OnClick="() => TryMcpAsync(row)">⇄ Try</FluentButton>
 
                                 @if (row.Trying)
                                 {
@@ -132,14 +140,14 @@
                                 }
 
                                 <FluentButton Appearance="ButtonAppearance.Transparent" IconOnly="true" Color="var(--alembic-error)"
-                                              Title="Remove this server" Disabled="running" OnClick="() => RemoveMcpAsync(agent, row)">✕</FluentButton>
+                                              Title="Remove this server" Disabled="isDistilling" OnClick="() => RemoveMcpAsync(agent, row)">✕</FluentButton>
                             </FluentStack>
                         </FluentGridItem>
                     }
 
                     <FluentGridItem Xs="2" />
                     <FluentGridItem Xs="10">
-                        <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" Disabled="running"
+                        <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" Disabled="isDistilling"
                                       OnClick="() => AddMcp(agent)">Add an MCP server</FluentButton>
                     </FluentGridItem>
                 }
@@ -149,7 +157,7 @@
         <div class="panel-block">
             <FluentDivider />
 
-            @if (running)
+            @if (isDistilling)
             {
                 <FluentGrid Spacing="3" Class="distillation">
                     <FluentGridItem Xs="4">
@@ -194,7 +202,7 @@
                                 <FluentText As="TextTag.Paragraph" Size="TextSize.Size500" Weight="TextWeight.Semibold" Class="distillation-phase">@PhaseLabel</FluentText>
                                 <FluentProgressBar Value="Percent" Max="100" Width="100%" />
                                 <FluentText Size="TextSize.Size500">
-                                    <strong>@Percent%</strong><span class="muted"> · @plan.Count(step => step.Done) of @plan.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")</span>
+                                    <strong>@Percent%</strong><span class="muted"> · @buildSteps.Count(step => step.Done) of @buildSteps.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")</span>
                                 </FluentText>
 
                                 @if (NextAgent is { } next)
@@ -245,9 +253,9 @@
                         @* Newest first in the markup: the log is drawn bottom up, so it stays on its newest line by itself. *@
                         <ol class="distillation-log" aria-live="polite">
                             <li class="log-current"><FluentSpinner Size="SpinnerSize.Tiny" />Writing @CurrentLogLabel…</li>
-                            @for (int line = written.Count - 1; line >= 0; line--)
+                            @for (int line = writtenPaths.Count - 1; line >= 0; line--)
                             {
-                                <li class="log-done"><span class="log-mark">✓</span><code>@written[line]</code></li>
+                                <li class="log-done"><span class="log-mark">✓</span><code>@writtenPaths[line]</code></li>
                             }
                         </ol>
                     </FluentGridItem>
@@ -257,7 +265,7 @@
                     <FluentButton Appearance="ButtonAppearance.Outline" Disabled="isStopping" OnClick="Stop">@(isStopping ? "Stopping…" : "Stop")</FluentButton>
                 </FluentStack>
             }
-            else if (package is { } archive)
+            else if (archiveBytes is { } archive)
             {
                 <FluentStack Orientation="Orientation.Vertical" HorizontalAlignment="HorizontalAlignment.Start" VerticalGap="12px" Class="distillation-done">
                     <FluentText As="TextTag.Paragraph" Size="TextSize.Size800" Weight="TextWeight.Regular" Class="distillation-done-headline">
@@ -266,7 +274,7 @@
 
                     <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="14px">
                         <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="DownloadAsync">Download @ArchiveName</FluentButton>
-                        <FluentText Size="TextSize.Size500" Class="muted">@written.Count files, @(archive.Length / 1024) KB</FluentText>
+                        <FluentText Size="TextSize.Size500" Class="muted">@writtenPaths.Count files, @(archive.Length / 1024) KB</FluentText>
                     </FluentStack>
 
                     <FluentButton Appearance="ButtonAppearance.Outline" OnClick="AgainAsync">Run again</FluentButton>
@@ -275,7 +283,7 @@
             else
             {
                 <FluentStack Orientation="Orientation.Horizontal">
-                    <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="FinalizeAsync">Generate domain</FluentButton>
+                    <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" Disabled="isGeneratingNamespace" OnClick="FinalizeAsync">Generate domain</FluentButton>
                 </FluentStack>
             }
         </div>
@@ -336,6 +344,9 @@
 
         /// <summary>Why the try got no answer; <c>null</c> when it succeeded.</summary>
         public string? Failure { get; set; }
+
+        /// <summary>The box the address is typed into, so a row just opened can take the caret.</summary>
+        public FluentTextInput? Box { get; set; }
     }
 
     /// <summary>
@@ -362,24 +373,34 @@
     private string rootNamespace = string.Empty;
 
     /// <summary>
+    /// Whether the model is proposing the namespace, so the box waits for it.
+    /// </summary>
+    private bool isGeneratingNamespace;
+
+    /// <summary>
     /// Every agent's MCP rows.
     /// </summary>
-    private readonly Dictionary<AgentDraft, List<McpRow>> mcp = [];
+    private readonly Dictionary<AgentDraft, List<McpRow>> mcpRowsByAgent = [];
 
     /// <summary>
     /// Whether distilling was refused, so every missing fact shows as an error.
     /// </summary>
-    private bool touched;
+    private bool wasGenerationRefused;
+
+    /// <summary>
+    /// The MCP row just opened, waiting for its box to be on screen before the caret moves into it.
+    /// </summary>
+    private McpRow? mcpRowAwaitingFocus;
 
     /// <summary>
     /// The finished archive, until a code fact changes under it.
     /// </summary>
-    private byte[]? package;
+    private byte[]? archiveBytes;
 
     /// <summary>
     /// Whether the distillation is running.
     /// </summary>
-    private bool running;
+    private bool isDistilling;
 
     /// <summary>
     /// Whether Stop was pressed and the build is still unwinding.
@@ -389,12 +410,12 @@
     /// <summary>
     /// Every path the build reported, oldest first.
     /// </summary>
-    private readonly List<string> written = [];
+    private readonly List<string> writtenPaths = [];
 
     /// <summary>
     /// The steps the build walks, in the order it writes them.
     /// </summary>
-    private readonly List<Step> plan = [];
+    private readonly List<Step> buildSteps = [];
 
     /// <summary>
     /// Cancels the running build.
@@ -404,7 +425,7 @@
     /// <summary>
     /// Redraws the distillation while it runs, through the long silences of model calls.
     /// </summary>
-    private System.Threading.Timer? heartbeat;
+    private Timer? heartbeat;
 
     /// <summary>
     /// When the step in hand began, so a slow step can say how long it has been slow.
@@ -437,16 +458,45 @@
             agent.Code.Inferred = false;
 
             // One editable row per server the agent already declares.
-            mcp[agent] = [.. agent.Code.MCPServers.Select(url => new McpRow { Url = url })];
+            mcpRowsByAgent[agent] = [.. agent.Code.MCPServers.Select(url => new McpRow { Url = url })];
         }
 
         // One namespace for the whole archive, taken from the first agent that states one.
         rootNamespace = Draft.Agents.Select(agent => agent.Code.Namespace).FirstOrDefault(name => !string.IsNullOrWhiteSpace(name)) ?? string.Empty;
     }
 
+    /// <summary>
+    /// Writes a proposed namespace into the box and onto every agent when the domain states none.
+    /// </summary>
+    protected override async Task OnInitializedAsync()
+    {
+        // A namespace already stated by the client or an earlier sitting is never replaced.
+        if (!string.IsNullOrWhiteSpace(rootNamespace))
+            return;
+
+        // The box waits while the model names the project after the business.
+        isGeneratingNamespace = true;
+        string? proposal = await NamespaceProposalService.ProposeAsync(Draft);
+        isGeneratingNamespace = false;
+
+        // No proposal leaves the box empty for the client to type in.
+        if (proposal is null)
+            return;
+
+        // The proposal stands in the box for the client to read and change.
+        rootNamespace = proposal;
+
+        // The namespace is every agent's, which the emitter reads per agent.
+        foreach (AgentDraft agent in Draft.Agents)
+            agent.Code.Namespace = proposal;
+
+        // The shell saves it, so a second visit finds it written instead of asking again.
+        await OnChanged.InvokeAsync();
+    }
+
     /// <summary>An agent's MCP rows, created empty for an agent the page has not met yet.</summary>
     private List<McpRow> McpRows(AgentDraft agent) =>
-        mcp.TryGetValue(agent, out List<McpRow>? rows) ? rows : mcp[agent] = [];
+        mcpRowsByAgent.TryGetValue(agent, out List<McpRow>? rows) ? rows : mcpRowsByAgent[agent] = [];
 
     /// <summary>
     /// Why the namespace would not do; <c>null</c> while it would.
@@ -457,7 +507,7 @@
         {
             // A blank namespace is an error only once distilling was refused, so an untouched page does not shout.
             if (string.IsNullOrWhiteSpace(rootNamespace))
-                return touched ? "Required" : null;
+                return wasGenerationRefused ? "Required" : null;
 
             // Every dotted segment becomes part of the generated code's namespace declaration.
             foreach (string part in rootNamespace.Trim().Split('.'))
@@ -473,7 +523,7 @@
     /// The error state of a class name left blank once distilling was refused or not a C# identifier.
     /// </summary>
     private MessageState? IdentifierState(string? name) =>
-        (touched && string.IsNullOrWhiteSpace(name)) || (!string.IsNullOrWhiteSpace(name) && !IsIdentifier(name))
+        (wasGenerationRefused && string.IsNullOrWhiteSpace(name)) || (!string.IsNullOrWhiteSpace(name) && !IsIdentifier(name))
             ? MessageState.Error
             : null;
 
@@ -504,7 +554,7 @@
     private async Task InvalidateAsync()
     {
         // An archive whose code facts changed would download code the screen no longer shows.
-        package = null;
+        archiveBytes = null;
 
         // The shell saves the changed facts with the rest of the domain.
         await OnChanged.InvokeAsync();
@@ -513,7 +563,28 @@
     /// <summary>
     /// Opens a blank MCP row: an address is never guessed.
     /// </summary>
-    private void AddMcp(AgentDraft agent) => McpRows(agent).Add(new McpRow());
+    private void AddMcp(AgentDraft agent)
+    {
+        // The row starts blank and is remembered until its box exists to receive the caret.
+        mcpRowAwaitingFocus = new McpRow();
+        McpRows(agent).Add(mcpRowAwaitingFocus);
+    }
+
+    /// <summary>
+    /// Puts the caret in the address box of the MCP row just opened.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The client asked for the row to type an address into, so the box takes the caret the moment it is drawn.
+        if (mcpRowAwaitingFocus?.Box is { } addressBox)
+        {
+            // Released before focusing, so a redraw while the client types never pulls the caret back to this row.
+            mcpRowAwaitingFocus = null;
+
+            // Scrolled into view, since the new row can open below the fold of a long list of agents.
+            await addressBox.FocusAsync(preventScroll: false);
+        }
+    }
 
     /// <summary>
     /// Takes an MCP server away from an agent.
@@ -583,7 +654,7 @@
     private async Task FinalizeAsync()
     {
         // From here on a blank fact shows as an error, since the client has asked for the archive.
-        touched = true;
+        wasGenerationRefused = true;
 
         // Code the client cannot compile is never distilled.
         if (HasHoles)
@@ -612,7 +683,7 @@
     private async Task AgainAsync()
     {
         // The previous archive is dropped first, so a failed rebuild cannot leave it downloadable.
-        package = null;
+        archiveBytes = null;
         await BuildAsync();
     }
 
@@ -622,10 +693,10 @@
     private async Task BuildAsync()
     {
         // The distillation starts from an empty log over a fresh plan, cancellable from Stop and redrawn by its heartbeat.
-        running = true;
-        written.Clear();
-        plan.Clear();
-        plan.AddRange(BuildPlan());
+        isDistilling = true;
+        writtenPaths.Clear();
+        buildSteps.Clear();
+        buildSteps.AddRange(BuildPlan());
         stepEnteredAt = DateTime.UtcNow;
         buildCancellation = new CancellationTokenSource();
         StartHeartbeat();
@@ -643,7 +714,7 @@
             Progress<string> progress = new Progress<string>(path =>
             {
                 // Every path joins the log, whether or not it closes a step.
-                written.Add(path);
+                writtenPaths.Add(path);
 
                 // A file that belongs to no step, such as a second file of the same class, moves nothing.
                 if (MatchStep(path) is not { } step)
@@ -660,18 +731,18 @@
             // Off the renderer's context, so every progress report gets through while the build writes.
             DomainDraft draft = Draft;
             CancellationToken token = buildCancellation.Token;
-            package = await Task.Run(() => AssetPackageService.BuildAsync(draft, progress, token));
+            archiveBytes = await Task.Run(() => AssetPackageService.BuildAsync(draft, progress, token));
 
             // A step whose files matched no path is closed too, since the archive is whole.
-            foreach (Step step in plan)
+            foreach (Step step in buildSteps)
                 step.Done = true;
         }
         catch (OperationCanceledException)
         {
             // Stopped: nothing partial is kept, so the client never downloads half an archive.
-            package = null;
-            written.Clear();
-            plan.Clear();
+            archiveBytes = null;
+            writtenPaths.Clear();
+            buildSteps.Clear();
             await OnNotify.InvokeAsync(new Notice("Distillation stopped: nothing partial was kept.", NoticeKind.Info));
         }
         catch (Exception failure)
@@ -684,7 +755,7 @@
         {
             // However it ended, the vessel stops and Stop has nothing left to cancel.
             StopHeartbeat();
-            running = false;
+            isDistilling = false;
             isStopping = false;
             buildCancellation?.Dispose();
             buildCancellation = null;
@@ -721,7 +792,7 @@
     private async Task DownloadAsync()
     {
         // Only a finished archive is offered; the bytes go to the browser, which saves them where the client chooses.
-        if (package is { } archive)
+        if (archiveBytes is { } archive)
             await JS.InvokeVoidAsync("alembicSave", ArchiveName, Convert.ToBase64String(archive), "application/zip");
     }
 
@@ -757,7 +828,7 @@
     {
         // The files every agent shares close the configuration step.
         if (path is "agents.json" or "alembic-draft.json" or "MIGRATION.md" or "README.md" or Alembic.Services.AssetPackageService.MarkerFileName)
-            return plan.FirstOrDefault(step => step.Kind == "structure");
+            return buildSteps.FirstOrDefault(step => step.Kind == "structure");
 
         // Each agent's emitted files, as the emitter itself names them.
         foreach (AgentDraft agent in Agents)
@@ -768,7 +839,7 @@
             {
                 // A templated file of the agent closes its class step.
                 if (path == file.Path)
-                    return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "code");
+                    return buildSteps.FirstOrDefault(step => step.AgentId == id && step.Kind == "code");
 
                 // The mock is the generated tool file's client half: same path with ".g" dropped.
                 if (file.Path.StartsWith("Tools/", StringComparison.Ordinal) && file.Path.EndsWith(".g.cs", StringComparison.Ordinal))
@@ -777,7 +848,7 @@
 
                     // The mock closes the mock step, as does the note left where the model failed to write one.
                     if (path == mockPath || path == mockPath + ".FAILED.txt")
-                        return plan.FirstOrDefault(step => step.AgentId == id && step.Kind == "mock");
+                        return buildSteps.FirstOrDefault(step => step.AgentId == id && step.Kind == "mock");
                 }
             }
         }
@@ -789,18 +860,18 @@
     /// <summary>
     /// The step being worked on: the first not yet done, since a step is only reported when it lands.
     /// </summary>
-    private Step? InProgress => plan.FirstOrDefault(step => !step.Done);
+    private Step? InProgress => buildSteps.FirstOrDefault(step => !step.Done);
 
     /// <summary>
     /// How far the whole distillation is.
     /// </summary>
-    private int Percent => plan.Count == 0 ? 0 : plan.Count(step => step.Done) * 100 / plan.Count;
+    private int Percent => buildSteps.Count == 0 ? 0 : buildSteps.Count(step => step.Done) * 100 / buildSteps.Count;
 
     /// <summary>
     /// The plan regrouped by agent, one card each.
     /// </summary>
     private IEnumerable<IGrouping<string, Step>> AgentCards =>
-        plan.Where(step => step.Kind != "structure").GroupBy(step => step.AgentId);
+        buildSteps.Where(step => step.Kind != "structure").GroupBy(step => step.AgentId);
 
     /// <summary>
     /// The agent the step in hand belongs to; none while the files every agent shares are written.
@@ -815,7 +886,7 @@
     {
         get
         {
-            List<Step> awaitingModel = [.. plan.Where(step => !step.Done && step.Kind == "mock")];
+            List<Step> awaitingModel = [.. buildSteps.Where(step => !step.Done && step.Kind == "mock")];
 
             // The first mock still waiting belongs to the agent in hand; the next agent is the first waiting one of another.
             return awaitingModel.Count == 0
@@ -883,7 +954,7 @@
             int seconds = (int)(DateTime.UtcNow - stepEnteredAt).TotalSeconds;
 
             // Nothing under three seconds, which would only flicker; minutes once a model call runs long.
-            return !running || seconds < 3 ? null : seconds < 60 ? $"{seconds}s" : $"{seconds / 60}m {seconds % 60:00}s";
+            return !isDistilling || seconds < 3 ? null : seconds < 60 ? $"{seconds}s" : $"{seconds / 60}m {seconds % 60:00}s";
         }
     }
 

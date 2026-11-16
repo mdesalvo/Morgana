@@ -71,10 +71,11 @@ builder.Services.AddScoped<IDraftStateService, DraftStateService>();
 builder.Services.AddSingleton<IAlembicPromptService, AlembicPromptService>();
 builder.Services.AddScoped<IInterviewService, InterviewService>();
 
-// The emit: project, generated C#, mocks and the migration report.
+// The emit: project, generated C#, mocks, the namespace proposal and the migration report.
 builder.Services.AddSingleton<ISolutionEmitService, SolutionEmitService>();
 builder.Services.AddSingleton<ICodeEmitService, CodeEmitService>();
 builder.Services.AddSingleton<IToolMockService, ToolMockService>();
+builder.Services.AddSingleton<INamespaceProposalService, NamespaceProposalService>();
 builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>();
 
 // The passes over the whole domain and the archive that packages it.

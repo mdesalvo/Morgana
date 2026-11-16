@@ -1,6 +1,6 @@
 @*
-    Collaboration is a form, not a conversation: which agent may consult which, over the whole domain,
-    and the agents another Morgana publishes. The prose an edge contradicts is Validation's to report.
+    Collaboration is a form, not a conversation: which agent may consult which across the whole domain,
+    the agents another Morgana publishes included. The prose an edge contradicts is Validation's to report.
 *@
 
 <section class="open">
@@ -16,7 +16,7 @@
             <FluentStack Orientation="Orientation.Vertical" VerticalGap="8px">
                 @foreach (AgentDraft asking in Agents)
                 {
-                    List<ConsultCell> row = [.. cells.Where(cell => cell.Asking == asking)];
+                    List<ConsultCell> row = [.. consultCells.Where(cell => cell.Asking == asking)];
 
                     @if (asking != Agents[0])
                     {
@@ -24,7 +24,7 @@
                     }
 
                     @* The direction lives in the row, so no box has to repeat it; one grid holds the name and the boxes so the
-                       name sits on the line of the first boxes, and fixed columns keep a colleague's box in the same place
+                       name sits on the line of the first boxes; fixed columns keep a colleague's box in the same place
                        from one asking agent to the next. *@
                     <FluentGrid Spacing="1" Class="a2a-row">
                         <FluentGridItem Xs="3">
@@ -64,13 +64,13 @@
             <FluentDivider />
             <FluentText Class="panel-title">Agents on partner Morgana</FluentText>
 
-            @if (remotes.Count > 0)
+            @if (remoteRows.Count > 0)
             {
                 <FluentGrid Spacing="2">
-                    @foreach (RemoteRow row in remotes)
+                    @foreach (RemoteRow row in remoteRows)
                     {
                         <FluentGridItem Xs="3">
-                            <FluentTextInput Width="100%" @bind-Value="row.Intent" @bind-Value:after="() => RenameAsync(row)" Placeholder="agent name"
+                            <FluentTextInput @ref="row.Box" Width="100%" @bind-Value="row.Intent" @bind-Value:after="() => RenameAsync(row)" Placeholder="agent name"
                                              MessageState="@Required(row.Intent)" Message="@RequiredMessage(row.Intent)" />
                         </FluentGridItem>
 
@@ -170,6 +170,9 @@
 
         /// <summary>Whether both halves are named, the only state in which it can be reached.</summary>
         public bool Complete => !string.IsNullOrWhiteSpace(Intent) && !string.IsNullOrWhiteSpace(Instance);
+
+        /// <summary>The box the colleague's name is typed into, so a row just opened can take the caret.</summary>
+        public FluentTextInput? Box { get; set; }
     }
 
     /// <summary>
@@ -180,17 +183,22 @@
     /// <summary>
     /// Every possible edge on screen.
     /// </summary>
-    private List<ConsultCell> cells = [];
+    private List<ConsultCell> consultCells = [];
 
     /// <summary>
     /// The colleagues of other Morganas named so far.
     /// </summary>
-    private readonly List<RemoteRow> remotes = [];
+    private readonly List<RemoteRow> remoteRows = [];
 
     /// <summary>
     /// Whether moving on was refused, so blank halves show as errors.
     /// </summary>
-    private bool touched;
+    private bool wasNextRefused;
+
+    /// <summary>
+    /// The remote colleague's row just opened, waiting for its box to be on screen before the caret moves into it.
+    /// </summary>
+    private RemoteRow? remoteRowAwaitingFocus;
 
     /// <summary>
     /// The agents that can ask or be asked: the ones with an ID an intent can reach.
@@ -209,7 +217,7 @@
                      .DistinctBy(colleague => (colleague.Intent.ToLowerInvariant(), colleague.Instance!.ToLowerInvariant())))
         {
             // Typed and applied alike, since it already stands on the domain under these names.
-            remotes.Add(new RemoteRow
+            remoteRows.Add(new RemoteRow
             {
                 Intent = remote.Intent,
                 Instance = remote.Instance!,
@@ -227,14 +235,14 @@
     /// </summary>
     private void Rebuild()
     {
-        cells = [];
+        consultCells = [];
 
         // One line of boxes per agent that could ask.
         foreach (AgentDraft asking in Agents)
         {
             // Every other agent of the domain, since an agent never consults itself.
             foreach (AgentDraft other in Agents.Where(other => other != asking))
-                cells.Add(new ConsultCell
+                consultCells.Add(new ConsultCell
                 {
                     Asking = asking,
                     Intent = other.ID!,
@@ -243,8 +251,8 @@
                 });
 
             // Every partner's colleague named in full; a half-named one cannot be reached and gets no box.
-            foreach (RemoteRow row in remotes.Where(row => row.Complete))
-                cells.Add(new ConsultCell
+            foreach (RemoteRow row in remoteRows.Where(row => row.Complete))
+                consultCells.Add(new ConsultCell
                 {
                     Asking = asking,
                     Intent = row.AppliedIntent,
@@ -327,7 +335,7 @@
             agent.Code.Consults.RemoveAll(colleague => Same(colleague, row.AppliedIntent, row.AppliedInstance));
 
         // The row and its boxes go; the shell saves the domain.
-        remotes.Remove(row);
+        remoteRows.Remove(row);
         Rebuild();
         await OnChanged.InvokeAsync();
     }
@@ -335,7 +343,28 @@
     /// <summary>
     /// Opens a row for a colleague of another Morgana, blank on both halves: only its card knows either name.
     /// </summary>
-    private void Add() => remotes.Add(new RemoteRow());
+    private void Add()
+    {
+        // The row starts blank and is remembered until its box exists to receive the caret.
+        remoteRowAwaitingFocus = new RemoteRow();
+        remoteRows.Add(remoteRowAwaitingFocus);
+    }
+
+    /// <summary>
+    /// Puts the caret in the name box of the remote colleague's row just opened.
+    /// </summary>
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // The client asked for the row to name a colleague in, so its first box takes the caret the moment it is drawn.
+        if (remoteRowAwaitingFocus?.Box is { } intentBox)
+        {
+            // Released before focusing, so a redraw while the client types never pulls the caret back to this row.
+            remoteRowAwaitingFocus = null;
+
+            // Scrolled into view, since the new row opens at the foot of the card.
+            await intentBox.FocusAsync(preventScroll: false);
+        }
+    }
 
     /// <summary>
     /// Moves on, refusing while a remote colleague is half-named.
@@ -343,10 +372,10 @@
     private async Task NextAsync()
     {
         // A half-named colleague is one nobody can reach, so Validation would find it before the client does.
-        if (remotes.Any(row => !row.Complete))
+        if (remoteRows.Any(row => !row.Complete))
         {
             // The blank halves now show as errors.
-            touched = true;
+            wasNextRefused = true;
             await OnRefuse.InvokeAsync("Name and partner are both needed: without them the colleague cannot be reached.");
             return;
         }
@@ -359,13 +388,13 @@
     /// The error state of a required half, shown once moving on was refused.
     /// </summary>
     private MessageState? Required(string value) =>
-        touched && string.IsNullOrWhiteSpace(value) ? MessageState.Error : null;
+        wasNextRefused && string.IsNullOrWhiteSpace(value) ? MessageState.Error : null;
 
     /// <summary>
     /// The message under a required half left blank.
     /// </summary>
     private string? RequiredMessage(string value) =>
-        touched && string.IsNullOrWhiteSpace(value) ? "Required" : null;
+        wasNextRefused && string.IsNullOrWhiteSpace(value) ? "Required" : null;
 
     /// <summary>
     /// The name an agent goes by: its ID, which is the name of the intent that reaches it.
