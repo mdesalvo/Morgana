@@ -39,7 +39,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Anthropic" Version="13.9.0" />
+    <PackageReference Include="Anthropic" Version="13.10.0" />
   </ItemGroup>
 
   <ItemGroup>
