@@ -1,5 +1,5 @@
 {
-  "LastUpdate": "2026-11-16T18:36:16Z",
+  "LastUpdate": "2026-11-18T17:25:48Z",
   "Models": [
     { "Options": { "ModelId": "claude-fable-5-2", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 8.00, "OutputUsdPerMillion": 40.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 16.00 } },
     { "Options": { "ModelId": "claude-fable-5-1", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 10.00, "OutputUsdPerMillion": 50.00, "CacheReadUsdPerMillion": 0.25, "CacheWriteUsdPerMillion": 20.00 } },
