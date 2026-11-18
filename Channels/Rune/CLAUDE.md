@@ -47,14 +47,16 @@ default stays.
 ## Authentication
 
 JWTs are HMAC-SHA256 with `Rune:Authentication:SymmetricKey`, issuer `rune`, audience `morgana.ai`, five
-minutes. **Trust is asymmetric by design**: Rune signs its calls toward Morgana, Morgana does not sign
-the webhook POST toward Rune (`WebhookChannelService`'s convention). Do not add webhook signing without
-revisiting the decision recorded there.
+minutes. **The same key runs both ways**: Morgana signs every webhook POST toward Rune with it, issuer
+`morgana`, audience `rune`, five minutes, carrying the SHA-256 of the exact body
+(`Morgana.Contracts.WebhookAuthentication`). `MapMorganaHooks` refuses with 401 a delivery whose token or
+body hash does not hold. Morgana finds that key by the handshake's `channelName`, so the name must stay
+`rune`, the token's own issuer.
 
 **Onboarding a fresh Morgana instance:**
-1. Add `{ "Name": "rune", "SymmetricKey": "<≥256 bit, base64>" }` to
-   `Morgana:Authentication:Issuers[]`. That list holds **channels and nothing else**: the key buys
-   the conversation API and nothing published under `/a2a`
+1. Add `{ "Name": "rune", "SymmetricKey": "<≥256 bit, base64>", "CallbackOrigins": [ "https://localhost:5003" ] }`
+   to `Morgana:Authentication:Issuers[]`, the origin being where `Rune:CallbackURL` points. That list
+   holds **channels and nothing else**: the key buys the conversation API and nothing published under `/a2a`
 2. Put the same key under `Rune:Authentication:SymmetricKey` through user-secrets or an environment
    variable, never a commit
 3. Start Morgana (`:5001`), then `dotnet run` from `Channels/Rune/` (`:5003`)

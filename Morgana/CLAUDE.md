@@ -419,6 +419,9 @@ leaking one channel's key does not compromise the others. Unknown issuers are re
 **Onboarding a channel**: an `Issuers[]` entry whose `Name` equals the channel's `iss` and whose
 `SymmetricKey` matches its signing secret. A webhook channel also lists its `CallbackOrigins`: Morgana
 delivers to no other origin and follows no redirect, as it calls a partner only at its declared url.
+Every webhook POST carries a JWT signed with that same key (`Morgana.Contracts.WebhookAuthentication`:
+issuer `morgana`, audience the channel, the body's SHA-256), so a webhook channel's `channelName` must be
+its own `iss`: that name is how Morgana finds the key to sign with.
 **Onboarding a partner**: one `Partners[]` entry carrying
 name, url, the shared key and one policy per direction. Three switches nest: `Enabled` on the
 partner, then `OutboundPolicy.Enabled`, then `InboundPolicy.Enabled`.

@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -7,6 +8,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using Morgana.Contracts;
 using Morgana.Terminal.Handlers;
 using Morgana.Terminal.Interfaces;
@@ -143,25 +146,47 @@ public static class TerminalChannelExtensions
         return builder;
     }
 
-    /// <summary>
-    /// Maps the endpoints Morgana delivers to: <c>/morgana-hook</c> for messages and, where the profile declares streaming, <c>/morgana-hook/chunk</c> for the deltas.
-    /// No token guards them, since the trust model is asymmetric by design, as in WebhookChannelService. A delivery for another
-    /// conversation is refused with 404.
-    /// </summary>
+    /// <summary>Maps the endpoints Morgana delivers to, <c>/morgana-hook</c> for messages and <c>/morgana-hook/chunk</c> for the deltas where the profile streams, admitting only what Morgana signed.</summary>
+    /// <remarks>A delivery whose token or body hash does not hold is refused with 401, a delivery for another conversation with 404.</remarks>
     public static WebApplication MapMorganaHooks(this WebApplication app)
     {
-        // The profile decides whether the chunk endpoint exists at all.
+        // The profile decides whether the chunk endpoint exists at all and names the audience of Morgana's tokens.
         ChannelProfile profile = app.Services.GetRequiredService<ChannelProfile>();
+
+        // Morgana signs with the key this channel signs its own calls with, which CanStartTerminalChannel already proved present.
+        string symmetricKey = app.Configuration[profile.SectionKey("Authentication:SymmetricKey")]
+            ?? throw new InvalidOperationException($"{profile.SectionKey("Authentication:SymmetricKey")} is required to verify Morgana's deliveries.");
+
+        // A delivery token is Morgana's, addressed to this channel, signed with its key and still alive, as WebhookAuthentication describes.
+        TokenValidationParameters deliveryValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(symmetricKey)),
+            ValidateIssuer = true,
+            ValidIssuer = WebhookAuthentication.Issuer,
+            ValidateAudience = true,
+            ValidAudience = profile.ChannelName,
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+
+        // Reads and proves the tokens of both endpoints.
+        JsonWebTokenHandler deliveryTokenHandler = new JsonWebTokenHandler();
 
         // Morgana POSTs a serialized message on every outbound turn
         app.MapPost("/morgana-hook", async (HttpContext httpContext, WebhookReceiverService receiverService) =>
         {
+            // Nothing reaches the screen that Morgana did not sign: a forged delivery would speak to the user in her voice
+            byte[]? deliveryBody = await ReadBodySignedByMorganaAsync(httpContext);
+            if (deliveryBody is null)
+                return Results.Unauthorized();
+
             // The delivery as Morgana serialized it
             ChannelMessage? message;
             try
             {
-                // The body is bound to the contract Morgana and the channels share
-                message = await httpContext.Request.ReadFromJsonAsync<ChannelMessage>();
+                // The verified bytes are bound to the contract Morgana and the channels share
+                message = JsonSerializer.Deserialize<ChannelMessage>(deliveryBody, JsonSerializerOptions.Web);
             }
             catch (JsonException)
             {
@@ -185,12 +210,17 @@ public static class TerminalChannelExtensions
         // agent's response, revealed live and committed when the final message lands
         app.MapPost("/morgana-hook/chunk", async (HttpContext httpContext, WebhookReceiverService receiverService) =>
         {
+            // A chunk is revealed on screen as it lands, so it is held to the same proof as a message
+            byte[]? chunkBody = await ReadBodySignedByMorganaAsync(httpContext);
+            if (chunkBody is null)
+                return Results.Unauthorized();
+
             // The delta as Morgana serialized it
             StreamChunkRequest? chunk;
             try
             {
-                // The body is bound to the contract Morgana and the channels share
-                chunk = await httpContext.Request.ReadFromJsonAsync<StreamChunkRequest>();
+                // The verified bytes are bound to the contract Morgana and the channels share
+                chunk = JsonSerializer.Deserialize<StreamChunkRequest>(chunkBody, JsonSerializerOptions.Web);
             }
             catch (JsonException)
             {
@@ -208,6 +238,40 @@ public static class TerminalChannelExtensions
 
         // The app, so the mappings can be chained
         return app;
+
+        #region Utilities
+
+        // The body of a delivery whose bearer token Morgana signed for exactly these bytes; null when anything fails to hold.
+        async Task<byte[]?> ReadBodySignedByMorganaAsync(HttpContext httpContext)
+        {
+            // A delivery without a bearer carries nothing to prove it is Morgana's
+            string authorizationHeader = httpContext.Request.Headers.Authorization.ToString();
+            if (!authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            // Signature, issuer, audience and lifetime are proven against this channel's own key before the body is read,
+            // so a caller that proves nothing cannot make the channel hold whatever it chooses to send
+            TokenValidationResult validationResult = await deliveryTokenHandler.ValidateTokenAsync(
+                authorizationHeader["Bearer ".Length..].Trim(), deliveryValidationParameters);
+            if (!validationResult.IsValid)
+                return null;
+
+            // The exact bytes received, since the token hashed these and any re-encoding could differ from them
+            using MemoryStream bodyStream = new MemoryStream();
+            await httpContext.Request.Body.CopyToAsync(bodyStream, httpContext.RequestAborted);
+            byte[] receivedBody = bodyStream.ToArray();
+
+            // A genuine token vouches for one body: the hash it carries must be the hash of what arrived
+            string receivedBodyHash = Base64UrlEncoder.Encode(SHA256.HashData(receivedBody));
+            bool isBodyVouchedFor = validationResult.Claims.TryGetValue(WebhookAuthentication.BodyHashClaim, out object? claimedBodyHash)
+                && claimedBodyHash is string claimedBodyHashText
+                && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(claimedBodyHashText), Encoding.ASCII.GetBytes(receivedBodyHash));
+
+            // The verified bytes; nothing when the token speaks for another body
+            return isBodyVouchedFor ? receivedBody : null;
+        }
+
+        #endregion
     }
 
     /// <summary>

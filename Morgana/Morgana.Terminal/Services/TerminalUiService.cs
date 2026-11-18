@@ -467,7 +467,7 @@ public sealed class TerminalUiService : ITerminalUi
     private void CommitFinalMessage(LiveDisplayContext ctx, ChannelMessage message)
     {
         // The row belongs to whoever authored it, so a specialised agent keeps its colour even on the farewell
-        // line that carries AgentCompleted. The name comes over the unauthenticated callback, so it is cleaned
+        // line that carries AgentCompleted. The name is written by whoever built the agent, so it is cleaned
         // once here and every place that shows it afterwards reuses this value
         string messageSpeaker = string.IsNullOrWhiteSpace(message.AgentName)
             ? TerminalTheme.MorganaSpeaker
@@ -1378,7 +1378,7 @@ public sealed class TerminalUiService : ITerminalUi
     /// </summary>
     private void ShowOutcomePanel(string commandName, string text, string color)
     {
-        // Morgana's outcome arrives over the unauthenticated callback, so it is drawn only once it is plain text
+        // A command's outcome may quote what a model wrote, so it is drawn only once it is plain text
         string outcome = TerminalCellService.StripControlCharacters(text);
         string title = "/" + TerminalCellService.StripControlCharacters(commandName);
         commandPanel = width =>

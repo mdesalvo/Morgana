@@ -95,6 +95,19 @@ Slack, WhatsApp, a kiosk in a shop: any surface can become one of my mirrors. A 
 
 Everything it needs is in one small package with no dependencies, `Morgana.Contracts`, the same one my three mirrors use. A mirror knows no magic of its own: it only shows what I send. I admit each mirror with one entry in my settings, described in [Your choices]({{ '/install/#my-mirrors' | relative_url }}).
 
+### Knowing that a call is mine
+
+A mirror that receives my answers at a web address of its own can tell my calls from anyone else's. Each of them carries, as `Authorization: Bearer`, a token I sign with that mirror's own key:
+
+| Field | What it holds |
+|---|---|
+| `iss` | `morgana` |
+| `aud` | the mirror's name, as it announced itself |
+| `exp` | five minutes after I sent the call |
+| `body_sha256` | the SHA-256 of the exact bytes of the call, in base64url without padding |
+
+The mirror checks the token with its key, then hashes the bytes it received and compares the two. A token stolen on the way therefore opens no other message. Grimoire and Rune refuse whatever does not hold. For this to work, a mirror announces itself under the same name its own tokens carry as `iss`: that name is how I find its key.
+
 ## The mirrors' own settings
 
 Each mirror has its own small settings file. The ones you are likely to touch:

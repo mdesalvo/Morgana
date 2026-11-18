@@ -79,7 +79,7 @@ public class MorganaController : ControllerBase
     /// <param name="request">The conversation id the channel minted and its handshake.</param>
     /// <returns>
     /// 202 Accepted once the conversation exists on record: a message sent right after is served.
-    /// 400 Bad Request if the ID is not a 32-digit GUID or the channel metadata is incomplete or a webhook callback sits at an origin the channel never declared.
+    /// 400 Bad Request if the ID is not a 32-digit GUID, the channel metadata is incomplete or a webhook channel names an undeclared origin or a name other than its issuer.
     /// 409 Conflict if a conversation with that ID is already on record.
     /// 500 Internal Server Error on failure.
     /// </returns>
@@ -160,6 +160,24 @@ public class MorganaController : ControllerBase
             return BadRequest(new
             {
                 error = "deliveryMode=webhook requires a callbackUrl at an origin declared for this channel under Morgana:Authentication:Issuers:CallbackOrigins.",
+                conversationId = request.ConversationId
+            });
+        }
+
+        // Every delivery is signed with the key of the channel the record names, so a webhook channel must name itself
+        // as the issuer its token proved: under any other name its deliveries would carry somebody else's key or none.
+        string normalisedChannelName = request.ChannelMetadata.Coordinates.ChannelName.Trim().ToLowerInvariant();
+        if (normalisedDeliveryMode == Constants.DeliveryModes.Webhook
+            && !string.Equals(normalisedChannelName, callerIssuer, StringComparison.Ordinal))
+        {
+            logger.LogWarning(
+                "Start requested for conversation {ConversationId} by channel '{CallerIssuer}' announcing itself as '{ChannelName}' over webhook; returning 400",
+                request.ConversationId,
+                callerIssuer,
+                normalisedChannelName);
+            return BadRequest(new
+            {
+                error = "deliveryMode=webhook requires the channelName to be the issuer its token names, whose key signs every delivery.",
                 conversationId = request.ConversationId
             });
         }

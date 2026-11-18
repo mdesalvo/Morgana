@@ -5,14 +5,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [1.0.0] - UNDER DEVELOPMENT
+## [1.0.0-beta3] - UNDER DEVELOPMENT
 ### ✨ Added
 - Complete and unified documentation of the Morgana platform on the new [GitHub Pages](https://mdesalvo.github.io/Morgana/)
 
 ### 🔄 Changed
 - Every Docker image runs as the unprivileged user `app` of the .NET base image instead of root, on a data volume renamed `morgana-storage`
 - Morgana no longer redirects plain HTTP to HTTPS: TLS belongs to the proxy in front of her
-- A webhook channel names where it receives Morgana's deliveries in `CallbackOrigins` on its `Issuers` entry: a conversation asking for any other address is refused and no delivery follows a redirect
+- Morgana delivers webhook replies only to the addresses that her operator lists for each channel, under `CallbackOrigins` in its `Issuers` entry. A channel asking for any other address is refused at start. Nor does Morgana follow a redirect
+- Morgana signs every webhook delivery with the channel's own key, so Grimoire and Rune refuse whatever she did not send. A webhook channel must therefore announce itself under the same name its tokens carry as issuer
 
 ### 🐛 Fixed
 - The production setup pulled none of the official images from Docker Hub and built them from source instead: it now pulls them at the version it was released with

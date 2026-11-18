@@ -10,12 +10,11 @@ namespace Morgana.Terminal.Services;
 /// </summary>
 public sealed class TerminalCellService
 {
-    /// <summary>
-    /// Strips control characters, ESC, BEL and the C1 controls among them, out of a single-line text bound for the terminal.
-    /// Markup.Escape neutralises Spectre's own syntax only, while a raw control byte (an OSC sequence renaming the terminal, a
-    /// cursor move, the bell) is obeyed by the user's TTY. Everything Morgana sends arrives over an unauthenticated callback,
-    /// so a speaker name, a quick-reply label and a card field are untrusted until drawn.
-    /// </summary>
+    /// <summary>Strips control characters, ESC, BEL and the C1 controls among them, out of a single-line text bound for the terminal.</summary>
+    /// <remarks>
+    /// Markup.Escape neutralises Spectre's own syntax only, while a raw control byte (an OSC sequence renaming the terminal, a cursor move, the bell)
+    /// is obeyed by the user's TTY even inside a delivery Morgana signed, since that still carries what a model, a tool or a partner wrote.
+    /// </remarks>
     public static string StripControlCharacters(string text) =>
         text.Any(char.IsControl) ? new string(text.Where(character => !char.IsControl(character)).ToArray()) : text;
 

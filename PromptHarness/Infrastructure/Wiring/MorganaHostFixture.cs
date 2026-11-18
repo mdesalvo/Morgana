@@ -415,6 +415,15 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // The address that ChannelApiClient.StartAsync announces on purpose so that no delivery lands anywhere, which must still pass the start gate.
         Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{HarnessIssuerIndex}__CallbackOrigins__1", "http://127.0.0.1:1");
 
+        // The degraded channel is an issuer of its own, right after the harness one: Morgana admits a webhook channel only under
+        // the name its token proves and signs its deliveries with that issuer's key, so the name the degraded scenarios announce
+        // must be an issuer. Same key and same receiver, since the same harness channel speaks under both names.
+        int degradedIssuerIndex = HarnessIssuerIndex + 1;
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{degradedIssuerIndex}__Name", HarnessChannel.DegradedChannelName);
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{degradedIssuerIndex}__SymmetricKey", IssuerKey);
+        Environment.SetEnvironmentVariable(
+            $"Morgana__Authentication__Issuers__{degradedIssuerIndex}__CallbackOrigins__0", $"http://127.0.0.1:{ChannelReceiverPort}");
+
         // One partner past the last index of the host's appsettings, admitted to a single agent: refusing an unauthenticated call proves
         // the door is shut, while this proves it is shut selectively. Its key, its reach and its limit are one entry.
         ScopedPartnerIndex = Configuration.GetSection("Morgana:AgentToAgent:Partners").GetChildren().Count();

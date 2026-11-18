@@ -2,7 +2,9 @@ using System.Collections.Concurrent;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -30,11 +32,10 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// <inheritdoc cref="ChannelName" />
     public const string IssuerName = ChannelName;
 
-    /// <summary>
-    /// The channel name of the one scenario group that opts into the degraded capabilities.
-    /// <c>LLMPresenterService</c> caches its presentation process-wide by channel name, so a degraded conversation reusing <c>harness</c>
-    /// would race that cache against every other test; <see cref="IssuerName"/> is a constant of its own, so this never touches authentication.
-    /// </summary>
+    /// <summary>The channel name of the one scenario group that opts into the degraded capabilities, declared to the host as an issuer of its own.</summary>
+    /// <remarks>
+    /// <c>LLMPresenterService</c> caches its presentation by channel name, so reusing <c>harness</c> would race that cache, while Morgana signs a webhook delivery with the key of the issuer its channel is named after.
+    /// </remarks>
     public const string DegradedChannelName = "harness-degraded";
 
     /// <summary>
@@ -57,6 +58,10 @@ public sealed class HarnessChannel : IAsyncDisposable
 
     /// <summary>Reusable token writer; <see cref="JsonWebTokenHandler"/> is thread-safe.</summary>
     private readonly JsonWebTokenHandler tokenHandler = new JsonWebTokenHandler();
+
+    /// <summary>What a delivery token must be for the receiver to take the delivery: Morgana's, addressed to one of this channel's two names, signed with the harness key and alive.</summary>
+    /// <remarks>The literals are spelled out rather than read from the contracts, so a change to the wire shape fails the run instead of following it silently.</remarks>
+    private readonly TokenValidationParameters deliveryValidationParameters;
 
     /// <summary>Client for the REST surface, with a fresh bearer token per request.</summary>
     private readonly HttpClient httpClient;
@@ -97,9 +102,22 @@ public sealed class HarnessChannel : IAsyncDisposable
         this.receiverPort = receiverPort;
         this.drainTrailingSideMessages = drainTrailingSideMessages;
 
-        // The same key MorganaHostFixture gave the host for the harness issuer, as HMAC-SHA256 signing credentials.
+        // The same key MorganaHostFixture gave the host for the harness issuers, as HMAC-SHA256 signing credentials.
         credentials = new SigningCredentials(
             new SymmetricSecurityKey(Encoding.UTF8.GetBytes(issuerKey)), SecurityAlgorithms.HmacSha256);
+
+        // The receiver proves Morgana's deliveries with that same key, as Grimoire and Rune do with theirs.
+        deliveryValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = credentials.Key,
+            ValidateIssuer = true,
+            ValidIssuer = "morgana",
+            ValidateAudience = true,
+            ValidAudiences = [ChannelName, DegradedChannelName],
+            ValidateLifetime = true,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
 
         // The REST calls only queue work, so thirty seconds is generous; the answers arrive on the webhook.
         httpClient = new HttpClient { BaseAddress = new Uri(morganaBaseAddress), Timeout = TimeSpan.FromSeconds(30) };
@@ -119,8 +137,14 @@ public sealed class HarnessChannel : IAsyncDisposable
         // A turn's final message, queued per conversation so two conversations never cross wires.
         receiver.MapPost("/harness-hook", async (HttpContext context) =>
         {
+            // A delivery Morgana did not sign is refused as a channel refuses it, so a scenario never passes on a forged answer
+            // and a delivery Morgana forgot to sign surfaces as a turn that never answers.
+            byte[]? deliveryBody = await ReadBodySignedByMorganaAsync(context);
+            if (deliveryBody is null)
+                return Results.Unauthorized();
+
             // A body that is not a channel message is refused as a channel would refuse it.
-            ChannelMessage? message = await context.Request.ReadFromJsonAsync<ChannelMessage>();
+            ChannelMessage? message = JsonSerializer.Deserialize<ChannelMessage>(deliveryBody, JsonSerializerOptions.Web);
             if (message is null)
                 return Results.BadRequest();
 
@@ -136,8 +160,13 @@ public sealed class HarnessChannel : IAsyncDisposable
         // since no scenario reads them and an unanswered chunk would only fill the host log with failed deliveries.
         receiver.MapPost("/harness-hook/chunk", async (HttpContext context) =>
         {
+            // A chunk carries a token of its own over its own bytes and is held to the same proof as a message.
+            byte[]? chunkBody = await ReadBodySignedByMorganaAsync(context);
+            if (chunkBody is null)
+                return Results.Unauthorized();
+
             // A body that is not a chunk is refused as a channel would refuse it.
-            StreamChunkRequest? chunk = await context.Request.ReadFromJsonAsync<StreamChunkRequest>();
+            StreamChunkRequest? chunk = JsonSerializer.Deserialize<StreamChunkRequest>(chunkBody, JsonSerializerOptions.Web);
             return chunk is null ? Results.BadRequest() : Results.Ok();
         });
 
@@ -166,8 +195,9 @@ public sealed class HarnessChannel : IAsyncDisposable
         string conversationId = Guid.NewGuid().ToString("N");
         inbox[conversationId] = Channel.CreateUnbounded<ChannelMessage>();
 
-        // The handshake: the id, the channel's name and capabilities and the callback just bound.
-        using HttpRequestMessage request = Authorized(HttpMethod.Post, "/api/morgana/conversation/start");
+        // The handshake: the id, the channel's name and capabilities and the callback just bound. It is signed under the
+        // issuer the channel names itself after, since Morgana admits a webhook channel only under its own name.
+        using HttpRequestMessage request = Authorized(HttpMethod.Post, "/api/morgana/conversation/start", channelName ?? IssuerName);
         request.Content = JsonContent.Create(new StartConversationRequest(
             ConversationId: conversationId,
             ChannelMetadata: BuildMetadata(callbackUrl, capabilities, channelName)));
@@ -308,24 +338,24 @@ public sealed class HarnessChannel : IAsyncDisposable
         }
     }
 
-    /// <summary>Builds a request carrying a freshly-issued bearer token.</summary>
-    private HttpRequestMessage Authorized(HttpMethod method, string path)
+    /// <summary>Builds a request carrying a freshly-issued bearer token, under the harness issuer unless <paramref name="issuer"/> names the degraded one.</summary>
+    private HttpRequestMessage Authorized(HttpMethod method, string path, string issuer = IssuerName)
     {
         // Every call carries a fresh token, as a channel's every call does.
         HttpRequestMessage request = new HttpRequestMessage(method, path);
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken());
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", GenerateToken(issuer));
 
         // The request, for the caller to give a body.
         return request;
     }
 
-    /// <summary>Mints an HMAC-SHA256 JWT valid for five minutes, mirroring what every channel does.</summary>
-    private string GenerateToken()
+    /// <summary>Mints an HMAC-SHA256 JWT valid for five minutes under the given issuer, mirroring what every channel does.</summary>
+    private string GenerateToken(string issuer)
     {
         // A token per request never goes stale during a long run: five minutes is ample for one round trip.
         SecurityTokenDescriptor descriptor = new SecurityTokenDescriptor
         {
-            Issuer = IssuerName,
+            Issuer = issuer,
             Audience = audience,
             Subject = new ClaimsIdentity(
             [
@@ -338,6 +368,35 @@ public sealed class HarnessChannel : IAsyncDisposable
 
         // The signed token, sent as the bearer.
         return tokenHandler.CreateToken(descriptor);
+    }
+
+    /// <summary>The body of a delivery whose bearer token Morgana signed for exactly these bytes; null when anything fails to hold.</summary>
+    private async Task<byte[]?> ReadBodySignedByMorganaAsync(HttpContext context)
+    {
+        // A delivery without a bearer carries nothing to prove it is Morgana's.
+        string authorizationHeader = context.Request.Headers.Authorization.ToString();
+        if (!authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
+            return null;
+
+        // Signature, issuer, audience and lifetime are proven before the body is read.
+        TokenValidationResult validationResult = await tokenHandler.ValidateTokenAsync(
+            authorizationHeader["Bearer ".Length..].Trim(), deliveryValidationParameters);
+        if (!validationResult.IsValid)
+            return null;
+
+        // The exact bytes received, since the token hashed these and a re-encoding could differ from them.
+        using MemoryStream bodyStream = new MemoryStream();
+        await context.Request.Body.CopyToAsync(bodyStream, context.RequestAborted);
+        byte[] receivedBody = bodyStream.ToArray();
+
+        // A genuine token vouches for one body: the hash it carries must be the hash of what arrived.
+        string receivedBodyHash = Base64UrlEncoder.Encode(SHA256.HashData(receivedBody));
+        bool isBodyVouchedFor = validationResult.Claims.TryGetValue("body_sha256", out object? claimedBodyHash)
+            && claimedBodyHash is string claimedBodyHashText
+            && CryptographicOperations.FixedTimeEquals(Encoding.ASCII.GetBytes(claimedBodyHashText), Encoding.ASCII.GetBytes(receivedBodyHash));
+
+        // The verified bytes; nothing when the token speaks for another body.
+        return isBodyVouchedFor ? receivedBody : null;
     }
 
     /// <summary>The handshake: full capabilities and no length budget by default, webhook delivery.</summary>

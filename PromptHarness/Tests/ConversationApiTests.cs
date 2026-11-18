@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -15,6 +17,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
 using Morgana.Contracts;
@@ -260,13 +264,91 @@ public sealed class ConversationApiTests
     }
 
     [Fact]
+    public async Task Start_refuses_a_webhook_channel_naming_itself_other_than_its_issuer()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+
+        // The harness channel's token at a declared origin, announcing itself as another channel.
+        HttpResponseMessage response = await api.PostJsonAsync(
+            "/api/morgana/conversation/start",
+            """{"conversationId":"{id}","channelMetadata":{"coordinates":{"channelName":"grimoire","deliveryMode":"webhook","callbackUrl":"http://127.0.0.1:1/hook"},"capabilities":{"supportsRichCards":true,"supportsQuickReplies":true,"supportsStreaming":true,"supportsMarkdown":true}}}"""
+                .Replace("{id}", conversationId),
+            TestContext.Current.CancellationToken);
+
+        // Morgana signs a delivery with the key of the channel the record names, so a name other than the token's would sign with grimoire's key.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            "deliveryMode=webhook requires the channelName to be the issuer its token names, whose key signs every delivery.",
+            body.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Webhook_delivery_carries_a_token_vouching_for_its_body()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+
+        // A receiver of the test's own, so the delivery is read exactly as it came off the wire.
+        (WebApplication receiver, string receiverAddress, ConcurrentQueue<(string? Authorization, byte[] Body)> deliveries) =
+            await StartRecordingReceiverAsync(redirectLocation: null);
+        try
+        {
+            // The record is seeded rather than started: this case reads what a delivery carries, not how a start is admitted.
+            await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", callbackUrl: $"{receiverAddress}/hook");
+
+            // A command whose outcome Morgana tells the user over the webhook, with no model reached.
+            HttpResponseMessage commandResponse = await api.SendCommandAsync(
+                conversationId, """{"name":"compact","invocationId":"signed-1"}""", TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Accepted, commandResponse.StatusCode);
+
+            // The first delivery the command produced.
+            (string? Authorization, byte[] Body) delivery = await ReceiveFirstDeliveryAsync(deliveries);
+
+            // The token rides as a bearer, as a channel's own token does toward Morgana.
+            Assert.NotNull(delivery.Authorization);
+            Assert.StartsWith("Bearer ", delivery.Authorization, StringComparison.Ordinal);
+
+            // Morgana's token, addressed to the harness channel and signed with the harness key: the one a forger lacks.
+            TokenValidationResult validationResult = await new JsonWebTokenHandler().ValidateTokenAsync(
+                delivery.Authorization["Bearer ".Length..],
+                new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(fixture.IssuerKey)),
+                    ValidIssuer = "morgana",
+                    ValidAudience = "harness",
+                    ValidateLifetime = true
+                });
+            Assert.True(validationResult.IsValid, $"The delivery token did not validate: {validationResult.Exception?.Message}");
+
+            // The token vouches for these exact bytes, so a captured one opens no other body.
+            Assert.Equal(
+                Base64UrlEncoder.Encode(SHA256.HashData(delivery.Body)),
+                validationResult.Claims["body_sha256"] as string);
+
+            // Five minutes at most, the life a channel's own tokens have.
+            Assert.True(
+                validationResult.SecurityToken.ValidTo <= DateTime.UtcNow.AddMinutes(5),
+                $"The delivery token lives until {validationResult.SecurityToken.ValidTo:O}, past five minutes from now.");
+        }
+        finally
+        {
+            // The receiver goes however the case ended, so no port or thread outlives it.
+            await receiver.StopAsync(TestContext.Current.CancellationToken);
+            await receiver.DisposeAsync();
+        }
+    }
+
+    [Fact]
     public async Task Webhook_delivery_never_follows_a_redirect()
     {
         string conversationId = ChannelApiClient.NewConversationId();
 
         // The sink is where a redirect would carry the message if Morgana followed it.
-        (WebApplication sink, string sinkAddress, int[] sinkHits) = await StartRecordingApplicationAsync(redirectLocation: null);
-        (WebApplication redirector, string redirectorAddress, int[] redirectorHits) = await StartRecordingApplicationAsync($"{sinkAddress}/hook");
+        (WebApplication sink, string sinkAddress, ConcurrentQueue<(string? Authorization, byte[] Body)> sinkDeliveries) =
+            await StartRecordingReceiverAsync(redirectLocation: null);
+        (WebApplication redirector, string redirectorAddress, ConcurrentQueue<(string? Authorization, byte[] Body)> redirectorDeliveries) =
+            await StartRecordingReceiverAsync($"{sinkAddress}/hook");
         try
         {
             // The record is seeded rather than started, which bypasses the start gate on purpose: this case tests delivery, not admission.
@@ -277,17 +359,14 @@ public sealed class ConversationApiTests
                 conversationId, """{"name":"compact","invocationId":"redirect-1"}""", TestContext.Current.CancellationToken);
             Assert.Equal(HttpStatusCode.Accepted, commandResponse.StatusCode);
 
-            // Waits for Morgana to reach the redirector, which proves the delivery was attempted at all.
-            DateTime deadline = DateTime.UtcNow.AddSeconds(15);
-            while (Volatile.Read(ref redirectorHits[0]) == 0 && DateTime.UtcNow < deadline)
-                await Task.Delay(100, TestContext.Current.CancellationToken);
-            Assert.True(Volatile.Read(ref redirectorHits[0]) > 0, "Morgana never delivered to the callback within 15 seconds.");
+            // Morgana reached the redirector, which proves the delivery was attempted at all.
+            await ReceiveFirstDeliveryAsync(redirectorDeliveries);
 
             // A redirect that was going to be followed would already have landed: the extra wait covers a retry.
             await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
 
             // The sink is an address nobody declared, so no delivery may ever reach it.
-            Assert.Equal(0, Volatile.Read(ref sinkHits[0]));
+            Assert.Empty(sinkDeliveries);
         }
         finally
         {
@@ -297,47 +376,59 @@ public sealed class ConversationApiTests
             await sink.StopAsync(TestContext.Current.CancellationToken);
             await sink.DisposeAsync();
         }
+    }
 
-        #region Utilities
+    /// <summary>Starts a receiver on a port of its own that records every webhook POST as it came off the wire, then redirects it or takes it.</summary>
+    private static async Task<(WebApplication Application, string Address, ConcurrentQueue<(string? Authorization, byte[] Body)> Deliveries)> StartRecordingReceiverAsync(string? redirectLocation)
+    {
+        // The log would only crowd the output the suite reads.
+        WebApplicationBuilder builder = WebApplication.CreateBuilder();
+        builder.Logging.ClearProviders();
+        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        WebApplication application = builder.Build();
 
-        // A receiver answering the two webhook paths on a port of its own: it counts each hit and redirects or accepts it.
-        static async Task<(WebApplication Application, string Address, int[] Hits)> StartRecordingApplicationAsync(string? redirectLocation)
+        // What every POST carried, shared between the request threads and the test thread.
+        ConcurrentQueue<(string? Authorization, byte[] Body)> deliveries = new ConcurrentQueue<(string? Authorization, byte[] Body)>();
+
+        // Message and chunk deliveries are recorded alike, since either may be the first Morgana makes.
+        foreach (string path in new[] { "/hook", "/hook/chunk" })
         {
-            // The log would only crowd the output the suite reads.
-            WebApplicationBuilder builder = WebApplication.CreateBuilder();
-            builder.Logging.ClearProviders();
-            builder.WebHost.UseUrls("http://127.0.0.1:0");
-            WebApplication application = builder.Build();
-
-            // A counter that the request threads and the test thread share.
-            int[] hits = [0];
-
-            // Message and chunk deliveries are answered alike, since either may be the first Morgana makes.
-            foreach (string path in new[] { "/hook", "/hook/chunk" })
+            application.MapPost(path, async (HttpContext context) =>
             {
-                application.MapPost(path, () =>
-                {
-                    // Each arrival is one delivery attempt that reached this address.
-                    Interlocked.Increment(ref hits[0]);
+                // The exact bytes received, which a delivery token must have hashed.
+                using MemoryStream bodyStream = new MemoryStream();
+                await context.Request.Body.CopyToAsync(bodyStream, context.RequestAborted);
+                deliveries.Enqueue((context.Request.Headers.Authorization.FirstOrDefault(), bodyStream.ToArray()));
 
-                    // The redirector sends the delivery on to the sink and the sink takes it.
-                    return redirectLocation is null
-                        ? Results.Ok()
-                        : Results.Redirect(redirectLocation, permanent: false, preserveMethod: true);
-                });
-            }
-
-            await application.StartAsync();
-
-            // The address the system bound, which the seeded callback and the redirect name.
-            string address = application.Services.GetRequiredService<IServer>()
-                                        .Features.Get<IServerAddressesFeature>()!
-                                        .Addresses.First()
-                                        .TrimEnd('/');
-            return (application, address, hits);
+                // The redirector sends the delivery on to the sink and the sink takes it.
+                return redirectLocation is null
+                    ? Results.Ok()
+                    : Results.Redirect(redirectLocation, permanent: false, preserveMethod: true);
+            });
         }
 
-        #endregion
+        await application.StartAsync();
+
+        // The address the system bound, which the seeded callback and the redirect name.
+        string address = application.Services.GetRequiredService<IServer>()
+                                    .Features.Get<IServerAddressesFeature>()!
+                                    .Addresses.First()
+                                    .TrimEnd('/');
+        return (application, address, deliveries);
+    }
+
+    /// <summary>Waits up to fifteen seconds for the first POST a recording receiver takes, failing the case when none arrives.</summary>
+    private static async Task<(string? Authorization, byte[] Body)> ReceiveFirstDeliveryAsync(ConcurrentQueue<(string? Authorization, byte[] Body)> deliveries)
+    {
+        // A command's outcome reaches the webhook within moments, so fifteen seconds of silence means it was never sent.
+        DateTime deadline = DateTime.UtcNow.AddSeconds(15);
+        (string? Authorization, byte[] Body) firstDelivery;
+        while (!deliveries.TryPeek(out firstDelivery) && DateTime.UtcNow < deadline)
+            await Task.Delay(100, TestContext.Current.CancellationToken);
+
+        // The silence fails the case with what was expected, rather than as a missing value further down.
+        Assert.True(deliveries.TryPeek(out firstDelivery), "Morgana never delivered to the callback within 15 seconds.");
+        return firstDelivery;
     }
 
     [Fact]

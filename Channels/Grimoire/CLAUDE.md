@@ -54,14 +54,16 @@ Morgana requires `callbackUrl` to be an **absolute** URI when `deliveryMode=webh
 ## Authentication
 
 JWTs are HMAC-SHA256 with `Grimoire:Authentication:SymmetricKey`, issuer `grimoire`, audience
-`morgana.ai`, five minutes. **Trust is asymmetric by design**: Grimoire signs its calls toward Morgana,
-Morgana does not sign the webhook POST toward Grimoire (`WebhookChannelService`'s convention). Do not add
-webhook signing without revisiting the decision recorded there.
+`morgana.ai`, five minutes. **The same key runs both ways**: Morgana signs every webhook POST toward
+Grimoire with it, issuer `morgana`, audience `grimoire`, five minutes, carrying the SHA-256 of the exact
+body (`Morgana.Contracts.WebhookAuthentication`). `MapMorganaHooks` refuses with 401 a delivery whose
+token or body hash does not hold. Morgana finds that key by the handshake's `channelName`, so the name
+must stay `grimoire`, the token's own issuer.
 
 **Onboarding a fresh Morgana instance:**
-1. Add `{ "Name": "grimoire", "SymmetricKey": "<≥256 bit, base64>" }` to
-   `Morgana:Authentication:Issuers[]`. That list holds **channels and nothing else**: the key buys
-   the conversation API and nothing published under `/a2a`
+1. Add `{ "Name": "grimoire", "SymmetricKey": "<≥256 bit, base64>", "CallbackOrigins": [ "https://localhost:5004" ] }`
+   to `Morgana:Authentication:Issuers[]`, the origin being where `Grimoire:CallbackURL` points. That list
+   holds **channels and nothing else**: the key buys the conversation API and nothing published under `/a2a`
 2. Put the same key under `Grimoire:Authentication:SymmetricKey` through user-secrets or an
    environment variable, never a commit
 3. Start Morgana (`:5001`), then `dotnet run` from `Channels/Grimoire/` (`:5004`)
@@ -96,8 +98,8 @@ webhook signing without revisiting the decision recorded there.
 
 ## Conventions
 
-- **Nothing from the callback is drawn raw**: the webhook is unauthenticated by design, so prose,
-  speaker names, quick-reply labels and card fields all pass `TerminalCellService.StripControlCharacters`
+- **Nothing from the callback is drawn raw**: a delivery Morgana signed still carries what a model, a tool
+  or a partner wrote, so prose, speaker names, quick-reply labels and card fields all pass `TerminalCellService.StripControlCharacters`
   before reaching Spectre. `Markup.Escape` guards the `[` of the markup syntax and nothing else: an ESC or
   OSC sequence slips straight through it and is obeyed by the user's terminal. A new field drawn by the
   renderers follows the same rule
