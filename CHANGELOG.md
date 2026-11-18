@@ -7,7 +7,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [1.0.0] - UNDER DEVELOPMENT
 ### ✨ Added
-
+- Unified documentation of the Morgana ecosystem on [GitHub Pages](https://mdesalvo.github.io/Morgana/)
 ### 🔄 Changed
 
 ### 🐛 Fixed
