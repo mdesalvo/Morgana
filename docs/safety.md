@@ -88,6 +88,7 @@ The refusals you will meet on your first day:
 | A witch has no `[RequiresLLMTier]` | Say which of the three levels she needs |
 | Two plugins claim the same subject | Rename one of them |
 | A key is shorter than 32 bytes, or a name appears twice in the list of mirrors | Forge a new key with `openssl rand -base64 32` |
+| A mirror's `CallbackOrigins` holds a path, a query or a scheme other than http(s) | Write the scheme, host and port alone, such as `http://grimoire:5004` |
 | A witch asks a sister I cannot find | Check the name in `[ConsultsAgent]` and, for a faraway coven, its entry in `Partners` |
 
 In all, I run nine families of checks. Every one of them guards the same thing: an installation that looks fine and then fails in front of a customer.

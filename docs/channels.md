@@ -91,7 +91,7 @@ Slack, WhatsApp, a kiosk in a shop: any surface can become one of my mirrors. A 
 1. opens a conversation and tells me what it can show
 2. proves who it is with a signed token, made with a key I know and valid for 5 minutes, like every token my own mirrors make
 3. sends me the customer's messages through my web API
-4. shows what I send back, received either live over SignalR or as calls to a web address of its own
+4. shows what I send back, received either live over SignalR or as calls to a web address of its own, which my settings name in advance
 
 Everything it needs is in one small package with no dependencies, `Morgana.Contracts`, the same one my three mirrors use. A mirror knows no magic of its own: it only shows what I send. I admit each mirror with one entry in my settings, described in [Your choices]({{ '/install/#my-mirrors' | relative_url }}).
 

@@ -144,6 +144,28 @@ public sealed class StartupValidationTests
         Assert.Contains("PublicUrl", refusal.Message, StringComparison.Ordinal);
     }
 
+    /// <summary>Declarations that are not a bare http(s) origin, each carrying one extra the delivery check could not compare as an origin.</summary>
+    public static TheoryData<string, string> MalformedCallbackOrigins => new()
+    {
+        { "a path", "http://127.0.0.1:1/hook" },
+        { "a relative address", "/hook" },
+        { "another scheme", "ftp://127.0.0.1:1" },
+        { "a query", "http://127.0.0.1:1?channel=harness" }
+    };
+
+    [Theory]
+    [MemberData(nameof(MalformedCallbackOrigins))]
+    public void Boot_is_refused_when_a_channel_declares_a_callback_origin_that_is_not_one(string reason, string origin)
+    {
+        // An origin is compared as scheme, host and port, so one carrying anything else would read as
+        // declared while matching nothing. It could also admit more than its operator meant to allow.
+        Exception refusal = DoomedHost.AssertRefusesToBoot(
+            ($"Morgana__Authentication__Issuers__{fixture.HarnessIssuerIndex}__CallbackOrigins__0", origin));
+
+        Assert.True(refusal.Message.Contains("CallbackOrigins", StringComparison.Ordinal), $"The refusal for {reason} does not name CallbackOrigins.");
+        Assert.True(refusal.Message.Contains(origin, StringComparison.Ordinal), $"The refusal for {reason} does not quote the origin.");
+    }
+
     [Fact]
     public void Boot_is_refused_when_a_tier_has_no_provider()
     {

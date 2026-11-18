@@ -39,6 +39,9 @@ services:
       - Morgana__Authentication__Issuers__1__SymmetricKey=${JWT_SYMMETRIC_KEY}
       - Morgana__Authentication__Issuers__2__Name=rune
       - Morgana__Authentication__Issuers__2__SymmetricKey=${JWT_SYMMETRIC_KEY}
+      # Where the webhook channels receive inside this network: Morgana delivers to no other origin.
+      - Morgana__Authentication__Issuers__1__CallbackOrigins__0=http://grimoire:5004
+      - Morgana__Authentication__Issuers__2__CallbackOrigins__0=http://rune:5003
 
       # Agent-to-Agent with remote installations - off until uncommented (see the .env template).
       # PublicUrl is where a partner reaches this container: http://+:5001 is a binding, not an address.

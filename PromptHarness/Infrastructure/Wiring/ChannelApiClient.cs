@@ -67,14 +67,14 @@ public sealed class ChannelApiClient(MorganaHostFixture fixture)
     }
 
     /// <summary>
-    /// Posts a raw JSON body as the harness channel, so a malformed request reaches the gate as written.
+    /// Posts a raw JSON body as the harness channel unless <paramref name="token"/> names another credential, so a malformed request reaches the gate as written.
     /// <paramref name="cancellationToken"/> gives the call up as a channel that stopped waiting would.
     /// </summary>
-    public async Task<HttpResponseMessage> PostJsonAsync(string path, string json, CancellationToken cancellationToken = default)
+    public async Task<HttpResponseMessage> PostJsonAsync(string path, string json, CancellationToken cancellationToken = default, string? token = null)
     {
-        // Always the harness channel's own token: these calls test what lies behind the authentication gate.
+        // The harness channel's own token unless a case names another channel's: these calls test what lies behind the authentication gate.
         using HttpClient httpClient = new HttpClient();
-        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", HarnessToken());
+        httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token ?? HarnessToken());
 
         // The body goes out as written, never re-serialized.
         return await httpClient.PostAsync($"{fixture.BaseAddress}{path}", new StringContent(json, Encoding.UTF8, "application/json"), cancellationToken);

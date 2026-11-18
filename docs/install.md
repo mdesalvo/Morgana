@@ -92,12 +92,14 @@ I keep a list of the mirrors I will speak through, in `Morgana:Authentication:Is
 ```json
 "Issuers": [
   { "Name": "cauldron", "SymmetricKey": "..." },
-  { "Name": "grimoire", "SymmetricKey": "..." },
-  { "Name": "rune",     "SymmetricKey": "..." }
+  { "Name": "grimoire", "SymmetricKey": "...", "CallbackOrigins": [ "https://localhost:5004" ] },
+  { "Name": "rune",     "SymmetricKey": "...", "CallbackOrigins": [ "https://localhost:5003" ] }
 ]
 ```
 
 The mirror holds the same key in its own settings. With one key per mirror, a leaked key means changing that mirror alone. A mirror you do not use can leave the list. A [mirror of your own]({{ '/channels/#a-mirror-of-your-own' | relative_url }}) is one more entry. Keys must be at least 32 bytes long, which is what the command above forges.
+
+Grimoire and Rune receive my answers as calls to a web address of their own, so their entries also say where I may call: `CallbackOrigins`, the scheme, host and port alone, without a path. I deliver to no other address, even when a mirror asks me to. Nor do I follow a mirror's address when it sends me somewhere else. Cauldron hears me over SignalR and needs none. My Docker setup already names the addresses Grimoire and Rune have inside its network.
 
 ## Every other setting, by purpose
 

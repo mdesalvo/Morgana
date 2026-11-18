@@ -367,6 +367,9 @@ public static class Records
         /// It arrives through User Secrets or the environment and is never committed.
         /// </summary>
         public string SymmetricKey { get; set; } = string.Empty;
+
+        /// <summary>The web origins (scheme, host and port) where Morgana delivers to this channel over webhook; empty for a channel that is never delivered to by webhook.</summary>
+        public List<string> CallbackOrigins { get; set; } = [];
     }
 
     /// <summary>

@@ -126,6 +126,12 @@ public sealed class MorganaHostFixture : IAsyncLifetime
     /// <summary>The harness's own channel, already handshaken and listening for callbacks.</summary>
     public HarnessChannel Channel { get; }
 
+    /// <summary>The port the channel's receiver binds, declared to the host as a callback origin of the harness issuer.</summary>
+    public int ChannelReceiverPort { get; }
+
+    /// <summary>The index of the harness entry under Morgana:Authentication:Issuers, for a test overriding it.</summary>
+    public int HarnessIssuerIndex { get; private set; }
+
     /// <summary>Reader of the per-turn structural signals.</summary>
     public TurnObserver Observer { get; }
 
@@ -196,11 +202,15 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // so a listener started later would never see it.
         Observer = new TurnObserver(Output, Options.LogDrainMilliseconds);
 
+        // The receiver's port is claimed before the host starts, because the host accepts deliveries only at the origins its issuer entry declares.
+        ChannelReceiverPort = ReserveEphemeralPort();
+
         // The harness's own channel against the host's address; its webhook receiver starts listening in InitializeAsync.
         Channel = new HarnessChannel(
             BaseAddress,
             IssuerKey,
             Configuration["Morgana:Authentication:Audience"] ?? "morgana.ai",
+            ChannelReceiverPort,
             drainTrailingSideMessages: Options.DustBudgetPerConversation is not null);
 
         // The judge runs on the instance's own tiers and its logging stays silent.
@@ -394,9 +404,16 @@ public sealed class MorganaHostFixture : IAsyncLifetime
         // The harness channel is declared here alone, past the last issuer of the host's appsettings, with a key minted for this run:
         // a deployed installation never carries the instrument's identity. The ring of the host's own agents is coined at startup
         // and configured nowhere, so it is not written here.
-        int harnessIssuerIndex = Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren().Count();
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{harnessIssuerIndex}__Name", HarnessChannel.IssuerName);
-        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{harnessIssuerIndex}__SymmetricKey", IssuerKey);
+        HarnessIssuerIndex = Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren().Count();
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{HarnessIssuerIndex}__Name", HarnessChannel.IssuerName);
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{HarnessIssuerIndex}__SymmetricKey", IssuerKey);
+
+        // Where the channel's receiver listens, the origin every conversation that reads its replies announces.
+        Environment.SetEnvironmentVariable(
+            $"Morgana__Authentication__Issuers__{HarnessIssuerIndex}__CallbackOrigins__0", $"http://127.0.0.1:{ChannelReceiverPort}");
+
+        // The address that ChannelApiClient.StartAsync announces on purpose so that no delivery lands anywhere, which must still pass the start gate.
+        Environment.SetEnvironmentVariable($"Morgana__Authentication__Issuers__{HarnessIssuerIndex}__CallbackOrigins__1", "http://127.0.0.1:1");
 
         // One partner past the last index of the host's appsettings, admitted to a single agent: refusing an unauthenticated call proves
         // the door is shut, while this proves it is shut selectively. Its key, its reach and its limit are one entry.

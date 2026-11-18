@@ -2,11 +2,18 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text.Json;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Abstractions;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Routing;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Morgana.AI.Interfaces;
 using Morgana.AI.Services;
@@ -172,6 +179,165 @@ public sealed class ConversationApiTests
         Assert.Equal(HttpStatusCode.Conflict, response.StatusCode);
         Assert.Equal("http://127.0.0.1:1/owner", await api.QueryRecordAsync(conversationId, "SELECT callback_url FROM channel_metadata;"));
         Assert.Equal("billing", await api.HostPersistenceService().GetMostRecentActiveAgentAsync(conversationId));
+    }
+
+    /// <summary>
+    /// Callbacks the harness channel never declared, each off the declared origins in one fact: the host, the port, the scheme or the channel.
+    /// </summary>
+    public static TheoryData<string, string> UndeclaredCallbacks => new()
+    {
+        { "an address inside the host's network", "http://169.254.169.254/latest/meta-data/" },
+        { "the declared host on another port", "http://127.0.0.1:2/hook" },
+        { "the declared host and port on another scheme", "https://127.0.0.1:1/hook" },
+        { "another channel's origin", "https://localhost:5004/morgana-hook" }
+    };
+
+    [Theory]
+    [MemberData(nameof(UndeclaredCallbacks))]
+    public async Task Start_refuses_a_webhook_callback_its_channel_never_declared(string reason, string callbackUrl)
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+
+        // The harness's own handshake with the callback replaced, under the harness channel's token.
+        HttpResponseMessage response = await api.PostJsonAsync(
+            "/api/morgana/conversation/start",
+            """{"conversationId":"{id}","channelMetadata":{"coordinates":{"channelName":"harness","deliveryMode":"webhook","callbackUrl":"{callback}"},"capabilities":{"supportsRichCards":true,"supportsQuickReplies":true,"supportsStreaming":true,"supportsMarkdown":true}}}"""
+                .Replace("{id}", conversationId).Replace("{callback}", callbackUrl),
+            TestContext.Current.CancellationToken);
+
+        // Refused on the wire: a stolen channel key must not aim Morgana at an address its operator never declared.
+        Assert.True(response.StatusCode == HttpStatusCode.BadRequest, $"A start with a callback at {reason} was answered {(int)response.StatusCode}, not 400.");
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            "deliveryMode=webhook requires a callbackUrl at an origin declared for this channel under Morgana:Authentication:Issuers:CallbackOrigins.",
+            body.GetProperty("error").GetString());
+
+        // Nothing was opened, so the refused id is unknown to the history endpoint.
+        HttpResponseMessage historyResponse = await api.SendAsync("GET", "/api/morgana/conversation/{id}/history", conversationId, api.HarnessToken());
+        Assert.Equal(HttpStatusCode.NotFound, historyResponse.StatusCode);
+    }
+
+    [Fact]
+    public async Task Start_refuses_a_webhook_from_a_channel_declaring_no_callback_origin()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+
+        // Cauldron is admitted as a channel yet declares no callback origin, since it is reached over SignalR alone.
+        string cauldronKey = fixture.Configuration.GetSection("Morgana:Authentication:Issuers").GetChildren()
+            .First(issuer => issuer["Name"] == "cauldron")["SymmetricKey"]
+            ?? throw new InvalidOperationException("The host configuration carries no SymmetricKey for the cauldron issuer, which this case signs as.");
+
+        // A webhook handshake at an address the harness channel does declare, signed as cauldron: the declaration is the token's own.
+        HttpResponseMessage response = await api.PostJsonAsync(
+            "/api/morgana/conversation/start",
+            """{"conversationId":"{id}","channelMetadata":{"coordinates":{"channelName":"harness","deliveryMode":"webhook","callbackUrl":"http://127.0.0.1:1/hook"},"capabilities":{"supportsRichCards":true,"supportsQuickReplies":true,"supportsStreaming":true,"supportsMarkdown":true}}}"""
+                .Replace("{id}", conversationId),
+            TestContext.Current.CancellationToken,
+            api.MintToken("cauldron", cauldronKey));
+
+        // A channel declaring no origin is never delivered to by webhook, whatever address it names.
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        JsonElement body = await response.Content.ReadFromJsonAsync<JsonElement>(TestContext.Current.CancellationToken);
+        Assert.Equal(
+            "deliveryMode=webhook requires a callbackUrl at an origin declared for this channel under Morgana:Authentication:Issuers:CallbackOrigins.",
+            body.GetProperty("error").GetString());
+    }
+
+    [Fact]
+    public async Task Start_admits_a_webhook_callback_at_a_declared_origin_on_any_path()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+
+        // The declared origin with a path of the channel's own: only scheme, host and port are compared.
+        HttpResponseMessage response = await api.PostJsonAsync(
+            "/api/morgana/conversation/start",
+            """{"conversationId":"{id}","channelMetadata":{"coordinates":{"channelName":"harness","deliveryMode":"webhook","callbackUrl":"http://127.0.0.1:1/any/path/of/its/own"},"capabilities":{"supportsRichCards":true,"supportsQuickReplies":true,"supportsStreaming":true,"supportsMarkdown":true}}}"""
+                .Replace("{id}", conversationId),
+            TestContext.Current.CancellationToken);
+
+        // Admitted: the path belongs to the channel, so declaring an origin never pins one.
+        Assert.Equal(HttpStatusCode.Accepted, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Webhook_delivery_never_follows_a_redirect()
+    {
+        string conversationId = ChannelApiClient.NewConversationId();
+
+        // The sink is where a redirect would carry the message if Morgana followed it.
+        (WebApplication sink, string sinkAddress, int[] sinkHits) = await StartRecordingApplicationAsync(redirectLocation: null);
+        (WebApplication redirector, string redirectorAddress, int[] redirectorHits) = await StartRecordingApplicationAsync($"{sinkAddress}/hook");
+        try
+        {
+            // The record is seeded rather than started, which bypasses the start gate on purpose: this case tests delivery, not admission.
+            await api.SeedConversationOnRecordAsync(conversationId, activeAgent: "billing", callbackUrl: $"{redirectorAddress}/hook");
+
+            // A command whose outcome Morgana tells the user over the webhook, with no model reached.
+            HttpResponseMessage commandResponse = await api.SendCommandAsync(
+                conversationId, """{"name":"compact","invocationId":"redirect-1"}""", TestContext.Current.CancellationToken);
+            Assert.Equal(HttpStatusCode.Accepted, commandResponse.StatusCode);
+
+            // Waits for Morgana to reach the redirector, which proves the delivery was attempted at all.
+            DateTime deadline = DateTime.UtcNow.AddSeconds(15);
+            while (Volatile.Read(ref redirectorHits[0]) == 0 && DateTime.UtcNow < deadline)
+                await Task.Delay(100, TestContext.Current.CancellationToken);
+            Assert.True(Volatile.Read(ref redirectorHits[0]) > 0, "Morgana never delivered to the callback within 15 seconds.");
+
+            // A redirect that was going to be followed would already have landed: the extra wait covers a retry.
+            await Task.Delay(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
+
+            // The sink is an address nobody declared, so no delivery may ever reach it.
+            Assert.Equal(0, Volatile.Read(ref sinkHits[0]));
+        }
+        finally
+        {
+            // Both receivers go however the case ended, so no port or thread outlives it.
+            await redirector.StopAsync(TestContext.Current.CancellationToken);
+            await redirector.DisposeAsync();
+            await sink.StopAsync(TestContext.Current.CancellationToken);
+            await sink.DisposeAsync();
+        }
+
+        #region Utilities
+
+        // A receiver answering the two webhook paths on a port of its own: it counts each hit and redirects or accepts it.
+        static async Task<(WebApplication Application, string Address, int[] Hits)> StartRecordingApplicationAsync(string? redirectLocation)
+        {
+            // The log would only crowd the output the suite reads.
+            WebApplicationBuilder builder = WebApplication.CreateBuilder();
+            builder.Logging.ClearProviders();
+            builder.WebHost.UseUrls("http://127.0.0.1:0");
+            WebApplication application = builder.Build();
+
+            // A counter that the request threads and the test thread share.
+            int[] hits = [0];
+
+            // Message and chunk deliveries are answered alike, since either may be the first Morgana makes.
+            foreach (string path in new[] { "/hook", "/hook/chunk" })
+            {
+                application.MapPost(path, () =>
+                {
+                    // Each arrival is one delivery attempt that reached this address.
+                    Interlocked.Increment(ref hits[0]);
+
+                    // The redirector sends the delivery on to the sink and the sink takes it.
+                    return redirectLocation is null
+                        ? Results.Ok()
+                        : Results.Redirect(redirectLocation, permanent: false, preserveMethod: true);
+                });
+            }
+
+            await application.StartAsync();
+
+            // The address the system bound, which the seeded callback and the redirect name.
+            string address = application.Services.GetRequiredService<IServer>()
+                                        .Features.Get<IServerAddressesFeature>()!
+                                        .Addresses.First()
+                                        .TrimEnd('/');
+            return (application, address, hits);
+        }
+
+        #endregion
     }
 
     [Fact]

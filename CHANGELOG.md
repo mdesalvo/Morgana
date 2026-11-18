@@ -7,11 +7,12 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [1.0.0] - UNDER DEVELOPMENT
 ### ✨ Added
-- Unified documentation of the Morgana ecosystem on [GitHub Pages](https://mdesalvo.github.io/Morgana/)
+- Complete and unified documentation of the Morgana platform on the new [GitHub Pages](https://mdesalvo.github.io/Morgana/)
 
 ### 🔄 Changed
 - Every Docker image runs as the unprivileged user `app` of the .NET base image instead of root, on a data volume renamed `morgana-storage`
 - Morgana no longer redirects plain HTTP to HTTPS: TLS belongs to the proxy in front of her
+- A webhook channel names where it receives Morgana's deliveries in `CallbackOrigins` on its `Issuers` entry: a conversation asking for any other address is refused and no delivery follows a redirect
 
 ### 🐛 Fixed
 - The production setup pulled none of the official images from Docker Hub and built them from source instead: it now pulls them at the version it was released with

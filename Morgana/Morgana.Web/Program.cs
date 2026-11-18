@@ -62,7 +62,10 @@ builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
     new ChannelServiceRegistration(Constants.DeliveryModes.SignalR, sp.GetRequiredService<SignalRChannelService>()));
 
 // Webhook: POSTs to the callback the channel declared, on a named client so its pipeline is configured apart from any other.
-builder.Services.AddHttpClient(WebhookChannelService.HttpClientName);
+// Deliveries go only to the origin the channel's issuer declared, so a callback answering with a redirect is not followed:
+// the redirect would carry the message to an address nobody declared.
+builder.Services.AddHttpClient(WebhookChannelService.HttpClientName)
+    .ConfigurePrimaryHttpMessageHandler(() => new SocketsHttpHandler { AllowAutoRedirect = false });
 builder.Services.AddSingleton<WebhookChannelService>();
 builder.Services.AddSingleton<ChannelServiceRegistration>(sp =>
     new ChannelServiceRegistration(Constants.DeliveryModes.Webhook, sp.GetRequiredService<WebhookChannelService>()));
@@ -344,6 +347,10 @@ app.Services.GetRequiredService<ICommandRegistryService>();
 
 // Builds the three tiers at startup, so that a tier left unconfigured refuses the boot rather than the first turn.
 app.Services.GetRequiredService<ILanguageModelService>();
+
+// The issuers are proven usable on construction (keys, duplicates, callback origins). With agent-to-agent switched off
+// nothing else asks for this service at startup, so without this line a faulty declaration would refuse the first channel call instead of the boot.
+app.Services.GetRequiredService<IAuthenticationService>();
 
 // Morgana examines what every declared MCP server offers before the first conversation, as an antivirus does ahead
 // of use. A server unreachable now is examined at its first use with the same code and the admission never throws,

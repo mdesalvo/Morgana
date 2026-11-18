@@ -44,6 +44,9 @@ public class MorganaController : ControllerBase
     /// <summary>The lockout text a resumed conversation with no dust left is handed.</summary>
     private readonly Records.DustLimitingOptions dustLimitingOptions;
 
+    /// <summary>The channels admitted, read for the callback origins each declares.</summary>
+    private readonly Records.AuthenticationOptions authenticationOptions;
+
     /// <summary>Seconds that every channel is told to wait on a silent turn.</summary>
     private readonly int replyTimeoutSeconds;
 
@@ -56,7 +59,8 @@ public class MorganaController : ControllerBase
         IConversationPersistenceService conversationPersistenceService,
         IDustLimitService dustLimitService,
         IOptions<Records.DustLimitingOptions> dustLimitingOptions,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        IOptions<Records.AuthenticationOptions> authenticationOptions)
     {
         this.actorSystem = actorSystem;
         this.logger = logger;
@@ -65,6 +69,7 @@ public class MorganaController : ControllerBase
         this.conversationPersistenceService = conversationPersistenceService;
         this.dustLimitService = dustLimitService;
         this.dustLimitingOptions = dustLimitingOptions.Value;
+        this.authenticationOptions = authenticationOptions.Value;
 
         // The wait that every channel is told, read once from the ladder that orders every party's wait.
         replyTimeoutSeconds = (int)Records.TurnWaits.From(configuration).Channel.TotalSeconds;
@@ -74,7 +79,7 @@ public class MorganaController : ControllerBase
     /// <param name="request">The conversation id the channel minted and its handshake.</param>
     /// <returns>
     /// 202 Accepted once the conversation exists on record: a message sent right after is served.
-    /// 400 Bad Request if the ID is not a 32-digit GUID or the channel metadata is incomplete.
+    /// 400 Bad Request if the ID is not a 32-digit GUID or the channel metadata is incomplete or a webhook callback sits at an origin the channel never declared.
     /// 409 Conflict if a conversation with that ID is already on record.
     /// 500 Internal Server Error on failure.
     /// </returns>
@@ -127,6 +132,34 @@ public class MorganaController : ControllerBase
             return BadRequest(new
             {
                 error = "deliveryMode=webhook requires an absolute http(s) callbackUrl in channel coordinates.",
+                conversationId = request.ConversationId
+            });
+        }
+
+        // The channel the token proved decides which origins apply: the body can claim any name but cannot forge the token.
+        string? callerIssuer = HttpContext.Items[ChannelAuthenticationFilter.IssuerItemKey] as string;
+
+        // A channel declaring none gets an empty list, so it is never delivered to by webhook.
+        List<string> declaredCallbackOrigins = authenticationOptions.Issuers
+            .FirstOrDefault(issuer => string.Equals(issuer.Name, callerIssuer, StringComparison.Ordinal))?.CallbackOrigins ?? [];
+
+        // Morgana delivers only where the operator declared, as it calls a partner only at its configured Url,
+        // so a stolen channel key cannot aim Morgana at its own network. An origin is compared as scheme, host
+        // and port, so the path stays the channel's own.
+        if (normalisedDeliveryMode == Constants.DeliveryModes.Webhook
+            && Uri.TryCreate(request.ChannelMetadata.Coordinates.CallbackUrl, UriKind.Absolute, out Uri? requestedCallbackUri)
+            && !declaredCallbackOrigins.Any(declaredOrigin =>
+                Uri.TryCreate(declaredOrigin, UriKind.Absolute, out Uri? declaredOriginUri)
+                && string.Equals(declaredOriginUri.GetLeftPart(UriPartial.Authority), requestedCallbackUri.GetLeftPart(UriPartial.Authority), StringComparison.Ordinal)))
+        {
+            logger.LogWarning(
+                "Start requested for conversation {ConversationId} by channel '{CallerIssuer}' with a webhook callback at origin {RequestedOrigin} that the channel never declared; returning 400",
+                request.ConversationId,
+                callerIssuer,
+                requestedCallbackUri.GetLeftPart(UriPartial.Authority));
+            return BadRequest(new
+            {
+                error = "deliveryMode=webhook requires a callbackUrl at an origin declared for this channel under Morgana:Authentication:Issuers:CallbackOrigins.",
                 conversationId = request.ConversationId
             });
         }

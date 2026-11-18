@@ -19,6 +19,9 @@ public sealed class ChannelAuthenticationFilter(
     /// <summary>Where the authenticated caller is left for the action, which sends the message under it.</summary>
     public const string CallerIdItemKey = "morgana.channel.caller_id";
 
+    /// <summary>Where the issuer the token proved is left for the action, which reads the callback origins that channel declared.</summary>
+    public const string IssuerItemKey = "morgana.channel.issuer";
+
     /// <inheritdoc />
     public async Task OnAuthorizationAsync(AuthorizationFilterContext context)
     {
@@ -55,5 +58,8 @@ public sealed class ChannelAuthenticationFilter(
 
         // The identity a message is sent under comes from the proven token, never from anything the body claims
         context.HttpContext.Items[CallerIdItemKey] = authResult.CallerId;
+
+        // The start endpoint reads which channel's declared callback origins apply from the proven token, never from the body
+        context.HttpContext.Items[IssuerItemKey] = authResult.Issuer;
     }
 }

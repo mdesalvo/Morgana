@@ -79,15 +79,22 @@ public sealed class HarnessChannel : IAsyncDisposable
     /// </summary>
     private readonly bool drainTrailingSideMessages;
 
+    /// <summary>The port the callback receiver binds, the one the host's issuer entry declares as a callback origin.</summary>
+    private readonly int receiverPort;
+
     /// <summary>Wires the channel against a running host.</summary>
     /// <param name="morganaBaseAddress">Base address of the instance under test.</param>
     /// <param name="issuerKey">Symmetric key the host accepts for the <c>harness</c> issuer.</param>
     /// <param name="audience">Audience claim Morgana validates.</param>
+    /// <param name="receiverPort">Port the callback receiver binds, reserved by the fixture so the host can declare its origin.</param>
     /// <param name="drainTrailingSideMessages">Whether each turn waits to drain a trailing dust notice.</param>
-    public HarnessChannel(string morganaBaseAddress, string issuerKey, string audience, bool drainTrailingSideMessages = false)
+    public HarnessChannel(string morganaBaseAddress, string issuerKey, string audience, int receiverPort, bool drainTrailingSideMessages = false)
     {
         // The audience every token names and whether turns wait for a trailing notice.
         this.audience = audience;
+
+        // The port the host was told to accept deliveries at, since Morgana refuses a callback elsewhere.
+        this.receiverPort = receiverPort;
         this.drainTrailingSideMessages = drainTrailingSideMessages;
 
         // The same key MorganaHostFixture gave the host for the harness issuer, as HMAC-SHA256 signing credentials.
@@ -98,14 +105,14 @@ public sealed class HarnessChannel : IAsyncDisposable
         httpClient = new HttpClient { BaseAddress = new Uri(morganaBaseAddress), Timeout = TimeSpan.FromSeconds(30) };
     }
 
-    /// <summary>Starts the callback receiver on an ephemeral port.</summary>
+    /// <summary>Starts the callback receiver on the port the host declared as this channel's callback origin.</summary>
     public async Task StartAsync()
     {
         // A small web application of its own, the webhook side of the channel: Morgana pushes here and the harness never polls.
-        // The system picks the port, read back once it is bound; the application's log would only crowd the host output the suite reads.
+        // The port is the one the host's issuer entry declares, read back once it is bound; the application's log would only crowd the host output the suite reads.
         WebApplicationBuilder builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
-        builder.WebHost.UseUrls("http://127.0.0.1:0");
+        builder.WebHost.UseUrls(string.Create(System.Globalization.CultureInfo.InvariantCulture, $"http://127.0.0.1:{receiverPort}"));
 
         receiver = builder.Build();
 

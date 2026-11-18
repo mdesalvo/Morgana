@@ -417,7 +417,9 @@ JWT, per-issuer trust. A channel self-issues (own `iss`, audience `morgana.ai`, 
 leaking one channel's key does not compromise the others. Unknown issuers are rejected.
 
 **Onboarding a channel**: an `Issuers[]` entry whose `Name` equals the channel's `iss` and whose
-`SymmetricKey` matches its signing secret. **Onboarding a partner**: one `Partners[]` entry carrying
+`SymmetricKey` matches its signing secret. A webhook channel also lists its `CallbackOrigins`: Morgana
+delivers to no other origin and follows no redirect, as it calls a partner only at its declared url.
+**Onboarding a partner**: one `Partners[]` entry carrying
 name, url, the shared key and one policy per direction. Three switches nest: `Enabled` on the
 partner, then `OutboundPolicy.Enabled`, then `InboundPolicy.Enabled`.
 
@@ -443,7 +445,7 @@ fails or opens, silently.**
 5. Plugin `agents.json` files merge with no duplicated intent or prompt id and none declares `other`
    or a framework prompt id
 6. All three tiers declared, each naming a registered provider and carrying a `Connection`, none with a provider, model or used connection field left on its placeholder, each tier's model priced once its `models.json` entry and the tier's own `Pricing` are laid over each other, an Anthropic tier carrying an output ceiling, no provider registered twice, `ActorSystem:Tier` naming a tier
-7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice
+7. Every admitted issuer — channel, partner and the ring alike — carries a name and a key of at least 256 bits and no name is admitted twice; every channel's `CallbackOrigins` is a bare http(s) origin
 8. `ValidateTrustConfiguration`: each `Partners[]` entry names somebody once, does something, is coherent per open direction and carries a key that can sign
 9. `ValidatePublishedAddress`: `PublicUrl`, where declared, is absolute, on a bearer-carrying scheme and names one interface
 

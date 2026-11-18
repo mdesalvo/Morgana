@@ -70,7 +70,26 @@ public class JWTAuthenticationService : IAuthenticationService
 
         // Every channel, each pinned to its own key.
         foreach (Records.IssuerOptions configuredChannel in authenticationOptions.Issuers ?? [])
+        {
             AdmitIssuer(configuredChannel.Name, configuredChannel.SymmetricKey, authenticationOptions.Audience, isPartner: false);
+
+            // Every declared origin is where Morgana will POST on this channel's behalf, so a malformed one
+            // is refused at boot: a path or a credential in it would make the later origin comparison meaningless.
+            foreach (string origin in configuredChannel.CallbackOrigins)
+            {
+                // A bare http(s) origin has no credentials, no path beyond the root, no query and no fragment.
+                bool isBareWebOrigin = Uri.TryCreate(origin, UriKind.Absolute, out Uri? originUri)
+                    && (originUri.Scheme == Uri.UriSchemeHttp || originUri.Scheme == Uri.UriSchemeHttps)
+                    && originUri.UserInfo.Length == 0
+                    && string.Equals(originUri.PathAndQuery, "/", StringComparison.Ordinal)
+                    && originUri.Fragment.Length == 0;
+
+                // A declaration that is not an origin is fatal for the same reason every issuer defect is.
+                if (!isBareWebOrigin)
+                    throw new InvalidOperationException(
+                        $"Morgana authentication issuer '{configuredChannel.Name}' declares the callback origin '{origin}' under CallbackOrigins, which must be an absolute http(s) origin naming scheme, host and port alone, such as http://grimoire:5004.");
+            }
+        }
 
         // A partner brings its key on the entry that also says how far it reaches, so being admitted
         // here and being admitted at an agent are read from one declaration. Only the direction that
