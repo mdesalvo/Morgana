@@ -85,5 +85,8 @@ COPY --from=publish /app/publish .
 ENV ASPNETCORE_URLS=http://+:5005
 ENV ASPNETCORE_ENVIRONMENT=Production
 
+# Run unprivileged: the workbench builds every package it hands out in memory and writes nothing to disk
+USER $APP_UID
+
 # Application startup
 ENTRYPOINT ["dotnet", "Alembic.dll"]

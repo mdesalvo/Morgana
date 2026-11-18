@@ -74,5 +74,8 @@ COPY --from=publish /app/publish .
 ENV ASPNETCORE_URLS=http://+:5002
 ENV ASPNETCORE_ENVIRONMENT=Production
 
+# Run unprivileged: the channel faces the users' browsers and writes nothing outside its own home
+USER $APP_UID
+
 # Application startup
 ENTRYPOINT ["dotnet", "Cauldron.dll"]

@@ -78,5 +78,8 @@ COPY --from=publish /app/publish .
 ENV ASPNETCORE_URLS=http://+:5003
 ENV ASPNETCORE_ENVIRONMENT=Production
 
+# Run unprivileged: the channel listens for Morgana's webhook and writes its exports under its own home
+USER $APP_UID
+
 # Application startup
 ENTRYPOINT ["dotnet", "Rune.dll"]

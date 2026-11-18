@@ -9,6 +9,9 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### ✨ Added
 - Unified documentation of the Morgana ecosystem on [GitHub Pages](https://mdesalvo.github.io/Morgana/)
 ### 🔄 Changed
+- Every Docker image runs as the unprivileged user `app` of the .NET base image instead of root. A data volume written by an earlier image still belongs to root, so it must be handed over once before upgrading, whether it is a named volume or a bind mount:
+  `docker compose run --rm --no-deps --user root --entrypoint sh morgana -c 'chown -R "$APP_UID:$APP_UID" /app/data'`
+- Morgana no longer redirects plain HTTP to HTTPS: TLS belongs to the proxy in front of her
 
 ### 🐛 Fixed
 

@@ -71,10 +71,13 @@ LABEL org.opencontainers.image.licenses="Apache-2.0"
 COPY --from=publish /app/publish .
 
 # Create the directory where the plugin's database is read from, the volume that Morgana writes it to
-RUN mkdir -p /app/data
+RUN mkdir -p /app/data && chown $APP_UID:$APP_UID /app/data
 
 # Configure ASP.NET Core environment variables
 ENV ASPNETCORE_ENVIRONMENT=Production
+
+# Run as the same unprivileged user as Morgana: whichever of the two starts first creates the plugin's database, which the other must open for writing
+USER $APP_UID
 
 # Application startup
 ENTRYPOINT ["dotnet", "GardeningMCP.dll"]

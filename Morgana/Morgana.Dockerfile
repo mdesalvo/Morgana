@@ -113,8 +113,9 @@ EXPOSE 5001
 # Copy compiled binaries from publish stage
 COPY --from=publish /app/publish .
 
-# Create directory for SQLite databases (conversation persistence)
-RUN mkdir -p /app/data
+# Create directory for SQLite databases (conversation persistence), owned by the unprivileged user the process runs as.
+# An empty named volume takes this ownership at its first mount; a bind mount keeps the one it has on the host.
+RUN mkdir -p /app/data && chown $APP_UID:$APP_UID /app/data
 
 # Verify plugins directory exists and contains Examples.dll and the five LLM providers
 RUN ls -la /app/plugins/ && \
@@ -128,6 +129,10 @@ RUN for provider in Anthropic AzureOpenAI Google Ollama OpenAI; do \
 # Configure ASP.NET Core environment variables
 ENV ASPNETCORE_URLS=http://+:5001
 ENV ASPNETCORE_ENVIRONMENT=Production
+
+# Run unprivileged: plugins and stdio MCP servers are third-party code that starts with the process, so a flaw in one must not begin as root.
+# The gardening MCP server shares the data volume and runs as the same user.
+USER $APP_UID
 
 # Application startup
 ENTRYPOINT ["dotnet", "Morgana.Web.dll"]

@@ -374,9 +374,6 @@ if (builder.Configuration.GetValue("Morgana:ActorSystem:EnableToolGuardrail", tr
 // The open policy of section 3, ahead of routing so a browser's preflight is answered before any gate.
 app.UseCors("Channel");
 
-// A channel that calls over plain HTTP is sent to HTTPS, where its bearer token cannot be read on the wire.
-app.UseHttpsRedirection();
-
 // Serves wwwroot, which holds Morgana's avatar for the channels that draw it.
 app.UseStaticFiles();
 
