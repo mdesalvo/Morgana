@@ -45,8 +45,8 @@
   <!-- Package References -->
   <ItemGroup>
     <!-- Actors -->
-    <PackageReference Include="Akka" Version="1.5.*" />
-    <PackageReference Include="Akka.DependencyInjection" Version="1.5.*" />
+    <PackageReference Include="Akka" Version="1.5.75" />
+    <PackageReference Include="Akka.DependencyInjection" Version="1.5.75" />
     <!-- Agents -->
     <PackageReference Include="A2A" Version="$(A2AVersion)" />
     <PackageReference Include="Microsoft.Agents.AI" Version="$(MicrosoftAgentsAIVersion)" />
@@ -64,9 +64,9 @@
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="$(OpenTelemetryVersion)" />
     <PackageReference Include="OpenTelemetry.Instrumentation.AspNetCore" Version="$(OpenTelemetryVersion)" />
     <!-- Services -->
-    <PackageReference Include="Markdig" Version="1.6.*" />
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.*" />
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.*" />
+    <PackageReference Include="Markdig" Version="1.6.0" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.15" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.0" />
   </ItemGroup>
 
 </Project>

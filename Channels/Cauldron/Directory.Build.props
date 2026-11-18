@@ -28,8 +28,8 @@
     <!-- Common Description -->
     <Description>
     Cauldron is a modular web layer that talks with the Morgana conversational AI framework.
-    Built on cutting-edge .NET 10 and leveraging the Blazor Server + SignalR development platform,
-    Cauldron is the official and recommended Morgana's frontend.
+    Built on .NET 10 and leveraging the Blazor Server + SignalR development platform,
+    Cauldron is the official and recommended Morgana's channel.
     </Description>
 
   </PropertyGroup>
@@ -37,15 +37,15 @@
   <!-- Package References -->
   <ItemGroup>
     <!-- ASP.NET -->
-    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.*" />
-    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.*" />
+    <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.15" />
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.0.15" />
     <!-- Services -->
-    <PackageReference Include="Markdig" Version="1.6.*" />
-    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.*" />
-    <PackageReference Include="HtmlSanitizer" Version="10.0.*" />
+    <PackageReference Include="Markdig" Version="1.6.0" />
+    <PackageReference Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.23.0" />
+    <PackageReference Include="HtmlSanitizer" Version="10.0.1120" />
     <!-- Telemetry -->
-    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.21.*" />
-    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.*" />
+    <PackageReference Include="OpenTelemetry.Extensions.Hosting" Version="1.21.0" />
+    <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" Version="1.21.0" />
   </ItemGroup>
 
 </Project>

@@ -15,7 +15,7 @@
     </ItemGroup>
 
     <ItemGroup>
-       <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.1.*" />
+       <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" Version="5.1.0" />
     </ItemGroup>
 
     <ItemGroup>

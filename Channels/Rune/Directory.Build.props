@@ -28,7 +28,7 @@
     <!-- Common Description -->
     <Description>
     Rune is a minimal command-line reference channel that talks with the Morgana conversational AI framework.
-    Built on cutting-edge .NET 10 and leveraging the Spectre.Console terminal UI library, Rune is the second reference channel
+    Built on .NET 10 and leveraging the Spectre.Console terminal UI library, Rune is the second reference channel
     alongside Cauldron, exercising the webhook delivery mode and the "poor but honest" capability profile.
     </Description>
 
@@ -37,7 +37,7 @@
   <!-- Package References -->
   <ItemGroup>
     <!-- ASP.NET -->
-    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.*" />
+    <PackageReference Include="Microsoft.AspNetCore.App.Internal.Assets" Version="10.0.15" />
   </ItemGroup>
 
 </Project>
