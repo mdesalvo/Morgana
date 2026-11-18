@@ -1,6 +1,6 @@
 <a href="#"><img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" /></a>
 
-<p>
+<p align="center">
   <img src="https://img.shields.io/badge/.NET-10-932BD4" alt=".NET 10"/>
   <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
   <img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
