@@ -22,7 +22,7 @@ services:
       dockerfile: Morgana/Morgana.Dockerfile
       args:
         VERSION: ${MORGANA_VERSION}
-    image: morgana:${MORGANA_VERSION}
+    image: mdesalvo/morgana:${MORGANA_VERSION}
     container_name: morgana
     ports:
       - "5001:5001"
@@ -81,7 +81,7 @@ services:
       - Morgana__ActorSystem__Tier=${ACTORSYSTEM_TIER:-Economy}
     volumes:
       # Persistent volume for SQLite databases
-      - morgana-data:/app/data
+      - morgana-storage:/app/data
     networks:
       - morgana-network
 
@@ -91,20 +91,20 @@ services:
   # It shares Morgana's network namespace, so GardeningAgent reaches it at
   # http://localhost:5006/mcp exactly as on a developer machine.
   # It reads the plugin's database, almanac included, from the volume that Morgana writes it to.
+  # It runs from Morgana's own image, which carries the server under /app/gardening: started there,
+  # it reads its own appsettings.json rather than Morgana's. It binds the address GardeningAgent
+  # names whatever ASPNETCORE_URLS the image declares, so it never contends for Morgana's port.
   gardening:
-    build:
-      context: .
-      dockerfile: Examples/GardeningMCP/GardeningMCP.Dockerfile
-      args:
-        VERSION: ${MORGANA_VERSION}
-    image: gardening-mcp:${MORGANA_VERSION}
+    image: mdesalvo/morgana:${MORGANA_VERSION}
     container_name: gardening
+    working_dir: /app/gardening
+    entrypoint: ["dotnet", "GardeningMCP.dll"]
     network_mode: "service:morgana"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
       - Morgana__ConversationPersistence__StoragePath=/app/data
     volumes:
-      - morgana-data:/app/data
+      - morgana-storage:/app/data
     depends_on:
       - morgana
 
@@ -117,7 +117,7 @@ services:
       dockerfile: Channels/Cauldron/Cauldron.Dockerfile
       args:
         VERSION: ${CAULDRON_VERSION}
-    image: cauldron:${CAULDRON_VERSION}
+    image: mdesalvo/cauldron:${CAULDRON_VERSION}
     container_name: cauldron
     ports:
       - "5002:5002"
@@ -165,7 +165,7 @@ services:
       dockerfile: Channels/Grimoire/Grimoire.Dockerfile
       args:
         VERSION: ${GRIMOIRE_VERSION}
-    image: grimoire:${GRIMOIRE_VERSION}
+    image: mdesalvo/grimoire:${GRIMOIRE_VERSION}
     container_name: grimoire
     ports:
       - "5004:5004"
@@ -210,7 +210,7 @@ services:
       dockerfile: Channels/Rune/Rune.Dockerfile
       args:
         VERSION: ${RUNE_VERSION}
-    image: rune:${RUNE_VERSION}
+    image: mdesalvo/rune:${RUNE_VERSION}
     container_name: rune
     ports:
       - "5003:5003"
@@ -254,7 +254,7 @@ services:
       dockerfile: Alembic/Alembic.Dockerfile
       args:
         VERSION: ${ALEMBIC_VERSION}
-    image: alembic:${ALEMBIC_VERSION}
+    image: mdesalvo/alembic:${ALEMBIC_VERSION}
     container_name: alembic
     ports:
       - "5005:5005"
@@ -286,7 +286,7 @@ services:
 # ==============================================================================
 volumes:
   # SQLite database persistence (conversations + agent threads)
-  morgana-data:
+  morgana-storage:
     driver: local
 
 # ==============================================================================

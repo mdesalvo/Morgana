@@ -26,7 +26,7 @@ My image carries my example shop in its `plugins/` folder, so that a fresh insta
 
 Two things, always kept **apart**:
 
-- the `morgana-data` volume, where I keep every conversation, sealed
+- the `morgana-storage` volume, where I keep every conversation, sealed
 - the encryption key that opens them
 
 Whoever holds both can read every conversation. Whoever holds only the files can read nothing.

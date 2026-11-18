@@ -73,7 +73,7 @@ All three levels must be filled, even when no witch uses one of them. I never fa
 
 ### 3 · A cupboard
 
-`ConversationPersistence:StoragePath` is the folder where I keep the conversation files. My Docker setup already points it at a volume called `morgana-data`, so in Docker there is nothing to do. Outside Docker, pick a folder that is backed up.
+`ConversationPersistence:StoragePath` is the folder where I keep the conversation files. My Docker setup already points it at a volume called `morgana-storage`, so in Docker there is nothing to do. Outside Docker, pick a folder that is backed up.
 
 ## How settings reach me
 

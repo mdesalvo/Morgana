@@ -56,7 +56,11 @@ For production hotfixes, activated when the user says:
      - `<repo root>/Alembic/Directory.Build.props`
    - Every file gets the same version: a file found on a different version is reported to the user and aligned
 
-4. **Add new section in CHANGELOG.md**
+4. **Update the Docker image versions** in `<repo root>/production.env.template`
+   - Every `*_VERSION=` line in its `DOCKER VERSIONS` block gets the new version, never `latest`
+   - The file is what a production installation copies at a release tag, so it names the images published from that same tag
+
+5. **Add new section in CHANGELOG.md**
    - Read `<repo root>/CHANGELOG.md`
    - Insert a new section right after the header and preamble
    - **For new development cycles** (minor increment):
@@ -81,7 +85,7 @@ For production hotfixes, activated when the user says:
    ```
    - Replace `X.Y.Z` with the newly calculated version (e.g. `1.1.0`)
 
-5. **Communicate the result** to the user with details of the updated version
+6. **Communicate the result** to the user with details of the updated version
 
 ## Notes
 

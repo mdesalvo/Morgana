@@ -7,6 +7,7 @@
 # - Morgana.AI.LanguageModels.Anthropic, Morgana.AI.LanguageModels.AzureOpenAI, Morgana.AI.LanguageModels.Google, Morgana.AI.LanguageModels.Ollama, Morgana.AI.LanguageModels.OpenAI (the LLM providers, referenced by Morgana.Web)
 # - Morgana.Contracts (zero-dependency wire contracts, referenced by Morgana.AI)
 # - Examples (showcase plugins with 4 agents)
+# - GardeningMCP (the MCP server of the Examples plugin, which docker-compose starts from this image as a container of its own)
 # ==============================================================================
 
 # ==============================================================================
@@ -33,11 +34,13 @@ COPY ["Morgana/Morgana.AI.LanguageModels/Ollama/Morgana.AI.LanguageModels.Ollama
 COPY ["Morgana/Morgana.AI.LanguageModels/OpenAI/Morgana.AI.LanguageModels.OpenAI.csproj", "Morgana/Morgana.AI.LanguageModels/OpenAI/"]
 COPY ["Morgana/Morgana.Contracts/Morgana.Contracts.csproj", "Morgana/Morgana.Contracts/"]
 COPY ["Examples/Examples.csproj", "Examples/"]
+COPY ["Examples/GardeningMCP/GardeningMCP.csproj", "Examples/GardeningMCP/"]
 COPY ["Morgana/Directory.Build.props", "Morgana/"]
 
-# Restore NuGet dependencies (host app + the separately-published plugin project)
+# Restore NuGet dependencies (host app + the separately-published plugin project and its MCP server)
 RUN dotnet restore "Morgana/Morgana.Web/Morgana.Web.csproj" && \
-    dotnet restore "Examples/Examples.csproj"
+    dotnet restore "Examples/Examples.csproj" && \
+    dotnet restore "Examples/GardeningMCP/GardeningMCP.csproj"
 
 # Copy all source code from all projects
 COPY Morgana/Morgana.Web/ Morgana/Morgana.Web/
@@ -67,6 +70,10 @@ RUN dotnet publish "Morgana.Web.csproj" -c Release -o /app/publish /p:UseAppHost
 # Publish Examples to plugins/ directory
 WORKDIR "/src/Examples"
 RUN dotnet publish "Examples.csproj" -c Release -o /app/publish/plugins /p:UseAppHost=false /p:InsideDockerBuild=true
+
+# Publish the plugin's MCP server to gardening/, apart from plugins/ so the host never loads its assemblies
+WORKDIR "/src/Examples/GardeningMCP"
+RUN dotnet publish "GardeningMCP.csproj" -c Release -o /app/publish/gardening /p:UseAppHost=false /p:InsideDockerBuild=true
 
 # Publish the LLM providers to plugins/ directory, where the host discovers them
 WORKDIR "/src/Morgana/Morgana.AI.LanguageModels/Anthropic"
@@ -126,12 +133,16 @@ RUN for provider in Anthropic AzureOpenAI Google Ollama OpenAI; do \
       (echo "ERROR: Morgana.AI.LanguageModels.${provider}.dll not found in plugins/" && exit 1); \
     done
 
+# Verify the gardening MCP server is in place, since the example shop's GardeningAgent finds its tools nowhere else
+RUN test -f /app/gardening/GardeningMCP.dll || \
+    (echo "ERROR: GardeningMCP.dll not found in gardening/" && exit 1)
+
 # Configure ASP.NET Core environment variables
 ENV ASPNETCORE_URLS=http://+:5001
 ENV ASPNETCORE_ENVIRONMENT=Production
 
 # Run unprivileged: plugins and stdio MCP servers are third-party code that starts with the process, so a flaw in one must not begin as root.
-# The gardening MCP server shares the data volume and runs as the same user.
+# The gardening MCP server runs from this same image as this same user, which the data volume it shares with Morgana requires.
 USER $APP_UID
 
 # Application startup
