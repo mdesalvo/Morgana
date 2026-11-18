@@ -21,14 +21,14 @@ Without touching anything, I already come with:
 ## The three ingredients only you can bring
 
 <div class="cards three">
-<div class="card"><span class="kind">Ingredient</span><h3>Two keys</h3><p>One to seal the conversations, one to admit my mirrors.</p></div>
+<div class="card"><span class="kind">Ingredient</span><h3>Keys</h3><p>One to seal the conversations, one for each mirror I admit.</p></div>
 <div class="card"><span class="kind">Ingredient</span><h3>Three AI models</h3><p>A cheap one, a mid-range one and a strong one.</p></div>
 <div class="card"><span class="kind">Ingredient</span><h3>A cupboard</h3><p>The folder where I keep the conversations.</p></div>
 </div>
 
 Until all three are in the pot, I refuse to start and I name what is missing. That is on purpose: an installation running on the template's sample values is exactly what must never reach a customer.
 
-### 1 · Two keys
+### 1 · Keys
 
 | Key | What I use it for |
 |---|---|
@@ -41,7 +41,7 @@ Both are random values you forge yourself:
 openssl rand -base64 32
 ```
 
-In Docker they go in `.env` as `ENCRYPTIONKEY` and `JWT_SYMMETRIC_KEY`. My shipped setup gives one mirror key to all three mirrors, for convenience. In production give each mirror its own: see [my mirrors](#my-mirrors) below.
+In Docker they go in `.env`: `ENCRYPTIONKEY` and one key per mirror, `CAULDRON_SYMMETRIC_KEY`, `GRIMOIRE_SYMMETRIC_KEY` and `RUNE_SYMMETRIC_KEY`. A leaked key then opens one mirror alone: see [my mirrors](#my-mirrors) below.
 
 ### 2 · Three AI models
 

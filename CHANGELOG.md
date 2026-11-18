@@ -14,6 +14,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - Morgana no longer redirects plain HTTP to HTTPS: TLS belongs to the proxy in front of her
 - Morgana delivers webhook replies only to the addresses that her operator lists for each channel, under `CallbackOrigins` in its `Issuers` entry. A channel asking for any other address is refused at start. Nor does Morgana follow a redirect
 - Morgana signs every webhook delivery with the channel's own key, so Grimoire and Rune refuse whatever she did not send. A webhook channel must therefore announce itself under the same name its tokens carry as issuer
+- In Docker each channel has a key of its own: `.env` holds `CAULDRON_SYMMETRIC_KEY`, `GRIMOIRE_SYMMETRIC_KEY` and `RUNE_SYMMETRIC_KEY` in place of the shared `JWT_SYMMETRIC_KEY`
 
 ### 🐛 Fixed
 - The production setup pulled none of the official images from Docker Hub and built them from source instead: it now pulls them at the version it was released with

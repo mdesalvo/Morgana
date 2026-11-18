@@ -34,11 +34,11 @@ services:
       # Authentication (JWT) - one key per channel this installation serves.
       # Agents of this installation consult each other under a key coined at startup: nothing to set.
       - Morgana__Authentication__Issuers__0__Name=cauldron
-      - Morgana__Authentication__Issuers__0__SymmetricKey=${JWT_SYMMETRIC_KEY}
+      - Morgana__Authentication__Issuers__0__SymmetricKey=${CAULDRON_SYMMETRIC_KEY}
       - Morgana__Authentication__Issuers__1__Name=grimoire
-      - Morgana__Authentication__Issuers__1__SymmetricKey=${JWT_SYMMETRIC_KEY}
+      - Morgana__Authentication__Issuers__1__SymmetricKey=${GRIMOIRE_SYMMETRIC_KEY}
       - Morgana__Authentication__Issuers__2__Name=rune
-      - Morgana__Authentication__Issuers__2__SymmetricKey=${JWT_SYMMETRIC_KEY}
+      - Morgana__Authentication__Issuers__2__SymmetricKey=${RUNE_SYMMETRIC_KEY}
       # Where the webhook channels receive inside this network: Morgana delivers to no other origin.
       - Morgana__Authentication__Issuers__1__CallbackOrigins__0=http://grimoire:5004
       - Morgana__Authentication__Issuers__2__CallbackOrigins__0=http://rune:5003
@@ -129,8 +129,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5002
 
-      # Authentication (JWT) - same symmetric key as Morgana
-      - Cauldron__Authentication__SymmetricKey=${JWT_SYMMETRIC_KEY}
+      # Authentication (JWT) - this channel's own key, the one Morgana holds for it under its name
+      - Cauldron__Authentication__SymmetricKey=${CAULDRON_SYMMETRIC_KEY}
 
       # Morgana (Backend URL)
       - Cauldron__MorganaURL=http://morgana:5001
@@ -179,8 +179,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5004
 
-      # Authentication (JWT) - same symmetric key as Morgana
-      - Grimoire__Authentication__SymmetricKey=${JWT_SYMMETRIC_KEY}
+      # Authentication (JWT) - this channel's own key, the one Morgana holds for it under its name
+      - Grimoire__Authentication__SymmetricKey=${GRIMOIRE_SYMMETRIC_KEY}
 
       # Morgana (Backend URL + webhook callback)
       - Grimoire__MorganaURL=http://morgana:5001
@@ -224,8 +224,8 @@ services:
       - ASPNETCORE_ENVIRONMENT=Production
       - ASPNETCORE_URLS=http://+:5003
 
-      # Authentication (JWT) - same symmetric key as Morgana
-      - Rune__Authentication__SymmetricKey=${JWT_SYMMETRIC_KEY}
+      # Authentication (JWT) - this channel's own key, the one Morgana holds for it under its name
+      - Rune__Authentication__SymmetricKey=${RUNE_SYMMETRIC_KEY}
 
       # Morgana (Backend URL + webhook callback)
       - Rune__MorganaURL=http://morgana:5001

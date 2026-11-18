@@ -23,9 +23,9 @@ cp development.env.template .env
 </li>
 <li markdown="1">
 
-**Forge my two keys**
+**Forge my keys**
 
-With the first key I lock away every conversation I keep. With the second the mirrors prove to me that they are mine. Forge each one with this command and paste them into `.env` as `ENCRYPTIONKEY` and `JWT_SYMMETRIC_KEY`.
+With the first key I lock away every conversation I keep. With one more for each mirror, that mirror proves to me that it is mine. Forge each one with this command and paste them into `.env` as `ENCRYPTIONKEY`, `CAULDRON_SYMMETRIC_KEY`, `GRIMOIRE_SYMMETRIC_KEY` and `RUNE_SYMMETRIC_KEY`.
 
 ```bash
 openssl rand -base64 32
