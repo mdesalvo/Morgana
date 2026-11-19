@@ -79,7 +79,7 @@ a:hover { color: var(--pink); }
   border-bottom: 1px solid var(--line);
 }
 .brand { display: flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); font: 22px/1 var(--display); }
-.brand .pot { width: 28px; height: 32px; display: inline-flex; }
+.brand .pot { width: 28px; height: 32px; display: inline-flex; position: relative; top: -6px; }
 .gh { margin-left: auto; color: var(--soft); display: flex; padding: 6px; }
 .gh:hover { color: var(--violet); }
 .menu {
@@ -310,6 +310,7 @@ div.card { background: none; }
 .cauldron-svg .bubble:nth-of-type(4) { animation-delay: .8s; }
 .cauldron-svg .bubble:nth-of-type(5) { animation-delay: 1s; }
 .brand:hover .cauldron-svg .bubble { animation-duration: 1s, 1s; fill: var(--pink); }
+.brand:hover .cauldron-svg .cauldron-body { fill: var(--pink); stroke: var(--pink); }
 @keyframes float { 0% { transform: translateY(0); } 100% { transform: translateY(2em); } }
 @keyframes fade-in { 0% { opacity: 0; } 60% { opacity: .1; } 100% { opacity: 1; } }
 .foot .pot { display: block; width: 24px; height: 28px; margin: 0 auto 8px; opacity: .8; }

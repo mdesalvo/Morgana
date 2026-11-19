@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [1.0.0-beta3] - UNDER DEVELOPMENT
+## [1.0.0-beta3] - 2026-11-19
 ### ✨ Added
 - Complete and unified documentation of the Morgana platform on the new [GitHub Pages](https://mdesalvo.github.io/Morgana/)
 
@@ -22,6 +22,8 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### 📦 Dependencies
 
 ### 🚀 Future Enablement
+- Webhook channels on the open internet: Morgana signs every delivery, so a channel knows which messages really come from her
+- Hardened Kubernetes and OpenShift clusters: Morgana's images run without root and leave TLS to the proxy in front of them
 
 
 ## [1.0.0-beta2] - 2026-11-14
