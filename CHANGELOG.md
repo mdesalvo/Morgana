@@ -20,6 +20,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - The production setup pulled none of the official images from Docker Hub and built them from source instead: it now pulls them at the version it was released with
 
 ### 📦 Dependencies
+- Stabilized NuGet dependencies in preparation of Morgana-1.0 (no more "v.*" across the package props) 
 
 ### 🚀 Future Enablement
 - Webhook channels on the open internet: Morgana signs every delivery, so a channel knows which messages really come from her
