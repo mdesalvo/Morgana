@@ -1,8 +1,9 @@
 {
-  "LastUpdate": "2026-11-18T17:25:48Z",
+  "LastUpdate": "2026-11-19T18:37:14Z",
   "Models": [
     { "Options": { "ModelId": "gemini-4-carbon", "MaxOutputTokens": 32768 }, "Pricing": { "InputUsdPerMillion": 4.00, "OutputUsdPerMillion": 20.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 4.00 } },
     { "Options": { "ModelId": "gemini-4-argon", "MaxOutputTokens": 32768 }, "Pricing": { "InputUsdPerMillion": 4.00, "OutputUsdPerMillion": 20.00, "CacheReadUsdPerMillion": 0.20, "CacheWriteUsdPerMillion": 4.00 } },
+    { "Options": { "ModelId": "gemini-4-neon", "MaxOutputTokens": 65536 }, "Pricing": { "InputUsdPerMillion": 3.00, "OutputUsdPerMillion": 15.00, "CacheReadUsdPerMillion": 0.15, "CacheWriteUsdPerMillion": 3.00 } },
     { "Options": { "ModelId": "gemini-4-hydrogen", "MaxOutputTokens": 65536 }, "Pricing": { "InputUsdPerMillion": 1.50, "OutputUsdPerMillion": 7.50, "CacheReadUsdPerMillion": 0.075, "CacheWriteUsdPerMillion": 1.50 } },
     { "Options": { "ModelId": "gemini-3.8-flash", "MaxOutputTokens": 65536 }, "Pricing": { "InputUsdPerMillion": 1.50, "OutputUsdPerMillion": 7.50, "CacheReadUsdPerMillion": 0.15, "CacheWriteUsdPerMillion": 1.50 } },
     { "Options": { "ModelId": "gemini-3.6-flash", "MaxOutputTokens": 65536 }, "Pricing": { "InputUsdPerMillion": 1.50, "OutputUsdPerMillion": 7.50, "CacheReadUsdPerMillion": 0.15, "CacheWriteUsdPerMillion": 1.50 } },
