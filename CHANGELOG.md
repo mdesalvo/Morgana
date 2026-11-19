@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [1.0.0-beta3] - 2026-11-19
+## [1.0.0-beta3] - 2026-11-20
 ### ✨ Added
 - Complete and unified documentation of the Morgana platform on the new [GitHub Pages](https://mdesalvo.github.io/Morgana/)
 
