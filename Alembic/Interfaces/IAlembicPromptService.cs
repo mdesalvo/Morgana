@@ -10,7 +10,7 @@ namespace Alembic.Interfaces;
 /// </summary>
 public interface IAlembicPromptService
 {
-    /// <summary>Resolves one of Alembic's prompts by id, throwing <see cref="KeyNotFoundException"/> when none carries it.</summary>
+    /// <summary>Resolves one of Alembic's prompts by id with the shared reach rule already spliced in, throwing <see cref="KeyNotFoundException"/> when none carries it.</summary>
     /// <param name="promptId">The prompt's id, such as <c>DomainMapper</c> or <c>CodeMocker</c>.</param>
     /// <returns>The prompt.</returns>
     Records.Prompt Resolve(string promptId);

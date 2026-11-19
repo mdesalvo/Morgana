@@ -2,6 +2,8 @@ using System.IO.Compression;
 using System.Text;
 using Alembic.Interfaces;
 using Alembic.Models;
+using Morgana.AI;
+using Morgana.AI.Interfaces;
 
 namespace Alembic.Services;
 
@@ -16,6 +18,9 @@ public class AssetPackageService : IAssetPackageService
     /// Anyone can zip an <c>agents.json</c>, while no other zip has a reason to carry this entry; what matters is that it exists, never what it says.
     /// </summary>
     public const string MarkerFileName = "alembic-emit.marker";
+
+    /// <summary>The prompt in <c>alembic.json</c> that governs writing a mock, which words the refusal of the provider.</summary>
+    private const string CodeMockerPromptId = "CodeMocker";
 
     /// <summary>Writes the Draft back out as <c>agents.json</c>.</summary>
     private readonly IDraftExportService draftExportService;
@@ -35,6 +40,15 @@ public class AssetPackageService : IAssetPackageService
     /// <summary>Builds <c>MIGRATION.md</c> from the Draft's diff against its baseline.</summary>
     private readonly IMigrationReportService migrationReportService;
 
+    /// <summary>Reads every mock against its tools' descriptions before the archive carries it.</summary>
+    private readonly IGuardService guardService;
+
+    /// <summary>Tells whether the provider refused to write a mock, a refusal that is a verdict and not a failure.</summary>
+    private readonly ILanguageModelService llmService;
+
+    /// <summary>Resolves the <c>CodeMocker</c> prompt, whose sentence the client reads when the provider refused to write a mock.</summary>
+    private readonly IAlembicPromptService alembicPromptService;
+
     /// <summary>Records a mock that could not be written, which the archive ships around.</summary>
     private readonly ILogger logger;
 
@@ -45,6 +59,9 @@ public class AssetPackageService : IAssetPackageService
     /// <param name="codeEmitService">Writes the deterministic <c>.g.cs</c> half of each agent and tool class.</param>
     /// <param name="toolMockService">Writes the authored mock half of each tool class — the one call that can fail.</param>
     /// <param name="migrationReportService">Builds <c>MIGRATION.md</c> from the Draft's diff against its baseline.</param>
+    /// <param name="guardService">Judges every mock against its tools' descriptions before it is written.</param>
+    /// <param name="llmService">Tells whether the provider refused to write a mock.</param>
+    /// <param name="alembicPromptService">Resolves the <c>CodeMocker</c> prompt, which words the refusal of the provider.</param>
     /// <param name="logger">Used to record per-agent mock failures that the archive still ships around.</param>
     public AssetPackageService(
         IDraftExportService draftExportService,
@@ -53,6 +70,9 @@ public class AssetPackageService : IAssetPackageService
         ICodeEmitService codeEmitService,
         IToolMockService toolMockService,
         IMigrationReportService migrationReportService,
+        IGuardService guardService,
+        ILanguageModelService llmService,
+        IAlembicPromptService alembicPromptService,
         ILogger logger)
     {
         this.draftExportService = draftExportService;
@@ -61,18 +81,24 @@ public class AssetPackageService : IAssetPackageService
         this.codeEmitService = codeEmitService;
         this.toolMockService = toolMockService;
         this.migrationReportService = migrationReportService;
+        this.guardService = guardService;
+        this.llmService = llmService;
+        this.alembicPromptService = alembicPromptService;
         this.logger = logger;
     }
 
     /// <summary>
     /// Packages the whole domain in the order a client would want to trust it: the marker and the configuration, the project, then each agent's C#.
-    /// A mock that fails costs only its own body, so the client still receives the configuration, the signatures and the report.
+    /// A mock that fails to be written costs only its own body while a mock the CodeGuard refuses twice builds no archive at all, throwing <see cref="MockRefusedException"/>.
     /// </summary>
     public async Task<byte[]> BuildAsync(
         DomainDraft draft,
-        IProgress<string>? progress = null,
+        IProgress<ArchiveProgress>? progress = null,
         CancellationToken cancellationToken = default)
     {
+        // The agents whose mock was kept out, by the CodeGuard twice or by the provider outright, reported together once every agent has been tried.
+        List<string> refusedAgentIds = [];
+
         // The archive is built in memory, handed back as bytes for the browser to download.
         using MemoryStream buffer = new MemoryStream();
 
@@ -100,54 +126,141 @@ public class AssetPackageService : IAssetPackageService
             // Each named agent: an agent the map has not named yet has no class to emit.
             foreach (AgentDraft agent in draft.Agents.Where(agentDraft => !string.IsNullOrWhiteSpace(agentDraft.ID)))
             {
+                // The generated half carries every tool's description, which is the contract the CodeGuard holds the mock to.
+                string? contract = null;
+
                 // The generated half: the agent's class and, where it has tools, the declared half of its tool class.
                 foreach (EmittedFile file in codeEmitService.Emit(agent, agent.ID!))
+                {
                     await WriteAsync(archive, file.Path, file.Content, progress, cancellationToken);
+
+                    // The tool class is the file the mock completes, so its text is what the mock is judged against.
+                    if (file.Path.Contains("/Tools/", StringComparison.Ordinal) || file.Path.StartsWith("Tools/", StringComparison.Ordinal))
+                        contract = file.Content;
+                }
 
                 // An agent with no native tool has no tool class to mock.
                 if (agent.Tools.Count == 0)
                     continue;
 
-                // The one call in the archive that can fail on something outside Alembic. It is
-                // caught per agent rather than allowed to abort the download: a client holding the
-                // configuration, the signatures and the report, minus one mock body, has everything
-                // that matters. Losing all of it to one provider timeout would not.
+                // Writing a mock can fail on something outside Alembic. That failure is caught per
+                // agent rather than allowed to abort the download: a client holding the configuration,
+                // the signatures and the report, minus one mock body, has everything that matters.
+                // A guard that cannot judge is not caught here: a mock nobody could read never ships,
+                // so that failure ends the whole build.
                 string toolClass = agent.Code.ToolClassName ?? $"{char.ToUpperInvariant(agent.ID![0])}{agent.ID[1..]}Tool";
 
-                try
-                {
-                    // The client's half, written beside the generated one under the class both halves declare.
-                    string mock = await toolMockService.AuthorAsync(agent, agent.ID!, cancellationToken);
-                    await WriteAsync(archive, $"Tools/{toolClass}.cs", mock, progress, cancellationToken);
-                }
-                catch (Exception ex) when (ex is not OperationCanceledException)
-                {
-                    logger.LogError(ex, "Could not author the mock for {AgentId}", agent.ID);
+                // Where the client's half lands: the name every progress report about it carries.
+                string mockPath = $"Tools/{toolClass}.cs";
 
-                    // A sibling file rather than a silently missing one: the client sees exactly
-                    // which class has no body yet and what to do about it, in the same folder they
-                    // would have looked in for the mock itself.
-                    await WriteAsync(archive, $"Tools/{toolClass}.cs.FAILED.txt",
-                        $"Alembic could not write this mock: {ex.Message}\n\n"
-                        + $"Everything else in the archive is complete. Implement the partial methods declared in {toolClass}.g.cs by hand,\n"
-                        + "or morganize it again.",
-                        progress, cancellationToken);
+                // The first writing of the client's half; none comes back where the model failed or refused.
+                string? mock = await AuthorOrRecordFailureAsync(archive, agent, toolClass, null);
+
+                // Either the sibling note or the refusal already stands where the mock would have been.
+                if (mock is null)
+                    continue;
+
+                // The mock is read before anything of it is written, since the client compiles and runs it unread.
+                progress?.Report(new ArchiveProgress(mockPath, ArchiveProgressKind.Checking));
+                GuardVerdict verdict = await guardService.JudgeMockAsync(contract ?? string.Empty, agent.Target, mock, cancellationToken);
+
+                // A first refusal costs one more writing, told why the previous one was refused.
+                if (!verdict.IsCompliant)
+                {
+                    progress?.Report(new ArchiveProgress(mockPath, ArchiveProgressKind.Rewriting, verdict.Violation));
+                    mock = await AuthorOrRecordFailureAsync(archive, agent, toolClass, verdict.Violation);
+
+                    // The second writing failed like a first one would have: either the sibling note or the refusal already stands and there is nothing to judge.
+                    if (mock is null)
+                        continue;
+
+                    // The second writing is read exactly as the first was.
+                    progress?.Report(new ArchiveProgress(mockPath, ArchiveProgressKind.Checking));
+                    verdict = await guardService.JudgeMockAsync(contract ?? string.Empty, agent.Target, mock, cancellationToken);
                 }
+
+                // A second refusal keeps the mock out of the archive and the agent on the list that stops the build.
+                if (!verdict.IsCompliant)
+                {
+                    progress?.Report(new ArchiveProgress(mockPath, ArchiveProgressKind.Refused, verdict.Violation));
+                    refusedAgentIds.Add(agent.ID!);
+                    continue;
+                }
+
+                // A mock the guard passed is the client's half, written beside the generated one.
+                await WriteAsync(archive, mockPath, mock, progress, cancellationToken);
             }
+
+            // Every agent was tried so the client learns all the refusals at once; the archive is never closed over a mock that was kept out.
+            if (refusedAgentIds.Count > 0)
+                throw new MockRefusedException(refusedAgentIds);
         }
 
         // Read only now that the archive is closed and its central directory written.
         return buffer.ToArray();
+
+        #region Utilities
+
+        // Writes the client's half of one agent's tool class or the sibling note saying why it could not be written.
+        async Task<string?> AuthorOrRecordFailureAsync(ZipArchive archive, AgentDraft agent, string toolClass, string? refusal)
+        {
+            try
+            {
+                // The client's half, written under the class both halves declare.
+                return await toolMockService.AuthorAsync(agent, agent.ID!, refusal, cancellationToken);
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException && llmService.GetLanguageModel(Records.LLMTier.Efficiency).IsContentFilterRefusal(ex))
+            {
+                logger.LogWarning(ex, "The provider refused to write the mock for {AgentId}", agent.ID);
+
+                // The sentence that the CodeMocker prompt words for this refusal, since the model wrote nothing the CodeGuard could read.
+                string? refusalText = alembicPromptService.Resolve(CodeMockerPromptId)
+                    .GetAdditionalPropertyOrDefault<string?>(Constants.PromptProperties.ContentFilteredMessage, null);
+
+                // A prompt that words no such sentence would hand the client a refusal that says nothing.
+                if (string.IsNullOrWhiteSpace(refusalText))
+                    throw new InvalidOperationException(
+                        $"The {CodeMockerPromptId} prompt declares no {Constants.PromptProperties.ContentFilteredMessage} property: the refusal of the provider cannot be worded.");
+
+                // The client reads the refusal on the page like one of the CodeGuard's.
+                progress?.Report(new ArchiveProgress($"Tools/{toolClass}.cs", ArchiveProgressKind.Refused, refusalText));
+
+                // The build ends on the refused agents once every one has been tried, exactly as for a mock the CodeGuard refused.
+                refusedAgentIds.Add(agent.ID!);
+
+                // A refusal is the model's answer and not a mock that failed to be written, so no note stands in for the mock
+                // and it is never retried: another writing would meet the same filter.
+                return null;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                logger.LogError(ex, "Could not author the mock for {AgentId}", agent.ID);
+
+                // A sibling file rather than a silently missing one: the client sees exactly
+                // which class has no body yet and what to do about it, in the same folder they
+                // would have looked in for the mock itself.
+                await WriteAsync(archive, $"Tools/{toolClass}.cs.FAILED.txt",
+                    $"Alembic could not write this mock: {ex.Message}\n\n"
+                    + $"Everything else in the archive is complete. Implement the partial methods declared in {toolClass}.g.cs by hand,\n"
+                    + "or morganize it again.",
+                    progress, cancellationToken);
+
+                // No mock came back, so the caller has nothing to judge or write.
+                return null;
+            }
+        }
+
+        #endregion
     }
 
     /// <summary>Writes one entry and announces it to the caller's progress line.</summary>
     /// <param name="archive">The archive under construction.</param>
     /// <param name="path">The entry's path inside the archive, forward-slash separated.</param>
     /// <param name="content">The entry's whole text content.</param>
-    /// <param name="progress">Told the entry's path once it is written, for the caller's own status line.</param>
+    /// <param name="progress">Told the entry's path once it is written, as a Written event for the caller's own status line.</param>
     /// <param name="cancellationToken">Cancels the write mid-entry.</param>
     private static async Task WriteAsync(
-        ZipArchive archive, string path, string content, IProgress<string>? progress, CancellationToken cancellationToken)
+        ZipArchive archive, string path, string content, IProgress<ArchiveProgress>? progress, CancellationToken cancellationToken)
     {
         // Compressed as tightly as the format allows, since the download is what the client waits on.
         ZipArchiveEntry entry = archive.CreateEntry(path, CompressionLevel.Optimal);
@@ -158,7 +271,7 @@ public class AssetPackageService : IAssetPackageService
             await writer.WriteAsync(content.AsMemory(), cancellationToken);
 
         // The page names each file as it lands, the mocks taking seconds each.
-        progress?.Report(path);
+        progress?.Report(new ArchiveProgress(path, ArchiveProgressKind.Written));
     }
 
     /// <summary>The convention, carried inside the archive because there is nowhere else to carry it.</summary>

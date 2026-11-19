@@ -63,6 +63,9 @@ public class InterviewService : IInterviewService
     /// <summary>Composes the prompt an authored agent's model will read, which <c>GetComposedPrompt</c> shows a pass before it hands its prose over.</summary>
     private readonly IRecapService recapService;
 
+    /// <summary>Reads every typed answer before the model does, since Alembic turns what the client writes into the prose of agents that speak to their users.</summary>
+    private readonly IGuardService guardService;
+
     /// <summary>Supplies the chat client every pass runs on, always Efficiency, never the tier the authored agent will run on.</summary>
     private readonly ILanguageModelService llmService;
 
@@ -119,6 +122,7 @@ public class InterviewService : IInterviewService
         IPromptComposerService promptComposerService,
         IDraftValidationService draftValidationService,
         IRecapService recapService,
+        IGuardService guardService,
         ILanguageModelService llmService,
         IDraftStateService draftStateService,
         IConfiguration configuration,
@@ -128,6 +132,7 @@ public class InterviewService : IInterviewService
         this.promptComposerService = promptComposerService;
         this.draftValidationService = draftValidationService;
         this.recapService = recapService;
+        this.guardService = guardService;
         this.llmService = llmService;
         this.draftStateService = draftStateService;
         this.logger = logger;
@@ -429,6 +434,38 @@ public class InterviewService : IInterviewService
         // An empty answer tells the model nothing and spends no turn.
         if (string.IsNullOrWhiteSpace(answer))
             return interviewState;
+
+        // The button's own text is Alembic's words coming back, so there is nothing of the client's to read in it.
+        if (!string.Equals(answer, interviewState.Choice?.Value, StringComparison.Ordinal))
+        {
+            // Assigned only when the guard could judge: every other outcome leaves the turn from the catches below.
+            GuardVerdict verdict;
+
+            try
+            {
+                // The answer is read before the model sees it, together with the question it replies to.
+                verdict = await guardService.JudgeAnswerAsync(interviewState.Question, answer, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                // The client pressed Stop: the cancellation is theirs and it is not a failure of the guard.
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // A guard that could not judge passes nothing: the answer stays unread by the model and the client may send it again.
+                logger.LogError(ex, "The guard could not judge the answer");
+                interviewState.Error = $"The turn could not be completed: {ex.Message}";
+                return interviewState;
+            }
+
+            // A refused answer is told to the client in the guard's words and the interview stands where it was.
+            if (!verdict.IsCompliant)
+            {
+                interviewState.Error = verdict.Violation;
+                return interviewState;
+            }
+        }
 
         // The model reads the answer and writes through its tools.
         await ExchangeAsync(interviewState, answer, cancellationToken);

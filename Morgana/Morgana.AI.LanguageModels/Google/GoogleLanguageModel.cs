@@ -9,7 +9,7 @@ namespace Morgana.AI.LanguageModels.Google;
 /// <summary>
 /// The Google provider, serving Gemini models such as gemini-3.5-flash-lite, gemini-3.8-flash and gemini-4-argon through the Gemini API on a tier's ApiKey.
 /// Its models.json carries the standard prices for prompts up to 200,000 tokens, a cache write at the input price since Gemini bills it as plain input.
-/// It keeps the base's IsContentFilterRefusal: Gemini reports a blocked prompt or answer inside the response, never as an exception.
+/// It keeps the base's IsContentFilterRefusal: Gemini reports a blocked prompt or answer inside the response as its finish reason, never as an exception.
 /// </summary>
 /// <param name="loggerFactory">Writes the attempt lines of <see cref="AttemptLoggingHandler"/>; <c>null</c> writes nothing.</param>
 public class GoogleLanguageModel(ILoggerFactory? loggerFactory = null) : MorganaLanguageModel<GoogleTierConnection>

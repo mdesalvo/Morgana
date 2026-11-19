@@ -81,6 +81,8 @@ builder.Services.AddSingleton<IMigrationReportService, MigrationReportService>()
 // The passes over the whole domain and the archive that packages it.
 builder.Services.AddSingleton<ICoherenceService, CoherenceService>();
 builder.Services.AddSingleton<IDomainReadingService, DomainReadingService>();
+// The guards that read what the client types or uploads and every mock before the archive carries it.
+builder.Services.AddSingleton<IGuardService, GuardService>();
 builder.Services.AddSingleton<ICoherenceApplyService, CoherenceApplyService>();
 builder.Services.AddSingleton<IAssetPackageService, AssetPackageService>();
 

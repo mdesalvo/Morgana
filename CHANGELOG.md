@@ -5,7 +5,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [1.0.0-beta3] - 2026-11-20
+## [1.0.0-beta3] - UNDER DEVELOPMENT
+### 🎯 Major Feature: Guardrails in Alembic
+Alembic writes the prose Morgana's agents obey, so it now guards against fraudulent authors and domains dangerous for their users:
+- **AuthorGuard** reads every answer of the interview and every uploaded file before Alembic writes anything from them: an agent turned against its users or an order aimed at the model beneath it is refused, saying what was caught and where
+- **CodeGuard** reads every generated mock against its tool's description before it enters the archive: a mock may reach outside its process only for the effect that description declares. A mock refused twice leaves no archive to download
+
 ### ✨ Added
 - Complete and unified documentation of the Morgana platform on the new [GitHub Pages](https://mdesalvo.github.io/Morgana/)
 
@@ -17,10 +22,11 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 - In Docker each channel has a key of its own: `.env` holds `CAULDRON_SYMMETRIC_KEY`, `GRIMOIRE_SYMMETRIC_KEY` and `RUNE_SYMMETRIC_KEY` in place of the shared `JWT_SYMMETRIC_KEY`
 
 ### 🐛 Fixed
+- A content refusal by any AI provider is now answered as a refusal, never as a failure
 - The production setup pulled none of the official images from Docker Hub and built them from source instead: it now pulls them at the version it was released with
 
 ### 📦 Dependencies
-- Stabilized NuGet dependencies in preparation of Morgana-1.0 (no more "v.*" across the package props) 
+- Stabilized NuGet dependencies in preparation of Morgana-1.0: no more "v.*" across the package props 
 
 ### 🚀 Future Enablement
 - Webhook channels on the open internet: Morgana signs every delivery, so a channel knows which messages really come from her

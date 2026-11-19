@@ -10,11 +10,11 @@ public interface IAssetPackageService
 {
     /// <summary>Packages the whole domain as a zip archive.</summary>
     /// <param name="draft">The domain to package.</param>
-    /// <param name="progress">Reports each file as it is written, since every mock is a model call of its own.</param>
+    /// <param name="progress">Reports each file as it is written and each reading and refusal of a mock, since every mock is a model call of its own.</param>
     /// <param name="cancellationToken">Stops the packaging, mocks included.</param>
-    /// <returns>The zip archive.</returns>
+    /// <returns>The zip archive; a mock the CodeGuard refused twice builds none and throws <see cref="MockRefusedException"/> naming its agents.</returns>
     Task<byte[]> BuildAsync(
         DomainDraft draft,
-        IProgress<string>? progress = null,
+        IProgress<ArchiveProgress>? progress = null,
         CancellationToken cancellationToken = default);
 }

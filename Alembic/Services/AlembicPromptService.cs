@@ -16,6 +16,15 @@ public class AlembicPromptService : IAlembicPromptService
     /// <summary>The framework prompt Alembic inherits its voice from.</summary>
     private const string MorganaPromptId = "Morgana";
 
+    /// <summary>The placeholder where a prompt of <c>alembic.json</c> takes the rule on what a mock may reach.</summary>
+    private const string ReachRulePlaceholder = "((reach_rule))";
+
+    /// <summary>The property of the mock author's prompt that holds the reach rule, written once so the author and the CodeGuard hold the same words.</summary>
+    private const string ReachRuleProperty = "ReachRule";
+
+    /// <summary>The prompt that owns the reach rule: the one that writes the mocks the rule limits.</summary>
+    private const string MockAuthorPromptId = "CodeMocker";
+
     /// <summary>The prompt holding what Alembic says in every interview, whichever interviewer conducts it: its identity, how it asks and how it answers.</summary>
     private const string AlembicPromptId = "Alembic";
 
@@ -259,8 +268,24 @@ public class AlembicPromptService : IAlembicPromptService
         // Unlike the framework's resolver, this one does not degrade to an empty set: Alembic
         // without its own prose is an interviewer with nothing to say. Failing here, loudly, beats
         // conducting an interview on an empty system prompt.
-        return collection?.Prompts is { Length: > 0 } loaded
-            ? loaded
+        Records.Prompt[] loaded = collection?.Prompts is { Length: > 0 } declared
+            ? declared
             : throw new InvalidOperationException("alembic.json declares no prompts.");
+
+        // The rule the mock author is held to, which the CodeGuard enforces in the same words.
+        string? reachRule = loaded
+            .FirstOrDefault(prompt => string.Equals(prompt.ID, MockAuthorPromptId, StringComparison.OrdinalIgnoreCase))
+            ?.GetAdditionalPropertyOrDefault<string?>(ReachRuleProperty, null);
+
+        // A prompt that names the rule with no rule to name would reach the model as a literal placeholder.
+        if (loaded.Any(prompt => prompt.Instructions.Contains(ReachRulePlaceholder, StringComparison.Ordinal))
+            && string.IsNullOrWhiteSpace(reachRule))
+            throw new InvalidOperationException(
+                $"alembic.json uses {ReachRulePlaceholder} but the {MockAuthorPromptId} prompt declares no {ReachRuleProperty}.");
+
+        // Spliced once at load, so every reader of a prompt holds the rule and no caller has to remember it.
+        return [.. loaded.Select(prompt => prompt.Instructions.Contains(ReachRulePlaceholder, StringComparison.Ordinal)
+            ? prompt with { Instructions = prompt.Instructions.Replace(ReachRulePlaceholder, reachRule, StringComparison.Ordinal) }
+            : prompt)];
     }
 }

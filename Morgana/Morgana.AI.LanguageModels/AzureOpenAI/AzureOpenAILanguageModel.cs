@@ -22,8 +22,10 @@ public class AzureOpenAILanguageModel(ILoggerFactory? loggerFactory = null) : Mo
 
     /// <inheritdoc />
     public override bool IsContentFilterRefusal(Exception exception) =>
-        // Azure's own content filter (Prompt Shields included) blocks the prompt before any answer and reports it as a 400 naming content_filter.
-        exception is ClientResultException { Status: 400 } clientResultException && clientResultException.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase);
+        // A refusal reported through the finish reason is the base's, while the 400 is Azure's own: its content filter
+        // (Prompt Shields included) blocks the prompt before any answer and reports it as a 400 naming content_filter.
+        base.IsContentFilterRefusal(exception) ||
+        (exception is ClientResultException { Status: 400 } clientResultException && clientResultException.Message.Contains("content_filter", StringComparison.OrdinalIgnoreCase));
 
     /// <inheritdoc />
     protected override void ValidateConnection(AzureOpenAITierConnection connection)

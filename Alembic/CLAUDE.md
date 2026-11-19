@@ -355,6 +355,22 @@ rule the framework enforces at startup and **the duplication is the entire value
 exception arrives after the client has packaged, deployed and run; the same sentence here arrives while it
 costs nothing to change. Each finding carries a `Because` naming the rule.
 
+### The guards
+
+The prose Alembic writes reaches Morgana as trusted configuration, which no guard of hers reads. The mocks are
+compiled unread. So Alembic guards the two places where a purpose against the users can enter:
+
+- **`AuthorGuard`** reads every typed answer and every upload before any pass does. It is a distillation of
+  Morgana's UserGuard, not a copy: giving agents rules is the author's job, so only the forms that make sense for
+  an author survive and rudeness is declared harmless. The sentences it does share are listed in
+  `UserGuardSentences` and checked verbatim against `morgana.json` on every call. A refusal costs the client
+  nothing typed: the answer comes back in its box.
+- **`CodeGuard`** reads each mock against its tool's description. The criterion is proportion, never an API
+  list: a mock that must save a PDF writes one. `ReachRule` is the one sentence both the mock author and the
+  guard read, spliced into each, so the two can never disagree. One rewrite, then no archive.
+
+A guard that cannot answer is a technical failure, never a verdict: the step stops with the usual error.
+
 ### The coherence pass
 
 The half `DraftValidationService` cannot do. Every defect it looks for is **relational**, which is why the

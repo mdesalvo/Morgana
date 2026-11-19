@@ -79,7 +79,7 @@ reference. That is what keeps every one of them replaceable by a customer's own.
 | `Actors/` | `ConversationManagerActor`, `ConversationSupervisorActor`, `GuardActor`, `ClassifierActor`, `RouterActor` |
 | `Adapters/` | `MorganaAgentAdapter` (agent builder, peer-consultation surface), `MorganaToolAdapter` (tool to `AIFunction`), `MorganaChannelAdapter` (rich to plain degradation) |
 | `Attributes/` | `[HandlesIntent]`, `[RequiresLLMTier]`, `[ProvidesToolForIntent]`, `[UsesMCPServer]`, `[ConsultsAgent]` |
-| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient` |
+| `ChatClients/` | `IChatClient` decorators: `DustAccountingChatClient`, `ContentFilterChatClient` |
 | `Interfaces/` · `Services/` | Every service contract and its default implementation |
 | `Providers/` | `MorganaAIContextProvider` (context variables plus the shared registry), `MorganaChatHistoryProvider` |
 | `Tools/` | `MorganaTool`: the base class of every tool class and the base tools every agent holds ahead of its own |
@@ -248,7 +248,8 @@ installation can name are the ones deployed. A host without the loader (Alembic,
 only a vendor knows stays in its plugin: the connection record it binds from the tier's `Connection`
 section, the catalogue of its models (the `models.json` it must embed: each model's output ceiling and its price, which the base class alone converts into dust), `ValidateOptions` and
 `IsContentFilterRefusal`, the one place where a provider's own refusal of the content is
-told apart from a failure.
+told apart from a failure. A refusal reported as Microsoft.Extensions.AI's `ChatFinishReason.ContentFilter`
+needs no override: every tier's chain raises it as `ContentFilterRefusalException`, which the base recognises.
 
 `Morgana:LanguageModels:Tiers` is a JSON **object keyed by tier name**, so env-var overrides merge per tier. Each
 entry carries `Provider` (a registered provider's name, any casing), `Connection` (bound by that

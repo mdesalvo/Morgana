@@ -157,13 +157,49 @@
         <div class="panel-block">
             <FluentDivider />
 
-            @if (isDistilling)
+            @if (isDistilling || refusedAgentIds.Count > 0)
             {
+                @if (refusedAgentIds.Count > 0)
+                {
+                    <FluentMessageBar Intent="MessageBarIntent.Error" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="message-fits">
+                        <FluentStack Orientation="Orientation.Vertical" VerticalGap="10px">
+                            <FluentText Size="TextSize.Size400" Block="true">
+                                @if (refusedAgentIds.Count == 1)
+                                {
+                                    <text>No archive was built: the mock of <strong>@refusedAgentIds[0]</strong> does something its tool does not declare.</text>
+                                }
+                                else
+                                {
+                                    <text>No archive was built: the mocks of
+                                    @for (int position = 0; position < refusedAgentIds.Count; position++)
+                                    {
+                                        <strong>@refusedAgentIds[position]</strong>@(position < refusedAgentIds.Count - 2 ? ", " : position == refusedAgentIds.Count - 2 ? " and " : "")
+                                    }
+                                    do something their tools do not declare.</text>
+                                }
+                            </FluentText>
+                            <FluentText Size="TextSize.Size400" Block="true">
+                                @(refusedAgentIds.Count == 1
+                                    ? "The log below says which tool and what it did. Correct that tool's description if the code followed it. If it did not, run again."
+                                    : "The log below says which tools and what they did. Correct a tool's description where the code followed it. Where it did not, run again.")
+                            </FluentText>
+                            <FluentStack Orientation="Orientation.Horizontal" Wrap="true" HorizontalGap="8px" VerticalGap="8px">
+                                @foreach (string refusedId in refusedAgentIds)
+                                {
+                                    <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small"
+                                                  OnClick="() => OnCorrectAgent.InvokeAsync(refusedId)">@(refusedAgentIds.Count == 1 ? "Correct this agent →" : $"Correct the {refusedId} agent →")</FluentButton>
+                                }
+                                <FluentButton Appearance="ButtonAppearance.Outline" Size="ButtonSize.Small" OnClick="AgainAsync">Run again</FluentButton>
+                            </FluentStack>
+                        </FluentStack>
+                    </FluentMessageBar>
+                }
+
                 <FluentGrid Spacing="3" Class="distillation">
                     <FluentGridItem Xs="4">
                         <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="22px">
                             @* The favicon's vessel at working size: the brew rises with the build, the flame and the drip say it is running. *@
-                            <svg class="distillation-vessel" viewBox="0 0 120 160" role="img" aria-label="Distilling">
+                            <svg class="@(isDistilling ? "distillation-vessel" : "distillation-vessel cold")" viewBox="0 0 120 160" role="img" aria-label="@(isDistilling ? "Distilling" : "Stopped")">
                                 <defs>
                                     <clipPath id="belly-clip"><circle cx="52" cy="100" r="29.5" /></clipPath>
                                     <radialGradient id="brew" gradientUnits="userSpaceOnUse" cx="52" cy="118" r="42">
@@ -199,13 +235,20 @@
                             </svg>
 
                             <FluentStack Orientation="Orientation.Vertical" VerticalGap="10px" Class="distillation-status">
-                                <FluentText As="TextTag.Paragraph" Size="TextSize.Size500" Weight="TextWeight.Semibold" Class="distillation-phase">@PhaseLabel</FluentText>
+                                <FluentText As="TextTag.Paragraph" Size="TextSize.Size500" Weight="TextWeight.Semibold" Class="distillation-phase">@(isDistilling ? PhaseLabel : "Stopped before the archive")</FluentText>
                                 <FluentProgressBar Value="Percent" Max="100" Width="100%" />
                                 <FluentText Size="TextSize.Size500">
-                                    <strong>@Percent%</strong><span class="muted"> · @buildSteps.Count(step => step.Done) of @buildSteps.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")</span>
+                                    @if (isDistilling)
+                                    {
+                                        <strong>@Percent%</strong><span class="muted"> · @buildSteps.Count(step => step.Done) of @buildSteps.Count@(StepElapsed is { } elapsed ? $" · {elapsed} on this step" : "")</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="muted">@WrittenCount @(WrittenCount == 1 ? "file" : "files") written · @refusedAgentIds.Count @(refusedAgentIds.Count == 1 ? "mock refused" : "mocks refused")</span>
+                                    }
                                 </FluentText>
 
-                                @if (NextAgent is { } next)
+                                @if (isDistilling && NextAgent is { } next)
                                 {
                                     <FluentText Size="TextSize.Size400" Class="muted distillation-others">Next agent: @next</FluentText>
                                 }
@@ -225,14 +268,14 @@
                                     <ul class="step-card-steps">
                                         @foreach (Step step in card)
                                         {
-                                            <li class="@(step.Done ? "stage-done" : step == InProgress ? "stage-current" : "stage-todo")">
+                                            <li class="@(step.Refused ? "stage-refused" : step.Done ? "stage-done" : step == InProgress ? "stage-current" : "stage-todo")">
                                                 @if (step == InProgress)
                                                 {
                                                     <FluentSpinner Size="SpinnerSize.Tiny" />
                                                 }
                                                 else
                                                 {
-                                                    <span class="stage-mark">@(step.Done ? "✓" : "○")</span>
+                                                    <span class="stage-mark">@(step.Refused ? "✕" : step.Done ? "✓" : "○")</span>
                                                 }
                                                 @StepKindLabel(step.Kind)
                                             </li>
@@ -252,18 +295,38 @@
                     <FluentGridItem Xs="5">
                         @* Newest first in the markup: the log is drawn bottom up, so it stays on its newest line by itself. *@
                         <ol class="distillation-log" aria-live="polite">
-                            <li class="log-current"><FluentSpinner Size="SpinnerSize.Tiny" />Writing @CurrentLogLabel…</li>
-                            @for (int line = writtenPaths.Count - 1; line >= 0; line--)
+                            @if (isDistilling)
                             {
-                                <li class="log-done"><span class="log-mark">✓</span><code>@writtenPaths[line]</code></li>
+                                <li class="log-current"><FluentSpinner Size="SpinnerSize.Tiny" />@(currentLine ?? $"Writing {CurrentLogLabel}")…</li>
+                            }
+                            @for (int line = buildLog.Count - 1; line >= 0; line--)
+                            {
+                                @* One line per event, drawn by what happened to its file. *@
+                                ArchiveProgress entry = buildLog[line];
+
+                                @if (entry.Kind == ArchiveProgressKind.Rewriting)
+                                {
+                                    <li class="log-retry"><span class="log-mark">↻</span><span><code>@entry.Path</code><span class="log-why">Rewriting: @entry.Violation</span></span></li>
+                                }
+                                else if (entry.Kind == ArchiveProgressKind.Refused)
+                                {
+                                    <li class="log-refused"><span class="log-mark">✕</span><span><code>@entry.Path</code><span class="log-why">@entry.Violation</span></span></li>
+                                }
+                                else
+                                {
+                                    <li class="log-done"><span class="log-mark">✓</span><code>@entry.Path</code></li>
+                                }
                             }
                         </ol>
                     </FluentGridItem>
                 </FluentGrid>
 
-                <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="14px" Class="distillation-stop">
-                    <FluentButton Appearance="ButtonAppearance.Outline" Disabled="isStopping" OnClick="Stop">@(isStopping ? "Stopping…" : "Stop")</FluentButton>
-                </FluentStack>
+                @if (isDistilling)
+                {
+                    <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="14px" Class="distillation-stop">
+                        <FluentButton Appearance="ButtonAppearance.Outline" Disabled="isStopping" OnClick="Stop">@(isStopping ? "Stopping…" : "Stop")</FluentButton>
+                    </FluentStack>
+                }
             }
             else if (archiveBytes is { } archive)
             {
@@ -274,7 +337,7 @@
 
                     <FluentStack Orientation="Orientation.Horizontal" VerticalAlignment="VerticalAlignment.Center" HorizontalGap="14px">
                         <FluentButton Appearance="ButtonAppearance.Primary" Size="ButtonSize.Large" OnClick="DownloadAsync">Download @ArchiveName</FluentButton>
-                        <FluentText Size="TextSize.Size500" Class="muted">@writtenPaths.Count files, @(archive.Length / 1024) KB</FluentText>
+                        <FluentText Size="TextSize.Size500" Class="muted">@WrittenCount files, @(archive.Length / 1024) KB</FluentText>
                     </FluentStack>
 
                     <FluentButton Appearance="ButtonAppearance.Outline" OnClick="AgainAsync">Run again</FluentButton>
@@ -318,6 +381,12 @@
     /// </summary>
     [Parameter]
     public EventCallback<Notice> OnNotify { get; set; }
+
+    /// <summary>
+    /// Raised with the id of an agent whose mock was refused, so the shell opens it for the client to correct.
+    /// </summary>
+    [Parameter]
+    public EventCallback<string> OnCorrectAgent { get; set; }
 
     /// <summary>
     /// The three tiers an agent can think on.
@@ -365,6 +434,9 @@
 
         /// <summary>Whether its first file has landed.</summary>
         public bool Done { get; set; }
+
+        /// <summary>Whether the CodeGuard kept its mock out of the archive, so the step is closed without having produced its file.</summary>
+        public bool Refused { get; set; }
     }
 
     /// <summary>
@@ -408,9 +480,24 @@
     private bool isStopping;
 
     /// <summary>
-    /// Every path the build reported, oldest first.
+    /// The files written and the mocks rewritten or refused, in the order the build reported them; a mock being read is never stored.
     /// </summary>
-    private readonly List<string> writtenPaths = [];
+    private readonly List<ArchiveProgress> buildLog = [];
+
+    /// <summary>
+    /// What the build is doing right now when that is not the file the plan says is next: a mock being read or written again.
+    /// </summary>
+    private string? currentLine;
+
+    /// <summary>
+    /// The agents whose mock the CodeGuard refused twice, so the build stopped before the archive.
+    /// </summary>
+    private IReadOnlyList<string> refusedAgentIds = [];
+
+    /// <summary>
+    /// How many files have landed in the archive so far.
+    /// </summary>
+    private int WrittenCount => buildLog.Count(entry => entry.Kind == ArchiveProgressKind.Written);
 
     /// <summary>
     /// The steps the build walks, in the order it writes them.
@@ -556,6 +643,9 @@
         // An archive whose code facts changed would download code the screen no longer shows.
         archiveBytes = null;
 
+        // A refusal was about the facts that have just changed, so its notice and its way to the agent no longer apply.
+        refusedAgentIds = [];
+
         // The shell saves the changed facts with the rest of the domain.
         await OnChanged.InvokeAsync();
     }
@@ -694,7 +784,9 @@
     {
         // The distillation starts from an empty log over a fresh plan, cancellable from Stop and redrawn by its heartbeat.
         isDistilling = true;
-        writtenPaths.Clear();
+        buildLog.Clear();
+        refusedAgentIds = [];
+        currentLine = null;
         buildSteps.Clear();
         buildSteps.AddRange(BuildPlan());
         stepEnteredAt = DateTime.UtcNow;
@@ -711,17 +803,38 @@
             await OnChanged.InvokeAsync();
 
             // State only: drawing is the heartbeat's, so no interop outlives the circuit from here.
-            Progress<string> progress = new Progress<string>(path =>
+            Progress<ArchiveProgress> progress = new Progress<ArchiveProgress>(report =>
             {
-                // Every path joins the log, whether or not it closes a step.
-                writtenPaths.Add(path);
+                // A mock being read is only the pinned line: it is neither a file nor a step moving.
+                if (report.Kind == ArchiveProgressKind.Checking)
+                {
+                    currentLine = $"Checking {report.Path}";
+                    return;
+                }
+
+                // Every other event joins the log, whether or not it closes a step.
+                buildLog.Add(report);
+
+                // A mock written again is still the step in hand: the pinned line says so and no step closes.
+                if (report.Kind == ArchiveProgressKind.Rewriting)
+                {
+                    currentLine = $"Writing {report.Path} again";
+                    return;
+                }
+
+                // A file landed or a mock was kept out: the pinned line goes back to the plan's own next file.
+                currentLine = null;
 
                 // A file that belongs to no step, such as a second file of the same class, moves nothing.
-                if (MatchStep(path) is not { } step)
+                if (MatchStep(report.Path) is not { } step)
                     return;
 
                 Step? before = InProgress;
                 step.Done = true;
+
+                // A refused mock closes its step without its file, which the card shows as such.
+                if (report.Kind == ArchiveProgressKind.Refused)
+                    step.Refused = true;
 
                 // The clock restarts only when the step in hand changed, so the elapsed time is the new step's.
                 if (!ReferenceEquals(InProgress, before))
@@ -741,9 +854,14 @@
         {
             // Stopped: nothing partial is kept, so the client never downloads half an archive.
             archiveBytes = null;
-            writtenPaths.Clear();
+            buildLog.Clear();
             buildSteps.Clear();
             await OnNotify.InvokeAsync(new Notice("Distillation stopped: nothing partial was kept.", NoticeKind.Info));
+        }
+        catch (MockRefusedException refusal)
+        {
+            // The message bar and the log already say which mocks were refused and why, so no notice repeats it and the log stays as the evidence.
+            refusedAgentIds = refusal.AgentIds;
         }
         catch (Exception failure)
         {

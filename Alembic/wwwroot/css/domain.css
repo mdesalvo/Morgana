@@ -51,12 +51,18 @@
 @keyframes vessel-drip { 0% { transform: translateY(0); opacity: 0; } 20% { opacity: 1; } 100% { transform: translateY(26px); opacity: 0; } }
 @keyframes vessel-bubble { 0% { transform: translateY(0); opacity: 0; } 25% { opacity: .55; } 100% { transform: translateY(-26px); opacity: 0; } }
 
+/* A vessel that stopped before the archive: no flame, drip, spark or bubble, a faint error glow and a grey brew. */
+.distillation-vessel.cold .vessel-flame, .distillation-vessel.cold .vessel-drip, .distillation-vessel.cold .vessel-spark, .distillation-vessel.cold .vessel-bubble { display: none; }
+.distillation-vessel.cold .vessel-glow { fill: var(--alembic-error); opacity: .08; }
+.distillation-vessel.cold .brew-light, .distillation-vessel.cold .brew-mid, .distillation-vessel.cold .brew-deep { stop-color: var(--alembic-border); }
+
 .step-card-steps { display: flex; flex-direction: column; gap: 5px; margin: 0; padding: 0; list-style: none; font-size: var(--fontSizeBase500); }
 .step-card-steps li { display: flex; align-items: center; gap: 6px; }
 .stage-mark { width: 14px; text-align: center; flex-shrink: 0; }
 .stage-done { color: var(--alembic-success); }
 .stage-current { color: var(--alembic-text); font-weight: 600; }
 .stage-todo { color: var(--alembic-muted); }
+.stage-refused { color: var(--alembic-error); font-weight: 600; }
 .distillation-others { margin-top: 10px; }
 
 .distillation-log {
@@ -69,6 +75,12 @@
 .log-done { opacity: .75; }
 .log-done .log-mark { color: var(--alembic-success); }
 .log-current { font-weight: 600; }
+
+/* A mock rewritten after a refusal and one kept out, each with the guard's reason under its path. */
+.log-retry, .log-refused { align-items: flex-start; }
+.log-retry .log-mark { color: var(--alembic-gold); }
+.log-refused .log-mark, .log-refused code { color: var(--alembic-error); }
+.log-why { display: block; color: var(--alembic-muted); font-size: var(--fontSizeBase300); }
 .distillation-stop { margin-top: 14px; }
 
 .distillation-done { animation: distillation-arrive .4s ease; }

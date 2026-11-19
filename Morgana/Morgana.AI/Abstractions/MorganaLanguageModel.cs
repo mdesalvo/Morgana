@@ -6,6 +6,7 @@ using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Morgana.AI.ChatClients;
 
 namespace Morgana.AI.Abstractions;
 
@@ -28,9 +29,11 @@ public abstract class MorganaLanguageModel
     /// <param name="options">The model that the tier runs and its options.</param>
     public abstract IChatClient CreateChatClient(IConfigurationSection connectionSection, Records.ModelOptions options);
 
-    /// <summary>Tells whether an exception thrown by this provider's client is the provider refusing the content itself, a refusal that no retry would pass.</summary>
+    /// <summary>Tells whether an exception is the provider refusing the content, either reported by its finish reason (recognised here for every provider) or thrown in the provider's own way (recognised by its override).</summary>
     /// <param name="exception">The failure that the client of a tier threw.</param>
-    public virtual bool IsContentFilterRefusal(Exception exception) => false;
+    public virtual bool IsContentFilterRefusal(Exception exception) =>
+        // The tier's chain raises every answer that the provider ended on its content filter as this exception.
+        exception is ContentFilterRefusalException;
 
     /// <summary>What one dust unit is worth in US dollars on the tiers that this provider serves; a provider overrides it to give its dust a different value.</summary>
     public virtual decimal UsdPerDustUnit => 0.015m;

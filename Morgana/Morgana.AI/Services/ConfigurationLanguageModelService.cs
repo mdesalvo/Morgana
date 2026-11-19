@@ -264,18 +264,21 @@ public class ConfigurationLanguageModelService : ILanguageModelService
         return modelDefinition;
     }
 
-    /// <summary>Builds the client of a tier with the defaults of its model and its telemetry around the provider's own.</summary>
+    /// <summary>Builds the client of a tier with the defaults of its model, the content filter and its telemetry around the provider's own.</summary>
     private Records.ServedTier BuildServedTier(IConfigurationSection connectionSection, MorganaLanguageModel languageModel, Records.ModelDefinition modelDefinition)
     {
         // The price of the model becomes the dust that every call on this tier is charged in.
         Records.MagicDustPricing morganaDust = languageModel.ConvertToMorganaDust(modelDefinition.Pricing);
 
-        // The tier's chain, outermost first: the defaults layer only fills in the options that every caller left unset,
-        // Microsoft.Agents.AI for domain agents and CompleteWithSystemPromptAsync for the framework alike.
+        // The tier's chain, outermost first: the defaults layer, the content filter, the telemetry and the provider's own client.
+        // The defaults layer only fills in the options that every caller left unset, Microsoft.Agents.AI for domain agents
+        // and CompleteWithSystemPromptAsync for the framework alike. The content filter sits above the telemetry, so the span
+        // records the provider's own finish reason before the refusal is raised.
         ChatClientBuilder tierBuilder = new ChatClientBuilder(languageModel.CreateChatClient(connectionSection, modelDefinition.Options))
-            .ConfigureOptions(modelDefinition.Options.FillUnsetOptions);
+            .ConfigureOptions(modelDefinition.Options.FillUnsetOptions)
+            .Use(innerClient => new ContentFilterChatClient(innerClient));
 
-        // Telemetry wraps the provider's client below the defaults layer.
+        // Telemetry wraps the provider's client below the content filter.
         UseTelemetryWhenEnabled(tierBuilder);
 
         // The tier is served from here on: its client and the provider that built it and its price.

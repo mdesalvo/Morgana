@@ -83,6 +83,16 @@ The checks advise. They never block, because an expert who disagrees about their
 {% include shot.html src="alembic/validation.jpg" caption="The checks you chose. The AI badge marks one I judged" %}
 </div>
 
+## My still has guards too
+
+A tome is an order my witches obey without question. Whoever writes one with me holds power over your customers and my still keeps that power honest. The guards are the [same as at my doors]({{ '/safety/#why-i-need-guards' | relative_url }}), cut to the measure of an author:
+
+- **What your expert tells me.** Any subject a business may lawfully deal in passes, however delicate: medicines, debts, weapons. A witch turned against the customers she serves does not pass, nor does an order written to the AI beneath her instead of about the work. I say what I caught and why. The answer stays in its box, so your expert removes that part and sends the rest.
+- **What you bring back.** A file may have passed through other hands, so I read all of it before I take it in. One such passage is enough: I keep nothing of the file and name the witch and the chapter where it sits.
+- **The stand-ins I write.** A stand-in may reach beyond itself only where its spell's description asks it to, such as saving the document it says it saves. Before it enters the archive I read it against that description. If it strays I write it again. If it strays twice there is no archive: the log names the spell and what it did, while a button takes you straight to that witch.
+
+When the AI behind my guards does not answer, I stop and say so, as on any other step. Nothing unjudged goes forward.
+
 ## The archive
 
 Last, I ask a few technical facts: the namespace, the class names, the AI level of each witch and the MCP servers she borrows from. Then everything is distilled into **one archive**, because the pieces only fit together.

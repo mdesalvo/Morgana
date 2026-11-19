@@ -7,6 +7,7 @@
 @inject IDomainReadingService DomainReadingService
 @inject IDraftSerializationService DraftSerializationService
 @inject IDraftStateService DraftStateService
+@inject IGuardService GuardService
 @inject IInterviewService InterviewService
 @inject NavigationManager NavigationManager
 
@@ -51,6 +52,14 @@
     @if (readFailure is not null)
     {
         <FluentText As="TextTag.Paragraph" Size="TextSize.Size400" Color="Color.Error" Block="true">I could not read it: @readFailure</FluentText>
+    }
+
+    @if (uploadRefusal is { } refusal)
+    {
+        <FluentMessageBar Intent="MessageBarIntent.Error" Layout="MessageBarLayout.MultiLine" AllowDismiss="false" Class="import-news message-fits">
+            <FluentText Size="TextSize.Size400" Block="true">@refusal</FluentText>
+            <FluentText Size="TextSize.Size400" Block="true" Class="muted">Nothing of the file was kept. Remove that passage and bring the file again.</FluentText>
+        </FluentMessageBar>
     }
 
     @if (Revealed is { } draft)
@@ -214,6 +223,11 @@
     private string? readFailure;
 
     /// <summary>
+    /// The AuthorGuard's reason for turning the upload away, when it did.
+    /// </summary>
+    private string? uploadRefusal;
+
+    /// <summary>
     /// Whether a file is being read.
     /// </summary>
     private bool isReading;
@@ -324,6 +338,7 @@
         // A new upload clears what the previous one reported and hides the domain until this one arrives whole.
         isReading = true;
         readFailure = null;
+        uploadRefusal = null;
         importNotices = [];
         arrivedAsArchive = false;
 
@@ -358,12 +373,20 @@
                 if (IsSaveFile(inner))
                 {
                     inner.Position = 0;
+
+                    if (!await PassesAuthorGuardAsync(inner))
+                        return;
+
                     await ResumeAsync(inner, file.Name);
                     return;
                 }
 
                 // A bare configuration inside is imported like an uploaded one.
                 inner.Position = 0;
+
+                if (!await PassesAuthorGuardAsync(inner))
+                    return;
+
                 await ImportAsync(inner, file.Name);
                 return;
             }
@@ -372,12 +395,20 @@
             if (IsSaveFile(buffer))
             {
                 buffer.Position = 0;
+
+                if (!await PassesAuthorGuardAsync(buffer))
+                    return;
+
                 await ResumeAsync(buffer, file.Name);
                 return;
             }
 
             // Anything else is read as an agents.json, whose importer reports what it cannot read.
             buffer.Position = 0;
+
+            if (!await PassesAuthorGuardAsync(buffer))
+                return;
+
             await ImportAsync(buffer, file.Name);
         }
         // Too large, a broken zip or JSON that is not what it claims: each is told to the client, never a dropped circuit.
@@ -390,6 +421,27 @@
             // Whatever happened, the domain or the error now shows.
             isReading = false;
         }
+    }
+
+    /// <summary>
+    /// Has the AuthorGuard read the upload before anything of it reaches the Draft; a refusal is shown and nothing of the file is kept.
+    /// </summary>
+    private async Task<bool> PassesAuthorGuardAsync(MemoryStream upload)
+    {
+        // The file whole, as every later pass would read it: whatever the guard does not see here reaches the interview unread.
+        string uploadedText = Encoding.UTF8.GetString(upload.ToArray());
+        GuardVerdict verdict = await GuardService.JudgeUploadAsync(uploadedText);
+
+        // A refused upload is stopped here with the guard's words for the client.
+        if (!verdict.IsCompliant)
+        {
+            uploadRefusal = verdict.Violation;
+            return false;
+        }
+
+        // The stream goes back to its start for the importer that reads it next.
+        upload.Position = 0;
+        return true;
     }
 
     /// <summary>

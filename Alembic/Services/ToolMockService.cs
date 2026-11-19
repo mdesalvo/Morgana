@@ -18,6 +18,12 @@ public class ToolMockService : IToolMockService
     /// <summary>The prompt in <c>alembic.json</c> that governs mock authoring.</summary>
     private const string MockPromptId = "CodeMocker";
 
+    /// <summary>The property of the <c>CodeMocker</c> prompt that tells the model its previous mock was refused.</summary>
+    private const string RefusedRewriteProperty = "RefusedRewrite";
+
+    /// <summary>The placeholder in that sentence where the CodeGuard's reason is spliced in.</summary>
+    private const string ViolationPlaceholder = "((violation))";
+
     /// <summary>Resolves the mock author's prompt.</summary>
     private readonly IAlembicPromptService alembicPromptService;
 
@@ -53,9 +59,10 @@ public class ToolMockService : IToolMockService
     /// </summary>
     /// <param name="agent">The agent whose toolkit needs a mock body, read for its Target, Formatting and tools.</param>
     /// <param name="intentName">The intent this agent answers, which regenerates the very signatures the caller already has.</param>
+    /// <param name="refusal">The CodeGuard's reason for refusing the previous mock; <c>null</c> on a first writing.</param>
     /// <param name="cancellationToken">Cancels the underlying completion.</param>
     /// <returns>The whole <c>Tools/*.cs</c> source file, fence-stripped and ready to write to the archive.</returns>
-    public async Task<string> AuthorAsync(AgentDraft agent, string intentName, CancellationToken cancellationToken = default)
+    public async Task<string> AuthorAsync(AgentDraft agent, string intentName, string? refusal = null, CancellationToken cancellationToken = default)
     {
         // The mock author's own prose: how to write a mock and what a good one returns.
         Records.Prompt mock = alembicPromptService.Resolve(MockPromptId);
@@ -97,6 +104,21 @@ public class ToolMockService : IToolMockService
         // The class the two halves share, named by the fact the emit already carries rather than
         // guessed: what the generated half declares is what a second declaration would collide with.
         string className = agent.Code.ToolClassName ?? intentName;
+
+        // A second writing tells the model why the first was refused, so it removes that behaviour instead of rewording it.
+        if (refusal is not null)
+        {
+            // The sentence is the mock author's own prose, with the guard's reason where it names it.
+            string? refusedRewrite = mock.GetAdditionalPropertyOrDefault<string?>(RefusedRewriteProperty, null);
+
+            // A missing or blank sentence would send the model a request that says nothing of the refusal.
+            if (string.IsNullOrWhiteSpace(refusedRewrite))
+                throw new InvalidOperationException($"The {MockPromptId} prompt declares no {RefusedRewriteProperty}.");
+
+            // Closes the request, so the refusal is the last thing the model reads before it writes the file again.
+            request.AppendLine();
+            request.AppendLine(refusedRewrite.Replace(ViolationPlaceholder, refusal, StringComparison.Ordinal));
+        }
 
         // Plausible domain data written as compiling C# is a capable model's job, the tier every Alembic pass runs on.
         IChatClient chatClient = llmService.GetChatClient(Records.LLMTier.Efficiency);

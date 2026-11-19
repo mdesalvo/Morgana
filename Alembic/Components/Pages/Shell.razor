@@ -44,7 +44,7 @@
             </div>
 
             <div class="domain-slot" hidden="@(Pointer != Archive)">
-                <ArchiveCard Draft="domain" OnChanged="Changed" OnNotify="NotifyAsync">
+                <ArchiveCard Draft="domain" OnChanged="Changed" OnNotify="NotifyAsync" OnCorrectAgent="CorrectAgent">
                     <Keep><SaveWork Busy="isTurnInFlight" OnReceipt="NotifyAsync" /></Keep>
                 </ArchiveCard>
             </div>
@@ -229,6 +229,22 @@
 
         // Opened like any other look, so the frontier still bounds where the pointer may go.
         LookAt(target);
+    }
+
+    /// <summary>
+    /// Opens an agent at its Target, where the client corrects what a refused mock followed.
+    /// </summary>
+    private void CorrectAgent(string agentId)
+    {
+        // The agent's place on the track, which is none when the agent is not on it.
+        int entry = EntryOf(agentId);
+
+        // Nothing to open for an agent the track does not hold.
+        if (entry < 0)
+            return;
+
+        // The Target is the step every edit opens at, the same as when a finding sends the client to an agent.
+        LookAt(new ShellPoint(entry, 1));
     }
 
     /// <summary>

@@ -12,7 +12,8 @@ public interface IToolMockService
     /// <summary>Writes the client-owned tool class for one agent.</summary>
     /// <param name="agent">The agent whose toolkit to mock, which must declare at least one tool.</param>
     /// <param name="intentName">The intent that routes to it.</param>
+    /// <param name="refusal">The CodeGuard's reason for refusing the previous mock; <c>null</c> on a first writing.</param>
     /// <param name="cancellationToken">Stops the model call.</param>
     /// <returns>The complete text of <c>{ToolClass}.cs</c>.</returns>
-    Task<string> AuthorAsync(AgentDraft agent, string intentName, CancellationToken cancellationToken = default);
+    Task<string> AuthorAsync(AgentDraft agent, string intentName, string? refusal = null, CancellationToken cancellationToken = default);
 }
