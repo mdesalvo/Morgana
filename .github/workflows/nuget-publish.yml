@@ -41,11 +41,12 @@ jobs:
             exit 1
           fi
 
-      # Packing the solution packs every packable project in it: Morgana.Contracts, Morgana.AI
+      # Every packable project declares GeneratePackageOnBuild, so the build itself packs it and dotnet pack
+      # would not build at all on a fresh checkout. Building the solution packs Morgana.Contracts, Morgana.AI
       # and each provider under Morgana.AI.LanguageModels, so a new provider needs no change here
-      - name: Pack
+      - name: Build and pack
         working-directory: Morgana
-        run: dotnet pack Morgana.slnx -c Release -o ${{ github.workspace }}/nupkg -p:ContinuousIntegrationBuild=true
+        run: dotnet build Morgana.slnx -c Release -p:PackageOutputPath=${{ github.workspace }}/nupkg -p:ContinuousIntegrationBuild=true
 
       - name: Login to NuGet
         id: nuget
