@@ -5,7 +5,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
-## [1.0.0-beta3] - UNDER DEVELOPMENT
+## [1.0.0-beta3] - 2026-11-20
 ### 🎯 Major Feature: Guardrails in Alembic
 Alembic writes the prose Morgana's agents obey, so it now guards against fraudulent authors and domains dangerous for their users:
 - **AuthorGuard** reads every answer of the interview and every uploaded file before Alembic writes anything from them: an agent turned against its users or an order aimed at the model beneath it is refused, saying what was caught and where
