@@ -5,6 +5,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.0.0] - UNDER DEVELOPMENT
+### ✨ Added
+
+### 🔄 Changed
+
+### 🐛 Fixed
+
+### 📦 Dependencies
+
+### 🚀 Future Enablement
+
+
 ## [1.0.0-beta3] - 2026-11-20
 ### 🎯 Major Feature: Guardrails in Alembic
 Alembic writes the prose Morgana's agents obey, so it now guards against fraudulent authors and domains dangerous for their users:
