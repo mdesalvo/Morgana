@@ -12,6 +12,7 @@ Alembic writes the prose Morgana's agents obey, so it now guards against fraudul
 - **CodeGuard** reads every generated mock against its tool's description before it enters the archive: a mock may reach outside its process only for the effect that description declares. A mock refused twice leaves no archive to download
 
 ### ✨ Added
+- Alembic is now protected with guardrails distilled from the official Morgana's doctrine, helping at producing safer and responsible domains
 - Complete and unified documentation of the Morgana platform on the new [GitHub Pages](https://mdesalvo.github.io/Morgana/)
 
 ### 🔄 Changed
