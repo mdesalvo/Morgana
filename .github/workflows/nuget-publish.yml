@@ -1,0 +1,56 @@
+name: Pack and Push NuGet Packages
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'  # Trigger on version tags (v1.0.0-beta3, etc.)
+  workflow_dispatch:
+
+jobs:
+  pack-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write  # Trusted Publishing: the OIDC token NuGet/login exchanges for a short-lived API key
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      # The packages take their version from Morgana/Directory.Build.props, never from the tag:
+      # a tag that disagrees with it would publish packages under a version nobody released
+      - name: Check tag against package version
+        id: version
+        working-directory: Morgana
+        run: |
+          VERSION=$(dotnet msbuild Morgana.AI/Morgana.AI.csproj -getProperty:Version)
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          if [ "${{ github.event_name }}" = "push" ] && [ "${GITHUB_REF#refs/tags/v}" != "$VERSION" ]; then
+            echo "::error::Tag ${GITHUB_REF#refs/tags/} does not match version $VERSION of Directory.Build.props"
+            exit 1
+          fi
+
+      # Packing the solution packs every packable project in it: Morgana.Contracts, Morgana.AI
+      # and each provider under Morgana.AI.LanguageModels, so a new provider needs no change here
+      - name: Pack
+        working-directory: Morgana
+        run: dotnet pack Morgana.slnx -c Release -o ${{ github.workspace }}/nupkg -p:ContinuousIntegrationBuild=true
+
+      - name: Login to NuGet
+        id: nuget
+        uses: NuGet/login@v1
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      # Each .nupkg carries its .snupkg along to the symbol server.
+      # Skipping duplicates lets a failed run be re-run without refusing what already went up
+      - name: Push
+        run: >
+          dotnet nuget push "${{ github.workspace }}/nupkg/*.nupkg"
+          --api-key ${{ steps.nuget.outputs.NUGET_API_KEY }}
+          --source https://api.nuget.org/v3/index.json
+          --skip-duplicate
