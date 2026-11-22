@@ -1,5 +1,5 @@
 {
-  "LastUpdate": "2026-11-18T17:25:48Z",
+  "LastUpdate": "2026-11-22T08:46:29Z",
   "Models": [
     { "Options": { "ModelId": "gpt-6.2-astra", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 8.00, "OutputUsdPerMillion": 40.00, "CacheReadUsdPerMillion": 0.40, "CacheWriteUsdPerMillion": 10.00 } },
     { "Options": { "ModelId": "gpt-6.2-sol", "MaxOutputTokens": 128000 }, "Pricing": { "InputUsdPerMillion": 2.00, "OutputUsdPerMillion": 10.00, "CacheReadUsdPerMillion": 0.10, "CacheWriteUsdPerMillion": 2.50 } },
