@@ -1,12 +1,12 @@
 <a href="#"><img src="https://github.com/mdesalvo/Morgana/blob/main/Channels/Cauldron/Assets/Morgana-Banner.jpg" alt="Morgana Logo" width="100%" /></a>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/.NET-10-932BD4" alt=".NET 10"/>
-  <img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/>
-  <img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/>
-  <img src="https://img.shields.io/badge/MCP-932BD4?logo=nuget" alt="Model Context Protocol"/>
-  <img src="https://img.shields.io/badge/A2A-932BD4?logo=nuget" alt="Agent to Agent Protocol"/>
-  <img src="https://img.shields.io/badge/OpenTelemetry-932BD4?logo=nuget" alt="OpenTelemetry"/><br/>
+  <a href="https://dotnet.microsoft.com/it-it/download/dotnet/10.0"><img src="https://img.shields.io/badge/.NET-10-932BD4" alt=".NET 10"/></a>
+  <a href="https://www.nuget.org/packages/Akka/"><img src="https://img.shields.io/badge/Akka.NET-932BD4?logo=nuget" alt="Akka.NET"/></a>
+  <a href="https://www.nuget.org/packages/Microsoft.Agents.AI"><img src="https://img.shields.io/badge/Microsoft.Agents.AI-932BD4?logo=nuget" alt="Microsoft.Agents.AI"/></a>
+  <a href="https://www.nuget.org/packages/ModelContextProtocol"><img src="https://img.shields.io/badge/MCP-932BD4?logo=nuget" alt="Model Context Protocol"/></a>
+  <a href="https://www.nuget.org/packages/A2A"><img src="https://img.shields.io/badge/A2A-932BD4?logo=nuget" alt="Agent to Agent Protocol"/></a>
+  <a href="https://www.nuget.org/packages/OpenTelemetry"><img src="https://img.shields.io/badge/OpenTelemetry-932BD4?logo=nuget" alt="OpenTelemetry"/></a><br/>
   <a href="https://hub.docker.com/r/mdesalvo/morgana"><img src="https://img.shields.io/docker/pulls/mdesalvo/morgana?logo=docker&logoColor=white&label=Morgana&color=9f7aea" alt="Morgana (Docker Pulls)"></a>
   <a href="https://hub.docker.com/r/mdesalvo/cauldron"><img src="https://img.shields.io/docker/pulls/mdesalvo/cauldron?logo=docker&logoColor=white&label=Cauldron&color=9f7aea" alt="Cauldron (Docker Pulls)"></a>
   <a href="https://hub.docker.com/r/mdesalvo/grimoire"><img src="https://img.shields.io/docker/pulls/mdesalvo/grimoire?logo=docker&logoColor=white&label=Grimoire&color=9f7aea" alt="Grimoire (Docker Pulls)"></a>
